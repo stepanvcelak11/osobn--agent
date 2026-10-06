@@ -90,6 +90,8 @@ enum Schema {
             entity_kind TEXT,
             entity_id TEXT,
             before TEXT,
+            after TEXT,
+            notes TEXT NOT NULL DEFAULT '[]',
             source TEXT NOT NULL
         );
         CREATE INDEX actions_created ON actions(created_at);

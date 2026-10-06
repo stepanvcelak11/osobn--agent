@@ -33,7 +33,7 @@ public struct CzechTimeParser: Sendable {
 
     // MARK: - Slovníky
 
-    static let dayPattern = "pondeli|pondelky|utery|stred[uay]|ctvrt(?:ek|ky)|pat(?:ek|ky)|sobot[uya]|nedel[ei]"
+    static let dayPattern = "pondeli|pondelky|utery|stred[uay]|ctvrt(?:ek|ky|ka)|pat(?:ek|ky|ku)|sobot[uya]|nedel[ei]"
     static func weekdayNumber(_ s: String) -> Int? {
         if s.hasPrefix("pondel") { return 1 }
         if s.hasPrefix("uter") { return 2 }

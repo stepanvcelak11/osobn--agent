@@ -166,11 +166,18 @@ public struct ActionRecord: Identifiable, Equatable, Codable, Sendable {
     public var entity: EntityRef?
     /// Stav entity před změnou (nil = entita vznikla touto akcí).
     public var before: JSONValue?
+    /// Plánovaný / provedený stav po změně (nil = smazání).
+    public var after: JSONValue?
+    /// Odkud akce přišla: "pravidla", "model", "uživatel".
     public var source: String
+    /// Co si agent domyslel (zobrazí se na kartě).
+    public var notes: [String]
 
     public init(id: String = UUID().uuidString, createdAt: Date = Date(), tool: String, args: JSONValue,
-                status: ActionStatus, summary: String, entity: EntityRef?, before: JSONValue?, source: String) {
+                status: ActionStatus, summary: String, entity: EntityRef?, before: JSONValue?,
+                after: JSONValue? = nil, source: String, notes: [String] = []) {
         self.id = id; self.createdAt = createdAt; self.tool = tool; self.args = args; self.status = status
-        self.summary = summary; self.entity = entity; self.before = before; self.source = source
+        self.summary = summary; self.entity = entity; self.before = before; self.after = after
+        self.source = source; self.notes = notes
     }
 }

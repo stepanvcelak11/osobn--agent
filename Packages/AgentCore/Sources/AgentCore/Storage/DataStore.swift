@@ -318,16 +318,18 @@ public final class DataStore: @unchecked Sendable {
 
     public func insert(_ a: ActionRecord) throws {
         try db.execute("""
-            INSERT INTO actions (id, created_at, tool, args, status, summary, entity_kind, entity_id, before, source)
-            VALUES (?,?,?,?,?,?,?,?,?,?)
+            INSERT INTO actions (id, created_at, tool, args, status, summary, entity_kind, entity_id, before, after, notes, source)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
             """, [a.id, a.createdAt, a.tool, a.args.jsonString, a.status.rawValue, a.summary,
-                  a.entity?.kind.rawValue, a.entity?.id, a.before?.jsonString, a.source])
+                  a.entity?.kind.rawValue, a.entity?.id, a.before?.jsonString, a.after?.jsonString,
+                  JSONValue.array(a.notes.map { .string($0) }).jsonString, a.source])
     }
 
     public func update(_ a: ActionRecord) throws {
         try db.execute("""
-            UPDATE actions SET args=?, status=?, summary=?, entity_kind=?, entity_id=?, before=? WHERE id=?
-            """, [a.args.jsonString, a.status.rawValue, a.summary, a.entity?.kind.rawValue, a.entity?.id, a.before?.jsonString, a.id])
+            UPDATE actions SET args=?, status=?, summary=?, entity_kind=?, entity_id=?, before=?, after=?, notes=? WHERE id=?
+            """, [a.args.jsonString, a.status.rawValue, a.summary, a.entity?.kind.rawValue, a.entity?.id,
+                  a.before?.jsonString, a.after?.jsonString, JSONValue.array(a.notes.map { .string($0) }).jsonString, a.id])
     }
 
     public func action(id: String) throws -> ActionRecord? {
@@ -351,7 +353,10 @@ public final class DataStore: @unchecked Sendable {
                             args: JSONValue.parse(r.string("args") ?? "{}") ?? .object([:]),
                             status: ActionStatus(rawValue: r.string("status") ?? "applied") ?? .applied,
                             summary: r.string("summary") ?? "", entity: ref,
-                            before: r.string("before").flatMap(JSONValue.parse), source: r.string("source") ?? "")
+                            before: r.string("before").flatMap(JSONValue.parse),
+                            after: r.string("after").flatMap(JSONValue.parse),
+                            source: r.string("source") ?? "",
+                            notes: (JSONValue.parse(r.string("notes") ?? "[]")?.arrayValue ?? []).compactMap { $0.stringValue })
     }
 
     // MARK: - Vektory (sémantické hledání)
