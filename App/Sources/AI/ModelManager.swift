@@ -123,9 +123,9 @@ final class ModelManager: ObservableObject {
         }
         importStatus = "Počítám kontrolní součet…"
         let digest = try await Task.detached(priority: .userInitiated) { [weak self] in
-            try ModelVerifier.digest(of: tmp) { p in
+            try ModelVerifier.digest(of: tmp, progress: { p in
                 Task { @MainActor in self?.importProgress = p }
-            }
+            })
         }.value
         let fileName = source.lastPathComponent
         let pending = PendingImport(id: id, kind: kind, fileName: fileName, tempURL: tmp, digest: digest)
@@ -170,7 +170,7 @@ final class ModelManager: ObservableObject {
         defer { importProgress = nil }
         let url = m.url
         let d = try? await Task.detached { [weak self] in
-            try ModelVerifier.digest(of: url) { p in Task { @MainActor in self?.importProgress = p } }
+            try ModelVerifier.digest(of: url, progress: { p in Task { @MainActor in self?.importProgress = p } })
         }.value
         return d?.sha256 == m.sha256
     }

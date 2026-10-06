@@ -32,6 +32,7 @@ let package = Package(
                 .define("SQLCIPHER_CRYPTO_CC", .when(platforms: [.iOS, .macOS])),
                 .define("SQLCIPHER_CRYPTO_OPENSSL", .when(platforms: [.linux])),
                 .define("HAVE_USLEEP", to: "1"),
+                .define("NDEBUG"),                                // bez ladicích assertů SQLite
                 .unsafeFlags(["-w"]),
             ],
             linkerSettings: [
