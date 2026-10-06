@@ -1,0 +1,72 @@
+name: iOS – sestavení IPA
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+    paths-ignore: ["**.md", "docs/**"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: macos-15
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Xcode
+        run: |
+          ls /Applications | grep -i xcode || true
+          XC=$(ls -d /Applications/Xcode_26*.app /Applications/Xcode_16.4*.app /Applications/Xcode_16*.app 2>/dev/null | sort -V | tail -1)
+          echo "Using $XC"
+          sudo xcode-select -s "$XC/Contents/Developer"
+          xcodebuild -version
+
+      - name: XcodeGen
+        run: |
+          brew install xcodegen
+          xcodegen generate
+
+      - name: Závislosti (SwiftPM ověřuje kontrolní součty XCFrameworků)
+        run: xcodebuild -resolvePackageDependencies -project OsobniAgent.xcodeproj -scheme OsobniAgent -clonedSourcePackagesDirPath build/spm
+
+      - name: Sestavení (bez podpisu)
+        run: |
+          set -o pipefail
+          xcodebuild archive \
+            -project OsobniAgent.xcodeproj -scheme OsobniAgent -configuration Release \
+            -destination 'generic/platform=iOS' -archivePath build/OsobniAgent.xcarchive \
+            -clonedSourcePackagesDirPath build/spm \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+            | tee build/xcodebuild.log | grep -E "error:|warning: .*deprecated|\*\* ARCHIVE" || true
+          test -d build/OsobniAgent.xcarchive/Products/Applications/OsobniAgent.app || { grep -E "error:" -A3 build/xcodebuild.log | head -150; exit 1; }
+
+      - name: Bezpečnostní audit (žádný síťový kód)
+        run: scripts/audit_no_network.sh build/OsobniAgent.xcarchive/Products/Applications/OsobniAgent.app
+
+      - name: Nepodepsané IPA
+        run: |
+          mkdir -p build/ipa/Payload
+          cp -R build/OsobniAgent.xcarchive/Products/Applications/OsobniAgent.app build/ipa/Payload/
+          cd build/ipa && zip -qry ../OsobniAgent-unsigned.ipa Payload && cd ../..
+          shasum -a 256 build/OsobniAgent-unsigned.ipa | tee build/OsobniAgent-unsigned.ipa.sha256
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: OsobniAgent-unsigned-ipa
+          path: |
+            build/OsobniAgent-unsigned.ipa
+            build/OsobniAgent-unsigned.ipa.sha256
+          retention-days: 30
+
+      - name: Vydání (jen pro tag v*)
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${GITHUB_REF_NAME}" build/OsobniAgent-unsigned.ipa build/OsobniAgent-unsigned.ipa.sha256 \
+            --title "Osobní agent ${GITHUB_REF_NAME}" --notes-file docs/RELEASE_NOTES.md || \
+          gh release upload "${GITHUB_REF_NAME}" build/OsobniAgent-unsigned.ipa build/OsobniAgent-unsigned.ipa.sha256 --clobber

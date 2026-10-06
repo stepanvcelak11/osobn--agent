@@ -97,7 +97,7 @@ public enum JSONValue: Equatable, Codable, Sendable, CustomStringConvertible {
 }
 
 extension JSONValue {
-    static func from<T: Encodable>(_ value: T) -> JSONValue {
+    public static func from<T: Encodable>(_ value: T) -> JSONValue {
         let enc = JSONEncoder()
         enc.dateEncodingStrategy = .secondsSince1970
         guard let d = try? enc.encode(value),
@@ -105,7 +105,7 @@ extension JSONValue {
         return v
     }
 
-    func decode<T: Decodable>(_ type: T.Type) -> T? {
+    public func decode<T: Decodable>(_ type: T.Type) -> T? {
         let enc = JSONEncoder()
         guard let d = try? enc.encode(self) else { return nil }
         let dec = JSONDecoder()

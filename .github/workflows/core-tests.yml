@@ -1,0 +1,46 @@
+name: Jádro – testy (Linux)
+
+on:
+  push:
+    branches: [main]
+    paths: ["Packages/AgentCore/**", "tools/**", ".github/workflows/core-tests.yml"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    container: swift:6.1-noble
+    steps:
+      - uses: actions/checkout@v4
+      - name: OpenSSL (jen pro SQLCipher v testech na Linuxu)
+        run: apt-get update -qq && apt-get install -y -qq libssl-dev >/dev/null
+      - name: swift test
+        working-directory: Packages/AgentCore
+        env:
+          GRAMMAR_DUMP_DIR: ${{ github.workspace }}/grammars
+        run: |
+          mkdir -p "$GRAMMAR_DUMP_DIR"
+          swift test 2>&1 | tee test.log
+          grep -E "Executed .* tests, with 0 failures" test.log
+      - uses: actions/upload-artifact@v4
+        with:
+          name: grammars
+          path: grammars/
+
+  grammar:
+    needs: test
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: grammars
+          path: grammars
+      - name: llama.cpp b11440 (stejná verze jako v aplikaci)
+        run: git clone --depth 1 --branch b11440 https://github.com/ggml-org/llama.cpp /tmp/llama.cpp
+      - name: Ověření gramatik parserem llama.cpp
+        run: tools/grammar-check/run.sh grammars /tmp/llama.cpp

@@ -204,8 +204,8 @@ final class AgentTests: XCTestCase {
 final class GrammarDumpTests: XCTestCase {
     /// Uloží gramatiky pro ověření parserem llama.cpp (jen pokud existuje adresář /scratch/grammars).
     func testDumpGrammars() throws {
-        let dir = "/scratch/grammars"
-        guard FileManager.default.fileExists(atPath: dir) else { return }
+        guard let dir = ProcessInfo.processInfo.environment["GRAMMAR_DUMP_DIR"],
+              FileManager.default.fileExists(atPath: dir) else { return }
         try GrammarBuilder.agentGrammar(tools: Tools.all).write(toFile: dir + "/agent.gbnf", atomically: true, encoding: .utf8)
         try GrammarBuilder.agentGrammar(tools: Tools.capture, allowAnswer: false).write(toFile: dir + "/capture.gbnf", atomically: true, encoding: .utf8)
         try GrammarBuilder.answerOnly.write(toFile: dir + "/answer.gbnf", atomically: true, encoding: .utf8)
