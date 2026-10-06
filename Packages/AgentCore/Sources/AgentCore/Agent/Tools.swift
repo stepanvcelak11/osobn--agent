@@ -119,9 +119,47 @@ public enum Tools {
         description: "Vrátí zpět poslední akci agenta.",
         params: [], kind: .write)
 
+    public static let setTimer = ToolSpec(
+        name: "set_timer",
+        description: "Spustí odpočet (minutku) – zazvoní za danou dobu.",
+        params: [
+            .init(name: "duration", type: .string, required: true, description: "jak dlouho, např. „10 minut“, „hodinu a půl“"),
+            .init(name: "label", type: .string, required: false, description: "na co, např. „vajíčka“"),
+        ], kind: .write)
+
+    public static let setAlarm = ToolSpec(
+        name: "set_alarm",
+        description: "Nastaví budík (zvoní i v tichém režimu). Může se opakovat po dnech v týdnu.",
+        params: [
+            .init(name: "when", type: .string, required: true, description: "kdy, česky, např. „zítra v 6:30“, „každý pracovní den v 6“"),
+            .init(name: "label", type: .string, required: false, description: "popisek budíku"),
+        ], kind: .write)
+
+    public static let cancelAlarm = ToolSpec(
+        name: "cancel_alarm",
+        description: "Zruší budík nebo odpočet. Uživatel to potvrdí.",
+        params: [
+            .init(name: "which", type: .string, required: true, description: "který (popisek, čas) nebo „všechny“"),
+        ], kind: .destructive)
+
+    public static let listAlarms = ToolSpec(
+        name: "list_alarms",
+        description: "Vypíše nastavené budíky a odpočty.",
+        params: [
+            .init(name: "kind", type: .enumeration(["all", "alarm", "timer"]), required: true, description: "co vypsat"),
+        ], kind: .read)
+
+    public static let stopwatch = ToolSpec(
+        name: "stopwatch",
+        description: "Ovládá stopky.",
+        params: [
+            .init(name: "action", type: .enumeration(["start", "stop", "reset", "lap", "status"]), required: true, description: "akce"),
+        ], kind: .write)
+
     public static let all: [ToolSpec] = [
         createNote, createTask, createReminder, createEvent, completeTask, updateItem, deleteItem,
         listAgenda, listTasks, searchNotes, undoLast,
+        setTimer, setAlarm, cancelAlarm, listAlarms, stopwatch,
     ]
 
     /// Nástroje pro rychlé zachycení – jen zařazení myšlenky.

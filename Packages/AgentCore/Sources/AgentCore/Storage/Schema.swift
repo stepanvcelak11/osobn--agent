@@ -111,6 +111,16 @@ enum Schema {
             value TEXT NOT NULL
         );
         """,
+        // v2 – propojení s položkami v jiných aplikacích (Kalendář / Připomínky Apple)
+        """
+        CREATE TABLE external_links (
+            entity_kind TEXT NOT NULL,
+            entity_id TEXT NOT NULL,
+            system TEXT NOT NULL,
+            external_id TEXT NOT NULL,
+            PRIMARY KEY (entity_kind, entity_id, system)
+        );
+        """,
     ]
 
     static func migrate(_ db: Database) throws {

@@ -231,5 +231,6 @@ final class GrammarDumpTests: XCTestCase {
         try GrammarBuilder.agentGrammar(tools: Tools.all).write(toFile: dir + "/agent.gbnf", atomically: true, encoding: .utf8)
         try GrammarBuilder.agentGrammar(tools: Tools.capture, allowAnswer: false).write(toFile: dir + "/capture.gbnf", atomically: true, encoding: .utf8)
         try GrammarBuilder.answerOnly.write(toFile: dir + "/answer.gbnf", atomically: true, encoding: .utf8)
+        try TranscriptSummarizer.finalGrammar.write(toFile: dir + "/summary.gbnf", atomically: true, encoding: .utf8)
     }
 }

@@ -99,6 +99,8 @@ public enum BenchmarkSuite {
         .init(id: 28, input: "obden v 8 ráno zalít kytky", expect: .tool("create_reminder", ["title": "kytk", "when": "obden"])),
         .init(id: 29, input: "Co mám po termínu?", expect: .tool("list_agenda", ["range": "overdue"])),
         .init(id: 30, input: "Ve čtvrtek ve 14:30 mám poradu, upozorni mě", expect: .tool("create_event", ["title": "porad", "start": "ctvrt"])),
+        .init(id: 31, input: "Dej mi minutku na čtvrt hodiny na pizzu", expect: .tool("set_timer", ["duration": "ctvrt", "label": "pizz"])),
+        .init(id: 32, input: "Vzbuď mě v sobotu v osm", expect: .tool("set_alarm", ["when": "sobot"])),
     ]
 
     public static func evaluate(_ c: BenchmarkCase, output: String) -> (valid: Bool, decision: Bool, args: Bool) {

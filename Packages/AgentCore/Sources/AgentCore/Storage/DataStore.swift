@@ -5,6 +5,8 @@ public final class DataStore: @unchecked Sendable {
     public let db: Database
     /// Volá se po každé změně dat (UI, přeplánování notifikací).
     public var onChange: (() -> Void)?
+    /// Volá se po změně konkrétní položky (zrcadlení do Kalendáře / Připomínek Apple).
+    public var onEntityChange: ((EntityRef) -> Void)?
 
     public init(database: Database) throws {
         self.db = database
@@ -21,20 +23,23 @@ public final class DataStore: @unchecked Sendable {
         try DataStore(database: Database(path: ":memory:", key: Data((0..<32).map { _ in UInt8.random(in: 0...255) })))
     }
 
-    func changed() { onChange?() }
+    func changed(_ ref: EntityRef? = nil) {
+        if let ref { onEntityChange?(ref) }
+        onChange?()
+    }
 
     // MARK: - Poznámky
 
     public func insert(_ n: Note) throws {
         try db.execute("INSERT INTO notes (id, title, body, created_at, updated_at, deleted_at) VALUES (?,?,?,?,?,?)",
                        [n.id, n.title, n.body, n.createdAt, n.updatedAt, n.deletedAt])
-        changed()
+        changed(EntityRef(kind: .note, id: n.id))
     }
 
     public func update(_ n: Note) throws {
         try db.execute("UPDATE notes SET title=?, body=?, updated_at=?, deleted_at=? WHERE id=?",
                        [n.title, n.body, n.updatedAt, n.deletedAt, n.id])
-        changed()
+        changed(EntityRef(kind: .note, id: n.id))
     }
 
     public func note(id: String) throws -> Note? {
@@ -75,14 +80,14 @@ public final class DataStore: @unchecked Sendable {
             INSERT INTO tasks (id, title, details, due_at, due_has_time, done_at, priority, created_at, updated_at, deleted_at)
             VALUES (?,?,?,?,?,?,?,?,?,?)
             """, [t.id, t.title, t.details, t.dueAt, t.dueHasTime, t.doneAt, t.priority, t.createdAt, t.updatedAt, t.deletedAt])
-        changed()
+        changed(EntityRef(kind: .task, id: t.id))
     }
 
     public func update(_ t: TaskItem) throws {
         try db.execute("""
             UPDATE tasks SET title=?, details=?, due_at=?, due_has_time=?, done_at=?, priority=?, updated_at=?, deleted_at=? WHERE id=?
             """, [t.title, t.details, t.dueAt, t.dueHasTime, t.doneAt, t.priority, t.updatedAt, t.deletedAt, t.id])
-        changed()
+        changed(EntityRef(kind: .task, id: t.id))
     }
 
     public func task(id: String) throws -> TaskItem? {
@@ -119,14 +124,14 @@ public final class DataStore: @unchecked Sendable {
             INSERT INTO events (id, title, start_at, end_at, all_day, location, details, alert_minutes, created_at, updated_at, deleted_at)
             VALUES (?,?,?,?,?,?,?,?,?,?,?)
             """, [e.id, e.title, e.startAt, e.endAt, e.allDay, e.location, e.details, e.alertMinutes, e.createdAt, e.updatedAt, e.deletedAt])
-        changed()
+        changed(EntityRef(kind: .event, id: e.id))
     }
 
     public func update(_ e: Event) throws {
         try db.execute("""
             UPDATE events SET title=?, start_at=?, end_at=?, all_day=?, location=?, details=?, alert_minutes=?, updated_at=?, deleted_at=? WHERE id=?
             """, [e.title, e.startAt, e.endAt, e.allDay, e.location, e.details, e.alertMinutes, e.updatedAt, e.deletedAt, e.id])
-        changed()
+        changed(EntityRef(kind: .event, id: e.id))
     }
 
     public func event(id: String) throws -> Event? {
@@ -160,14 +165,14 @@ public final class DataStore: @unchecked Sendable {
             INSERT INTO reminders (id, title, due_at, recurrence, done_at, created_at, updated_at, deleted_at)
             VALUES (?,?,?,?,?,?,?,?)
             """, [rem.id, rem.title, rem.dueAt, Self.encodeRecurrence(rem.recurrence), rem.doneAt, rem.createdAt, rem.updatedAt, rem.deletedAt])
-        changed()
+        changed(EntityRef(kind: .reminder, id: rem.id))
     }
 
     public func update(_ rem: Reminder) throws {
         try db.execute("""
             UPDATE reminders SET title=?, due_at=?, recurrence=?, done_at=?, updated_at=?, deleted_at=? WHERE id=?
             """, [rem.title, rem.dueAt, Self.encodeRecurrence(rem.recurrence), rem.doneAt, rem.updatedAt, rem.deletedAt, rem.id])
-        changed()
+        changed(EntityRef(kind: .reminder, id: rem.id))
     }
 
     public func reminder(id: String) throws -> Reminder? {
@@ -249,7 +254,7 @@ public final class DataStore: @unchecked Sendable {
     /// Měkké smazání (do koše).
     public func softDelete(_ ref: EntityRef, at date: Date = Date()) throws {
         try db.execute("UPDATE \(ref.kind.table) SET deleted_at=?, updated_at=? WHERE id=?", [date, date, ref.id])
-        changed()
+        changed(ref)
     }
 
     /// Trvalé smazání (vč. vektorů).
@@ -258,7 +263,7 @@ public final class DataStore: @unchecked Sendable {
             try db.execute("DELETE FROM \(ref.kind.table) WHERE id=?", [ref.id])
             try db.execute("DELETE FROM embeddings WHERE entity_kind=? AND entity_id=?", [ref.kind.rawValue, ref.id])
         }
-        changed()
+        changed(ref)
     }
 
     public func exists(_ ref: EntityRef) throws -> Bool {
@@ -341,7 +346,7 @@ public final class DataStore: @unchecked Sendable {
     }
 
     public func lastAppliedAction() throws -> ActionRecord? {
-        try db.query("SELECT * FROM actions WHERE status='applied' ORDER BY created_at DESC LIMIT 1").first.map(Self.action(from:))
+        try db.query("SELECT * FROM actions WHERE status='applied' AND tool NOT IN ('cancel_alarm') ORDER BY created_at DESC LIMIT 1").first.map(Self.action(from:))
     }
 
     static func action(from r: Row) -> ActionRecord {
@@ -383,6 +388,35 @@ public final class DataStore: @unchecked Sendable {
     public func deleteEmbeddings(model: String? = nil) throws {
         if let model { try db.execute("DELETE FROM embeddings WHERE model=?", [model]) }
         else { try db.execute("DELETE FROM embeddings") }
+    }
+
+    // MARK: - Propojení s jinými aplikacemi
+
+    public func externalId(_ ref: EntityRef, system: String) throws -> String? {
+        try db.scalarString("SELECT external_id FROM external_links WHERE entity_kind=? AND entity_id=? AND system=?",
+                            [ref.kind.rawValue, ref.id, system])
+    }
+
+    public func setExternalId(_ id: String?, for ref: EntityRef, system: String) throws {
+        if let id {
+            try db.execute("INSERT INTO external_links (entity_kind, entity_id, system, external_id) VALUES (?,?,?,?) "
+                           + "ON CONFLICT(entity_kind, entity_id, system) DO UPDATE SET external_id=excluded.external_id",
+                           [ref.kind.rawValue, ref.id, system, id])
+        } else {
+            try db.execute("DELETE FROM external_links WHERE entity_kind=? AND entity_id=? AND system=?", [ref.kind.rawValue, ref.id, system])
+        }
+    }
+
+    /// Všechna cizí ID daného systému (aby se naše kopie v Kalendáři Apple nezobrazovaly dvakrát).
+    public func externalIds(system: String) throws -> Set<String> {
+        Set(try db.query("SELECT external_id FROM external_links WHERE system=?", [system]).compactMap { $0.string("external_id") })
+    }
+
+    public func linkedRefs(system: String) throws -> [EntityRef] {
+        try db.query("SELECT entity_kind, entity_id FROM external_links WHERE system=?", [system]).compactMap { r in
+            guard let k = EntityKind(rawValue: r.string("entity_kind") ?? ""), let id = r.string("entity_id") else { return nil }
+            return EntityRef(kind: k, id: id)
+        }
     }
 
     // MARK: - Nastavení (citlivá nastavení patří sem, ne do UserDefaults)

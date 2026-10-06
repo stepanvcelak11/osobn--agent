@@ -238,7 +238,7 @@ public final class AgentEngine: @unchecked Sendable {
     /// Shrnutí dne – deterministický základ, případně přeformulovaný modelem.
     public func summary(evening: Bool, useModel: Bool = true,
                         progress: (@Sendable (AgentProgress) -> Void)? = nil) async -> String {
-        let builder = OverviewBuilder(store: store, calendar: calendar, now: clock())
+        let builder = OverviewBuilder(store: store, calendar: calendar, now: clock(), external: executor.externalEvents)
         let base = (try? builder.deterministicSummary(evening: evening)) ?? ""
         guard useModel, let model else { return base }
         var data = (try? builder.agendaText(.today, refs: nil)) ?? ""

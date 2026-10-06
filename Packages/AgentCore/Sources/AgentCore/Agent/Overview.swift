@@ -24,6 +24,29 @@ public struct AgendaItem: Identifiable, Equatable, Sendable {
     public var isOverdue: Bool
     public var recurrenceText: String?
     public var location: String?
+    /// Odkud položka pochází, když není z aplikace (např. „Kalendář Apple“).
+    public var source: String? = nil
+
+    public var isExternal: Bool { source != nil }
+}
+
+/// Událost z jiné aplikace (Kalendář Apple) – jen ke čtení.
+public struct ExternalAgendaItem: Sendable {
+    public var id: String
+    public var title: String
+    public var start: Date
+    public var end: Date?
+    public var allDay: Bool
+    public var location: String?
+    public var source: String
+    public init(id: String, title: String, start: Date, end: Date?, allDay: Bool, location: String?, source: String) {
+        self.id = id; self.title = title; self.start = start; self.end = end; self.allDay = allDay; self.location = location; self.source = source
+    }
+
+    var agendaItem: AgendaItem {
+        AgendaItem(ref: EntityRef(kind: .event, id: "ext:" + id), title: title, date: start, endDate: end, hasTime: !allDay,
+                   isOverdue: false, recurrenceText: nil, location: location, source: source)
+    }
 }
 
 public struct DayOverview: Sendable {
@@ -45,8 +68,12 @@ public struct OverviewBuilder {
     public let calendar: Calendar
     public let now: Date
 
-    public init(store: DataStore, calendar: Calendar, now: Date = Date()) {
-        self.store = store; self.calendar = calendar; self.now = now
+    /// Události z Kalendáře Apple (jen když to uživatel povolí).
+    public var external: (@Sendable (Date, Date) -> [ExternalAgendaItem])?
+
+    public init(store: DataStore, calendar: Calendar, now: Date = Date(),
+                external: (@Sendable (Date, Date) -> [ExternalAgendaItem])? = nil) {
+        self.store = store; self.calendar = calendar; self.now = now; self.external = external
     }
 
     public func interval(_ range: AgendaRange) -> (Date, Date) {
@@ -78,6 +105,7 @@ public struct OverviewBuilder {
             out.append(AgendaItem(ref: EntityRef(kind: .reminder, id: r.id), title: r.title, date: d, endDate: nil,
                                   hasTime: true, isOverdue: false, recurrenceText: r.recurrence?.czechDescription, location: nil))
         }
+        for x in external?(from, to) ?? [] { out.append(x.agendaItem) }
         for t in try store.tasks(.open) {
             guard let due = t.dueAt, due >= from, due < to else { continue }
             out.append(AgendaItem(ref: EntityRef(kind: .task, id: t.id), title: t.title, date: due, endDate: nil,
@@ -100,7 +128,7 @@ public struct OverviewBuilder {
     public func overview() throws -> DayOverview {
         let todayItems = try items(.today)
         let current = todayItems.first { item in
-            guard item.ref.kind == .event, let s = item.date else { return false }
+            guard item.ref.kind == .event, item.hasTime, let s = item.date else { return false }
             let e = item.endDate ?? s.addingTimeInterval(3600)
             return s <= now && now < e
         }
@@ -112,7 +140,8 @@ public struct OverviewBuilder {
             AgendaItem(ref: EntityRef(kind: .reminder, id: $0.reminder.id), title: $0.reminder.title, date: $0.date, endDate: nil,
                        hasTime: true, isOverdue: false, recurrenceText: $0.reminder.recurrence?.czechDescription, location: nil)
         }
-        let next = futureWindow.filter { ($0.date ?? .distantPast) > now && $0.hasTime }
+        let futureAll = futureWindow + (external?(now, weekEnd) ?? []).map(\.agendaItem)
+        let next = futureAll.filter { ($0.date ?? .distantPast) > now && $0.hasTime }
             .min { ($0.date ?? .distantFuture) < ($1.date ?? .distantFuture) }
         let tomorrowStart = interval(.tomorrow).0
         let upcoming = try items(.week).filter { ($0.date ?? .distantPast) >= tomorrowStart }
@@ -144,8 +173,9 @@ public struct OverviewBuilder {
         var s = "• " + (parts.isEmpty ? "" : parts.joined(separator: " ") + " – ") + kind + item.title
         if let loc = item.location { s += " (\(loc))" }
         if let r = item.recurrenceText { s += " [opakuje se \(r)]" }
+        if let src = item.source { s += " (\(src))" }
         if item.isOverdue { s += " – po termínu" }
-        if let refs { s += " [\(refs.short(for: item.ref))]" }
+        if let refs, !item.isExternal { s += " [\(refs.short(for: item.ref))]" }
         return s
     }
 

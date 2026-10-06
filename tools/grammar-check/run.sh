@@ -26,4 +26,12 @@ C="$B/grammar-check"
  '-{"type":"answer","text":"x"} navíc'
 "$C" "$G/capture.gbnf" '+{"type":"tool","name":"create_note","args":{"text":"x"}}' '-{"type":"answer","text":"x"}' '+{"type":"ask","text":"?"}'
 "$C" "$G/answer.gbnf" '+{"type":"answer","text":"Dnes máš 2 úkoly."}' '-{"type":"ask","text":"x"}'
+"$C" "$G/agent.gbnf" \
+ '+{"type":"tool","name":"set_timer","args":{"duration":"10 minut","label":"Čaj"}}' \
+ '+{"type":"tool","name":"set_alarm","args":{"when":"zítra v 6:30"}}' \
+ '+{"type":"tool","name":"stopwatch","args":{"action":"lap"}}' \
+ '-{"type":"tool","name":"stopwatch","args":{"action":"explode"}}'
+"$C" "$G/summary.gbnf" \
+ '+{"title":"Fotosyntéza","summary":"Přednáška o \"světle\".","points":["A","B"],"tasks":[]}' \
+ '-{"title":"x","summary":"y","points":"A","tasks":[]}'
 echo "Gramatiky OK"

@@ -24,11 +24,14 @@ public struct CzechTimeParser: Sendable {
     public var now: Date
     /// Výchozí hodina, když je zadán jen den.
     public var defaultHour: Int = 9
+    /// Režim budíku: „v 6“ = 6:00 ráno (žádný posun na odpoledne), jinak nejbližší budoucí výskyt.
+    public var alarmMode: Bool = false
 
-    public init(calendar: Calendar = CzechFormat.calendar(), now: Date = Date(), defaultHour: Int = 9) {
+    public init(calendar: Calendar = CzechFormat.calendar(), now: Date = Date(), defaultHour: Int = 9, alarmMode: Bool = false) {
         self.calendar = calendar
         self.now = now
         self.defaultHour = defaultHour
+        self.alarmMode = alarmMode
     }
 
     // MARK: - Slovníky
@@ -364,7 +367,7 @@ public struct CzechTimeParser: Sendable {
             if adjusted != h {
                 if partOfDay == nil { result.assumptions.append("\(CzechFormat.time(hour: adjusted, minute: minute)) (odpoledne)") }
                 h = adjusted
-            } else if hourIsLoose && partOfDay == nil && h >= 7 && h <= 11 && (isToday || !dayExplicit) {
+            } else if !alarmMode && hourIsLoose && partOfDay == nil && h >= 7 && h <= 11 && (isToday || !dayExplicit) {
                 // „v 8“ dnes, ale 8:00 už bylo → nejspíš večer
                 let candidate = calendar.date(bySettingHour: h, minute: minute, second: 0, of: day)!
                 let evening = calendar.date(bySettingHour: h + 12, minute: minute, second: 0, of: day)!
@@ -417,7 +420,7 @@ public struct CzechTimeParser: Sendable {
             }
         }
         // „ve tři“ bez upřesnění = 15:00 (1–6 hodin běžně znamená odpoledne)
-        if loose && h >= 1 && h <= 6 { return h + 12 }
+        if loose && !alarmMode && h >= 1 && h <= 6 { return h + 12 }
         return h
     }
 

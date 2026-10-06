@@ -38,6 +38,12 @@ public final class ToolExecutor: @unchecked Sendable {
     public var clock: () -> Date
     public var settings: AgentSettings
     public weak var searcher: NoteSearching?
+    /// Události z Kalendáře Apple pro přehledy (jen při povolení uživatelem).
+    public var externalEvents: (@Sendable (Date, Date) -> [ExternalAgendaItem])?
+    /// Budíky, odpočty a stopky (dodá aplikace).
+    public weak var clockService: ClockService?
+    /// Režim návrhů: zapisující akce jen čekají na potvrzení (např. úkoly ze shrnutí nahrávky).
+    private var proposeMode = false
 
     public init(store: DataStore, refs: RefRegistry, calendar: Calendar, settings: AgentSettings = AgentSettings(),
                 clock: @escaping () -> Date = Date.init) {
@@ -67,13 +73,38 @@ public final class ToolExecutor: @unchecked Sendable {
         case Tools.deleteItem.name: return try deleteItem(call, source: source)
         case Tools.listAgenda.name:
             let range = AgendaRange(rawValue: call.args.nonEmptyString("range") ?? "today") ?? .today
-            let text = try OverviewBuilder(store: store, calendar: calendar, now: clock()).agendaText(range, refs: refs)
+            let text = try OverviewBuilder(store: store, calendar: calendar, now: clock(), external: externalEvents).agendaText(range, refs: refs)
             return ToolOutcome(action: nil, resultForModel: text, replyText: text, clarification: nil, isRead: true)
         case Tools.listTasks.name:
             let done = call.args.nonEmptyString("status") == "done"
             let text = try OverviewBuilder(store: store, calendar: calendar, now: clock()).tasksText(done: done, refs: refs)
             return ToolOutcome(action: nil, resultForModel: text, replyText: text, clarification: nil, isRead: true)
         case Tools.searchNotes.name: return try await searchNotes(call)
+        case Tools.setTimer.name: return try await setTimer(call, source: source)
+        case Tools.setAlarm.name: return try await setAlarm(call, source: source)
+        case Tools.cancelAlarm.name: return try cancelAlarm(call, source: source)
+        case Tools.listAlarms.name:
+            guard let cs = clockService else { return clarify(ClockError.unavailable.description) }
+            let kind = call.args.nonEmptyString("kind") ?? "all"
+            let list = cs.activeAlarms().filter { kind == "all" || $0.kind.rawValue == kind }
+            let now = clock()
+            let text = list.isEmpty ? "Žádné budíky ani odpočty nejsou nastavené."
+                : "Nastaveno:\n" + list.map { "• " + ($0.label.isEmpty ? "" : $0.label + " – ") + $0.describe(now: now, calendar: calendar) }.joined(separator: "\n")
+            return ToolOutcome(action: nil, resultForModel: text, replyText: text, clarification: nil, isRead: true)
+        case Tools.stopwatch.name:
+            guard let cs = clockService else { return clarify(ClockError.unavailable.description) }
+            let action = StopwatchAction(rawValue: call.args.nonEmptyString("action") ?? "status") ?? .status
+            let st = cs.stopwatch(action)
+            let t = CzechDuration.clock(st.elapsed(at: clock()), tenths: true)
+            let text: String
+            switch action {
+            case .start: text = "Stopky běží."
+            case .stop: text = "Stopky zastaveny na \(t)."
+            case .reset: text = "Stopky vynulovány."
+            case .lap: text = "Mezičas \(st.laps.count): \(CzechDuration.clock(st.laps.last ?? 0, tenths: true))"
+            case .status: text = st.isRunning ? "Stopky běží: \(t)" : "Stopky stojí na \(t)."
+            }
+            return ToolOutcome(action: nil, resultForModel: text, replyText: text, clarification: nil)
         case Tools.undoLast.name:
             guard let undone = try undoLast() else {
                 return ToolOutcome(action: nil, resultForModel: "Není co vracet.", replyText: "Není co vracet.", clarification: nil)
@@ -103,7 +134,7 @@ public final class ToolExecutor: @unchecked Sendable {
     /// Uloží akci – podle pravidel ji rovnou provede, nebo nechá čekat na potvrzení.
     private func record(tool: String, args: JSONValue, summary: String, entity: EntityRef, before: JSONValue?,
                         after: JSONValue?, source: String, notes: [String], forcePending: Bool) throws -> ActionRecord {
-        let pending = forcePending || settings.confirmAllWrites
+        let pending = forcePending || settings.confirmAllWrites || proposeMode
         var a = ActionRecord(createdAt: clock(), tool: tool, args: args, status: .pending, summary: summary,
                              entity: entity, before: before, after: after, source: source, notes: notes)
         try store.db.transaction {
@@ -115,6 +146,13 @@ public final class ToolExecutor: @unchecked Sendable {
     }
 
     private func apply(_ a: inout ActionRecord) throws {
+        if a.tool == Tools.cancelAlarm.name {
+            for item in a.before?.arrayValue ?? [] {
+                if let id = item["id"]?.stringValue { try? clockService?.cancel(id: id) }
+            }
+            a.status = .applied
+            return
+        }
         guard let entity = a.entity else { return }
         if let after = a.after {
             try store.restore(after, kind: entity.kind)
@@ -338,6 +376,102 @@ public final class ToolExecutor: @unchecked Sendable {
         return writeOutcome(a)
     }
 
+    // MARK: - Budíky a odpočty
+
+    private func recordClock(tool: String, args: JSONValue, summary: String, alarm: ClockAlarm, source: String, notes: [String]) throws -> ActionRecord {
+        let a = ActionRecord(createdAt: clock(), tool: tool, args: args, status: .applied, summary: summary,
+                             entity: nil, before: nil, after: JSONValue.from(alarm), source: source, notes: notes)
+        try store.insert(a)
+        return a
+    }
+
+    private func setTimer(_ call: ToolCall, source: String) async throws -> ToolOutcome {
+        guard let cs = clockService else { return clarify(ClockError.unavailable.description) }
+        let text = call.args.nonEmptyString("duration")!
+        guard let d = CzechDuration.parse(text), d >= 1, d <= 24 * 3600 else { return clarify("Na jak dlouho mám odpočet nastavit?") }
+        let label = call.args.nonEmptyString("label").map(cleanTitle) ?? "Minutka"
+        let alarm: ClockAlarm
+        do { alarm = try await cs.startTimer(label: label, duration: d) }
+        catch { return clarify("\(error)") }
+        let a = try recordClock(tool: call.name, args: call.args, summary: "\(label): odpočet \(CzechDuration.format(d))",
+                                alarm: alarm, source: source, notes: [])
+        return writeOutcome(a)
+    }
+
+    private func setAlarm(_ call: ToolCall, source: String) async throws -> ToolOutcome {
+        guard let cs = clockService else { return clarify(ClockError.unavailable.description) }
+        let whenText = call.args.nonEmptyString("when")!
+        let p = CzechTimeParser(calendar: calendar, now: clock(), defaultHour: 7, alarmMode: true)
+        guard let parsed = p.parse(whenText), let date = parsed.date, parsed.hasTime || parsed.recurrence != nil else {
+            return clarify("Na kolik hodin mám budík nastavit?")
+        }
+        var weekdays: [Int] = []
+        let hour = calendar.component(.hour, from: date), minute = calendar.component(.minute, from: date)
+        if let rec = parsed.recurrence {
+            switch rec.frequency {
+            case .daily where rec.interval == 1: weekdays = [1, 2, 3, 4, 5, 6, 7]
+            case .weekly where rec.interval == 1: weekdays = rec.weekdays.isEmpty ? [Recurrence.isoWeekday(date, calendar: calendar)] : rec.weekdays
+            default: return clarify(ClockError.unsupportedRepeat.description)
+            }
+        } else if date <= clock() {
+            return clarify("Ten čas už byl. Na kdy mám budík nastavit?")
+        }
+        let label = call.args.nonEmptyString("label").map(cleanTitle) ?? "Budík"
+        let alarm: ClockAlarm
+        do { alarm = try await cs.scheduleAlarm(label: label, date: date, weekdays: weekdays, hour: hour, minute: minute) }
+        catch { return clarify("\(error)") }
+        let a = try recordClock(tool: call.name, args: call.args, summary: alarm.describe(now: clock(), calendar: calendar),
+                                alarm: alarm, source: source, notes: parsed.assumptions)
+        return writeOutcome(a)
+    }
+
+    private func cancelAlarm(_ call: ToolCall, source: String) throws -> ToolOutcome {
+        guard let cs = clockService else { return clarify(ClockError.unavailable.description) }
+        let which = call.args.nonEmptyString("which")!
+        let f = CzechText.fold(which)
+        let all = cs.activeAlarms()
+        guard !all.isEmpty else {
+            return ToolOutcome(action: nil, resultForModel: "Nic není nastaveno.", replyText: "Žádné budíky ani odpočty nejsou nastavené.", clarification: nil)
+        }
+        var pool = all
+        if f.contains("minut") || f.contains("casovac") || f.contains("odpoc") { pool = all.filter { $0.kind == .timer } }
+        else if f.contains("budik") || f.contains("buzen") { pool = all.filter { $0.kind == .alarm } }
+        var chosen: [ClockAlarm]
+        if f.contains("vse") || f.contains("vsechn") {
+            chosen = pool
+        } else {
+            let byLabel = pool.filter { CzechText.similarity(which, $0.label) >= 0.5 }
+            let parsed = CzechTimeParser(calendar: calendar, now: clock(), alarmMode: true).parse(which)
+            let byTime = pool.filter { a in
+                guard let p = parsed, p.hasTime, let d = p.date, let h = a.hour ?? a.fireDate.map({ calendar.component(.hour, from: $0) }) else { return false }
+                let m = a.minute ?? a.fireDate.map { calendar.component(.minute, from: $0) } ?? 0
+                return h == calendar.component(.hour, from: d) && m == calendar.component(.minute, from: d)
+            }
+            chosen = !byLabel.isEmpty ? byLabel : (!byTime.isEmpty ? byTime : (pool.count == 1 ? pool : []))
+        }
+        let now = clock()
+        if chosen.isEmpty {
+            let list = all.map { ($0.label.isEmpty ? "" : $0.label + " – ") + $0.describe(now: now, calendar: calendar) }.joined(separator: "; ")
+            return clarify("Který mám zrušit? Nastaveno: \(list)")
+        }
+        let summary = chosen.count == 1 ? "Zrušit: " + chosen[0].describe(now: now, calendar: calendar) : "Zrušit \(chosen.count) budíků / odpočtů"
+        var a = ActionRecord(createdAt: now, tool: call.name, args: call.args, status: .pending, summary: summary,
+                             entity: nil, before: .array(chosen.map { JSONValue.from($0) }), after: nil, source: source)
+        // Odpočty ruší rovnou (nic se neztratí), budíky až po potvrzení.
+        if chosen.allSatisfy({ $0.kind == .timer }) { try apply(&a) }
+        try store.insert(a)
+        return writeOutcome(a)
+    }
+
+    // MARK: - Návrhy (čekají na potvrzení)
+
+    /// Provede zapisující nástroj jen jako návrh – karta s Potvrdit / Zrušit.
+    public func propose(_ call: ToolCall, source: String) async throws -> ToolOutcome {
+        proposeMode = true
+        defer { proposeMode = false }
+        return try await execute(call, source: source)
+    }
+
     // MARK: - Hledání
 
     private func searchNotes(_ call: ToolCall) async throws -> ToolOutcome {
@@ -384,7 +518,14 @@ public final class ToolExecutor: @unchecked Sendable {
     @discardableResult
     public func undo(actionId: String) throws -> ActionRecord {
         guard var a = try store.action(id: actionId) else { throw ExecutorError.notFound }
-        guard a.status == .applied, let entity = a.entity else { return a }
+        guard a.status == .applied else { return a }
+        if a.tool == Tools.setTimer.name || a.tool == Tools.setAlarm.name {
+            if let id = a.after?["id"]?.stringValue { try clockService?.cancel(id: id) }
+            a.status = .undone
+            try store.update(a)
+            return a
+        }
+        guard let entity = a.entity else { return a }
         try store.db.transaction {
             if let before = a.before {
                 try store.restore(before, kind: entity.kind)

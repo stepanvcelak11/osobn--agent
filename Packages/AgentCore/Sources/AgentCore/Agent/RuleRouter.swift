@@ -10,7 +10,7 @@ public enum RuleResult: Equatable, Sendable {
 
 /// Rozpracovaný požadavek, kterému chybí jeden údaj (typicky čas).
 public struct PendingIntent: Equatable, Sendable {
-    public enum Missing: String, Sendable { case when, title }
+    public enum Missing: String, Sendable { case when, title, duration }
     public var tool: String
     public var args: [String: String]
     public var missing: Missing
@@ -38,6 +38,8 @@ public struct RuleRouter: Sendable {
         let f = CzechText.fold(text).trimmingCharacters(in: CharacterSet(charactersIn: " .!?"))
 
         if Self.undoPhrases.contains(f) { return .tool(ToolCall(name: "undo_last", args: .object([:]))) }
+
+        if let r = routeClock(text, f) { return r }
 
         // Připomínky
         if matches(Self.reminderTrigger, f) {
@@ -100,8 +102,12 @@ public struct RuleRouter: Sendable {
         var args = pending.args
         switch pending.missing {
         case .when:
-            guard let p = parser.parse(answer), !p.isEmpty else { return nil }
+            let alarm = pending.tool == "set_alarm"
+            guard let p = CzechTimeParser(calendar: calendar, now: now, alarmMode: alarm).parse(answer), !p.isEmpty else { return nil }
             args["when"] = answer
+        case .duration:
+            guard CzechDuration.parse(answer) != nil else { return nil }
+            args["duration"] = answer
         case .title:
             let t = answer.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !t.isEmpty else { return nil }
@@ -130,6 +136,74 @@ public struct RuleRouter: Sendable {
         }
         if isTask { return ToolCall("create_task", ["title": text]) }
         return ToolCall("create_note", ["text": CzechText.capitalizeFirst(text)])
+    }
+
+    // MARK: - Budíky, minutky, stopky
+
+    private func routeClock(_ text: String, _ f: String) -> RuleResult? {
+        let isQuestion = text.hasSuffix("?")
+        // Stopky
+        if matches(#"\bstopk"#, f) {
+            let action: String
+            if matches(#"\b(zastav\w*|stop|pauz\w*)\b"#, f) { action = "stop" }
+            else if matches(#"\b(vynuluj|nuluj|reset|vymaz)"#, f) { action = "reset" }
+            else if matches(#"\b(mezicas|kolo)\b"#, f) { action = "lap" }
+            else if isQuestion || matches(#"\b(kolik|stav|jak\s+dlouho|ukaz)\b"#, f) { action = "status" }
+            else { action = "start" }
+            return .tool(ToolCall("stopwatch", ["action": action]))
+        }
+        // Zrušení
+        if matches(#"^(?:prosim\s+)?(?:zrus|vypni|smaz|odstran|zastav)\w*\s+(?:mi\s+)?(?:vsechny\s+|ten\s+|tu\s+)?(?:budik|minutk|casovac|odpoc)"#, f) {
+            return .tool(ToolCall("cancel_alarm", ["which": text]))
+        }
+        // Přehled
+        if matches(#"^(?:jake|ktere|kolik|mam)\s+(?:mam\s+)?(?:nastavene\s+|nastaveny\s+)?(?:budik|minutk|casovac|odpoc)"#, f) {
+            let kind = matches(#"budik"#, f) ? "alarm" : (matches(#"minutk|casovac|odpoc"#, f) ? "timer" : "all")
+            return .tool(ToolCall("list_alarms", ["kind": kind]))
+        }
+        guard !isQuestion else { return nil }
+        let timerWord = matches(#"\b(minutk\w*|casovac\w*|odpocet|odpocitavani|odpocitej|timer)\b"#, f)
+            || matches(#"^(?:zazvon|pipni|ozvi)\w*\s+(?:mi\s+)?za\b"#, f)
+            || matches(#"\bbudik\w*\s+za\b"#, f)
+        if timerWord, CzechDuration.parse(text) != nil {
+            var args = ["duration": text]
+            let label = clockLabel(text, extraFillers: ["za"])
+            if !label.isEmpty { args["label"] = label }
+            else if matches(#"\bbudik"#, f) { args["label"] = "Budík" }
+            return .tool(ToolCall("set_timer", args))
+        }
+        if timerWord {
+            return .clarify(question: "Na jak dlouho mám odpočet nastavit?",
+                            pending: PendingIntent(tool: "set_timer", args: [:], missing: .duration))
+        }
+        if matches(#"\b(budik\w*|vzbud\w*|probud\w*|buzeni)\b"#, f) {
+            let p = CzechTimeParser(calendar: calendar, now: now, defaultHour: 7, alarmMode: true)
+            if let parsed = p.parse(text), parsed.hasTime || parsed.recurrence != nil {
+                var args = ["when": joinedRanges(text, parsed.ranges)]
+                let label = clockLabel(p.remainder(of: text, removing: parsed.ranges), extraFillers: [])
+                if !label.isEmpty { args["label"] = label }
+                return .tool(ToolCall("set_alarm", args))
+            }
+            return .clarify(question: "Na kolik hodin mám budík nastavit?",
+                            pending: PendingIntent(tool: "set_alarm", args: [:], missing: .when))
+        }
+        return nil
+    }
+
+    /// Popisek budíku / minutky – text bez spouštěcích a výplňových slov a bez délky.
+    private func clockLabel(_ text: String, extraFillers: Set<String>) -> String {
+        var t = text.replacingOccurrences(
+            of: #"(?i)\b(\d+(?:[.,]\d+)?|jednu|jednou|dvě|dve|tři|tri|čtyři|ctyri|pět|pet|deset|patnáct|patnact|dvacet|třicet|tricet|půl|pul|čtvrt|ctvrt)?\s*(hodin[uy]?|hod|minut[uy]?|min|sekund[uy]?|sek|vteřin[uy]?|vterin[uy]?)\b(\s+a\s+(půl|pul))?"#,
+            with: " ", options: .regularExpression)
+        t = CzechText.collapseSpaces(t)
+        let fillers = Set<String>(["nastav", "nastavit", "spust", "zapni", "dej", "mi", "me", "na", "prosim", "minutku", "minutka",
+                                    "casovac", "odpocet", "odpocitej", "timer", "zazvon", "pipni", "ozvi", "se", "budik", "budika",
+                                    "vzbud", "probud", "a", "s", "popiskem", "nazvem", "buzeni", "novy", "chci"]).union(extraFillers)
+        // Výplňová slova odebereme ze začátku; zbytek je popisek (např. „na těstoviny“ → „Těstoviny“).
+        var words = t.split(separator: " ").map(String.init)
+        while let w = words.first, fillers.contains(CzechText.fold(w).trimmingCharacters(in: .punctuationCharacters)) { words.removeFirst() }
+        while let w = words.last, fillers.contains(CzechText.fold(w).trimmingCharacters(in: .punctuationCharacters)) { words.removeLast() }
+        return CzechText.capitalizeFirst(words.joined(separator: " ").trimmingCharacters(in: CharacterSet(charactersIn: " ,.:;-")))
     }
 
     // MARK: - Pomocné
