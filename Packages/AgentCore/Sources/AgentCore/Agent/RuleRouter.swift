@@ -25,9 +25,9 @@ public struct RuleRouter: Sendable {
 
     var parser: CzechTimeParser { CzechTimeParser(calendar: calendar, now: now) }
 
-    static let reminderTrigger = #"\b(pripomen(?:\s+mi)?|pripomenout|pripominku|pripominka|upozorni\s+me|upozorni|nezapomen\s+mi\s+pripomenout)\b"#
+    static let reminderTrigger = #"\b(pripomen(?:\s+mi)?|upozorni\s+me|nezapomen\s+mi\s+pripomenout|(?:nastav|vytvor|pridej|udelej)(?:\s+mi)?\s+pripominku)\b|^\s*pripominka\b"#
     static let notePrefix = #"^\s*(?:(?:prosim\s+)?(?:poznamenej(?:\s+si)?|zapis(?:\s+si)?|zaznamenej(?:\s+si)?|uloz(?:\s+si)?(?:\s+poznamku)?|zapamatuj\s+si|nova\s+poznamka|poznamka))\s*[:,\-–]?\s*"#
-    static let taskPrefix = #"^\s*(?:(?:prosim\s+)?(?:pridej(?:\s+si)?(?:\s+(?:do\s+)?(?:ukol[uy]?|ukolu))|novy\s+ukol|ukol|todo|to-do|musim))\s*[:,\-–]?\s*"#
+    static let taskPrefix = #"^\s*(?:(?:prosim\s+)?(?:pridej(?:\s+si)?(?:\s+(?:do\s+)?(?:ukol[uy]?|ukolu))|novy\s+ukol|ukol|todo|to-do))\s*[:,\-–]?\s*"#
     static let completePrefix = #"^\s*(?:hotovo|splneno|dokonceno|odskrtni|oznac\s+(?:jako\s+)?(?:hotove|splnene|hotovy|splneny))\s*[:,\-–]?\s*"#
     static let undoPhrases: Set<String> = ["zpet", "vrat to", "vrat zpet", "vrat to zpet", "vrat posledni akci", "odvolej",
                                            "zrus posledni akci", "zrus to", "vrat to prosim", "zpet prosim", "undo"]
@@ -135,8 +135,11 @@ public struct RuleRouter: Sendable {
     // MARK: - Pomocné
 
     private func agendaRange(_ f: String) -> AgendaRange? {
-        let asks = matches(#"\b(co|jaky|jake|kolik)\b.*\b(mam|me\s+ceka|ceka\s+me|cekaji|deje|program|plan|naplanovano|v\s+planu)\b|^(?:dnesni|zitrejsi|tydenni)\s+(?:program|plan|prehled)|^(?:prehled|program|agenda)\b"#, f)
-        guard asks, !matches(#"\bukol"#, f) || matches(#"\b(dnes|zitra|tyden)"#, f) else { return nil }
+        let asks = matches(#"\b(co|jaky|jake|kolik|mam)\b.*\b(mam|me\s+ceka|ceka\s+me|cekaji|deje|program|plan|naplanovano|naplanovaneho|v\s+planu)\b|^(?:dnesni|zitrejsi|tydenni)\s+(?:program|plan|prehled)|^(?:prehled|program|agenda)\b"#, f)
+        // Jen krátké dotazy, které míří na čas nebo program (ne „co mám vařit k večeři?“)
+        let words = f.split(whereSeparator: { $0 == " " }).count
+        let timeOrPlan = matches(#"\b(dnes|dneska|zitra|pozitri|tyden|tydnu|po\s+terminu|ceka|cekaji|program|plan|naplanovan\w*|agenda|prehled)\b"#, f)
+        guard asks, timeOrPlan, words <= 8, !matches(#"\bukol"#, f) || matches(#"\b(dnes|zitra|tyden)"#, f) else { return nil }
         if matches(#"\bpo\s+terminu\b|\bzmeskan|\bprosvihl"#, f) { return .overdue }
         if matches(#"\bpristi\s+tyden|\bpristim\s+tydnu"#, f) { return .nextWeek }
         if matches(#"\b(tento\s+tyden|tenhle\s+tyden|tomto\s+tydnu|tyden|tydnu|pristich\s+dnech|nejblizsich\s+dnech)\b"#, f) { return .week }

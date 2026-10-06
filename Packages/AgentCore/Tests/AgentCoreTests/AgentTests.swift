@@ -60,6 +60,19 @@ final class AgentTests: XCTestCase {
         XCTAssertEqual(r.actions.first?.summary, "Připomínka: Vypnout troubu – dnes v 10:20")
     }
 
+    func testRulesDoNotHijackConversation() {
+        let r = RuleRouter(calendar: TS.cal, now: TS.now)
+        XCTAssertNil(r.route("co mám vařit k večeři?"))
+        XCTAssertNil(r.route("musím ti něco říct"))
+        XCTAssertNil(r.route("jak funguje připomínka v této aplikaci?"))
+        XCTAssertNil(r.route("co mám dělat, když mě bolí hlava"))
+        XCTAssertNotNil(r.route("co mám dnes?"))
+        XCTAssertNotNil(r.route("Co mě čeká tento týden"))
+        XCTAssertNotNil(r.route("Mám na zítra něco naplánovaného?"))
+        XCTAssertNotNil(r.route("nastav mi připomínku na zítra v 9 na zubaře"))
+        XCTAssertNotNil(r.route("Připomínka: zítra v 7 vynést koš"))
+    }
+
     func testClarificationFlow() async throws {
         let agent = try makeAgent()
         let q = await agent.handle("připomeň mi koupit mléko")

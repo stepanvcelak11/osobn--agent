@@ -19,4 +19,4 @@ Osobní AI agent, který běží **100 % offline přímo v telefonu**. Bez serve
 ## Vývoj
 - Jádro (`Packages/AgentCore`) jde testovat i bez Macu: `cd Packages/AgentCore && swift test` (Linux potřebuje `libssl-dev`).
 - iOS: `brew install xcodegen && xcodegen generate && open OsobniAgent.xcodeproj`.
-- CI: `Jádro – testy` (Linux, 46 testů + ověření gramatik parserem llama.cpp), `iOS – sestavení IPA` (macOS, nepodepsané IPA + síťový audit). Tag `v*` vytvoří vydání s IPA.
+- CI: `Jádro – testy` (Linux, 47 testů + ověření gramatik parserem llama.cpp), `iOS – sestavení IPA` (macOS, nepodepsané IPA + síťový audit). Tag `v*` vytvoří vydání s IPA.
