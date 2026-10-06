@@ -22,6 +22,7 @@ final class AIService: ObservableObject {
     private(set) var embedder: LlamaEmbedder?
     private var whisper: WhisperTranscriber?
     private var whisperModelId: String?
+    private var whisperReleaseTask: Task<Void, Never>?
 
     var contextLength: Int {
         get { UserDefaults.standard.object(forKey: "llm.context") as? Int ?? 3072 }
@@ -67,6 +68,7 @@ final class AIService: ObservableObject {
     /// Whisper se načítá až při prvním diktování a po chvíli se uvolní (šetří paměť).
     func transcriber(for m: InstalledModel?) async throws -> WhisperTranscriber {
         guard let m else { throw SpeechError.noModel }
+        scheduleWhisperRelease()
         if let whisper, whisperModelId == m.id { return whisper }
         speechState = .loading(m.displayName)
         let path = m.url.path
@@ -82,7 +84,19 @@ final class AIService: ObservableObject {
         }
     }
 
+    /// Whisper (~0,5–1 GB) se uvolní po 2 minutách bez diktování – šetří paměť pro jazykový model.
+    private func scheduleWhisperRelease() {
+        whisperReleaseTask?.cancel()
+        whisperReleaseTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 120_000_000_000)
+            guard !Task.isCancelled else { return }
+            self?.releaseSpeech()
+        }
+    }
+
     func releaseSpeech() {
+        whisperReleaseTask?.cancel()
+        whisperReleaseTask = nil
         whisper = nil
         whisperModelId = nil
         speechState = .none
