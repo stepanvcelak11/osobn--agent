@@ -220,6 +220,24 @@ struct HomeView: View {
         }
     }
 
+    private func subtitle(_ item: AgendaItem, showRelative: Bool) -> String {
+        let cal = app.calendar
+        var parts: [String] = []
+        if let d = item.date {
+            if showRelative {
+                parts.append(CzechFormat.relativeDateTime(d, now: now, calendar: cal, hasTime: item.hasTime))
+            } else if item.hasTime {
+                var t = CzechFormat.time(d, calendar: cal)
+                if let e = item.endDate { t += "–" + CzechFormat.time(e, calendar: cal) }
+                parts.append(t)
+            } else {
+                parts.append("celý den")
+            }
+        }
+        if let loc = item.location { parts.append(loc) }
+        return parts.joined(separator: " · ")
+    }
+
     private func itemRow(_ item: AgendaItem, showRelative: Bool) -> some View {
         Button {
             if let snap = try? app.store?.snapshot(item.ref) { editing = EditTarget(ref: item.ref, snapshot: snap) }
@@ -229,11 +247,7 @@ struct HomeView: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(item.title).font(.body).foregroundStyle(.primary).lineLimit(2)
                     HStack(spacing: 6) {
-                        if let d = item.date {
-                            Text(showRelative ? CzechFormat.relativeDateTime(d, now: now, calendar: app.calendar, hasTime: item.hasTime)
-                                              : (item.hasTime ? CzechFormat.time(d, calendar: app.calendar) + (item.endDate.map { "–" + CzechFormat.time($0, calendar: app.calendar) } ?? "") : "celý den"))
-                        }
-                        if let loc = item.location { Text("· \(loc)") }
+                        Text(subtitle(item, showRelative: showRelative))
                         if item.recurrenceText != nil { Image(systemName: "repeat") }
                     }
                     .font(.caption).foregroundStyle(item.isOverdue ? .red : .secondary)
@@ -251,6 +265,13 @@ struct TaskRow: View {
     @EnvironmentObject var app: AppModel
     var task: TaskItem
     var now: Date
+
+    private var dueLine: (text: String, overdue: Bool)? {
+        guard let d = task.dueAt else { return nil }
+        let overdue = !task.isDone && (task.dueHasTime ? d < now : d < app.calendar.startOfDay(for: now))
+        let when = CzechFormat.relativeDateTime(d, now: now, calendar: app.calendar, hasTime: task.dueHasTime)
+        return (overdue ? "Po termínu · " + when : when, overdue)
+    }
     var body: some View {
         HStack(spacing: 12) {
             Button { app.toggleTask(task) } label: {
@@ -262,10 +283,8 @@ struct TaskRow: View {
             .accessibilityLabel(task.isDone ? "Označit jako nesplněné" : "Označit jako splněné")
             VStack(alignment: .leading, spacing: 2) {
                 Text(task.title).strikethrough(task.isDone).foregroundStyle(task.isDone ? .secondary : .primary)
-                if let d = task.dueAt {
-                    let overdue = !task.isDone && (task.dueHasTime ? d < now : d < Calendar.current.startOfDay(for: now))
-                    Text((overdue ? "Po termínu · " : "") + CzechFormat.relativeDateTime(d, now: now, calendar: app.calendar, hasTime: task.dueHasTime))
-                        .font(.caption).foregroundStyle(overdue ? .red : .secondary)
+                if let line = dueLine {
+                    Text(line.text).font(.caption).foregroundStyle(line.overdue ? Color.red : Color.secondary)
                 }
             }
             Spacer()

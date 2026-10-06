@@ -73,7 +73,7 @@ final class AudioRecorder: ObservableObject {
         guard !isRecording else { return }
         guard await Self.requestPermission() else { throw SpeechError.micDenied }
         let session = AVAudioSession.sharedInstance()
-        try session.setCategory(.playAndRecord, mode: .measurement, options: [.defaultToSpeaker, .allowBluetooth])
+        try session.setCategory(.playAndRecord, mode: .measurement, options: [.defaultToSpeaker])
         try session.setActive(true, options: [])
 
         let input = engine.inputNode

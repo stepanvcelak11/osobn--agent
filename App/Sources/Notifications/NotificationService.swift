@@ -13,10 +13,10 @@ final class NotificationService: NSObject, ObservableObject, UNUserNotificationC
     @Published var openedFromNotification: String?
 
     private let center = UNUserNotificationCenter.current()
-    static let categoryReminder = "OA_REMINDER"
-    static let categorySummary = "OA_SUMMARY"
-    static let actionSnooze10 = "OA_SNOOZE_10"
-    static let actionSnooze60 = "OA_SNOOZE_60"
+    nonisolated static let categoryReminder = "OA_REMINDER"
+    nonisolated static let categorySummary = "OA_SUMMARY"
+    nonisolated static let actionSnooze10 = "OA_SNOOZE_10"
+    nonisolated static let actionSnooze60 = "OA_SNOOZE_60"
     private let managedPrefixes = ["rem-", "evt-", "tsk-"]
 
     func configure() {

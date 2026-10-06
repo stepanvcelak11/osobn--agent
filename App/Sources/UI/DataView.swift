@@ -142,29 +142,46 @@ struct DataView: View {
         }
     }
 
-    @ViewBuilder private var eventsList: some View {
+    private var eventGroups: [(day: Date, events: [Event])] {
         let cal = app.calendar
         let list = events.filter { matches($0.title + " " + $0.location) }
         let groups = Dictionary(grouping: list) { cal.startOfDay(for: $0.startAt) }
-        if list.isEmpty { EmptyHint(text: "Žádné události. Řekni třeba „v pátek ve 14 schůzka s Petrem“.") }
-        ForEach(groups.keys.sorted(), id: \.self) { day in
-            SwiftUI.Section(CzechText.capitalizeFirst(CzechFormat.relativeDay(day, now: Date(), calendar: cal))) {
-                ForEach(groups[day] ?? []) { e in
-                    HStack(spacing: 12) {
-                        KindBadge(kind: .event)
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(e.title)
-                            Text(e.allDay ? "celý den" : CzechFormat.time(e.startAt, calendar: cal) + (e.endAt.map { "–" + CzechFormat.time($0, calendar: cal) } ?? "")
-                                 + (e.location.isEmpty ? "" : " · \(e.location)"))
-                                .font(.caption).foregroundStyle(.secondary)
-                        }
-                    }
-                    .contentShape(Rectangle())
-                    .onTapGesture { edit(EntityRef(kind: .event, id: e.id)) }
-                    .swipeActions { deleteButton(EntityRef(kind: .event, id: e.id), e.title) }
-                }
+        return groups.keys.sorted().map { (day: $0, events: groups[$0] ?? []) }
+    }
+
+    @ViewBuilder private var eventsList: some View {
+        let groups = eventGroups
+        if groups.isEmpty { EmptyHint(text: "Žádné události. Řekni třeba „v pátek ve 14 schůzka s Petrem“.") }
+        ForEach(groups, id: \.day) { g in
+            SwiftUI.Section(dayTitle(g.day)) {
+                ForEach(g.events) { e in eventRow(e) }
             }
         }
+    }
+
+    private func dayTitle(_ day: Date) -> String {
+        CzechText.capitalizeFirst(CzechFormat.relativeDay(day, now: Date(), calendar: app.calendar))
+    }
+
+    private func eventSubtitle(_ e: Event) -> String {
+        let cal = app.calendar
+        var s = e.allDay ? "celý den" : CzechFormat.time(e.startAt, calendar: cal)
+        if !e.allDay, let end = e.endAt { s += "–" + CzechFormat.time(end, calendar: cal) }
+        if !e.location.isEmpty { s += " · " + e.location }
+        return s
+    }
+
+    private func eventRow(_ e: Event) -> some View {
+        HStack(spacing: 12) {
+            KindBadge(kind: .event)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(e.title)
+                Text(eventSubtitle(e)).font(.caption).foregroundStyle(.secondary)
+            }
+        }
+        .contentShape(Rectangle())
+        .onTapGesture { edit(EntityRef(kind: .event, id: e.id)) }
+        .swipeActions { deleteButton(EntityRef(kind: .event, id: e.id), e.title) }
     }
 
     @ViewBuilder private var remindersList: some View {
