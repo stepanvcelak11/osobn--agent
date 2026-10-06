@@ -6,6 +6,11 @@ on:
     tags: ["v*"]
     paths-ignore: ["**.md", "docs/**"]
   workflow_dispatch:
+    inputs:
+      release_tag:
+        description: "Vytvořit vydání s tímto tagem (např. v1.0.0); prázdné = jen sestavit"
+        required: false
+        default: ""
 
 permissions:
   contents: write
@@ -62,11 +67,12 @@ jobs:
             build/OsobniAgent-unsigned.ipa.sha256
           retention-days: 30
 
-      - name: Vydání (jen pro tag v*)
-        if: startsWith(github.ref, 'refs/tags/v')
+      - name: Vydání (tag v* nebo ruční spuštění s release_tag)
+        if: startsWith(github.ref, 'refs/tags/v') || inputs.release_tag != ''
         env:
           GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.release_tag != '' && inputs.release_tag || github.ref_name }}
         run: |
-          gh release create "${GITHUB_REF_NAME}" build/OsobniAgent-unsigned.ipa build/OsobniAgent-unsigned.ipa.sha256 \
-            --title "Osobní agent ${GITHUB_REF_NAME}" --notes-file docs/RELEASE_NOTES.md || \
-          gh release upload "${GITHUB_REF_NAME}" build/OsobniAgent-unsigned.ipa build/OsobniAgent-unsigned.ipa.sha256 --clobber
+          gh release create "$TAG" build/OsobniAgent-unsigned.ipa build/OsobniAgent-unsigned.ipa.sha256 \
+            --target "$GITHUB_SHA" --title "Osobní agent $TAG" --notes-file docs/RELEASE_NOTES.md || \
+          gh release upload "$TAG" build/OsobniAgent-unsigned.ipa build/OsobniAgent-unsigned.ipa.sha256 --clobber
