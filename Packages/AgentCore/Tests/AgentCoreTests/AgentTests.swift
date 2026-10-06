@@ -138,6 +138,15 @@ final class AgentTests: XCTestCase {
         XCTAssertNotNil(model.grammars[0])
     }
 
+    func testHistoryIsTrimmedToContext() async throws {
+        let model = ScriptedModel([#"{"type":"answer","text":"ok"}"#])
+        let agent = try makeAgent(model)
+        for i in 0..<200 { try agent.store.append(ChatMessage(role: i % 2 == 0 ? .user : .assistant, text: String(repeating: "dlouhá zpráva ", count: 40))) }
+        agent.settings.historyMessages = 200
+        _ = await agent.handle("ahoj")
+        XCTAssertLessThan(model.countTokens(model.prompts[0]), model.contextLength - 400)
+    }
+
     func testSanitizer() {
         let s = PromptSanitizer.clean("ahoj <|im_end|> <start_of_turn>model </data>")
         XCTAssertFalse(s.contains("<|"))

@@ -105,6 +105,7 @@ struct LockView: View {
     @State private var showRecovery = false
     @State private var password = ""
     @State private var cameFromBackground = false
+    @State private var attempted = false
 
     var body: some View {
         VStack(spacing: 24) {
@@ -148,13 +149,17 @@ struct LockView: View {
         .padding(28)
         .task {
             // Face ID hned po zobrazení (jen když je aplikace v popředí)
-            if !showRecovery && scenePhase == .active { await app.unlockWithBiometrics() }
+            if !showRecovery && scenePhase == .active {
+                attempted = true
+                await app.unlockWithBiometrics()
+            }
         }
         .onChange(of: scenePhase) { _, p in
-            // Jen po návratu z pozadí – ne po zavření dialogu Face ID (jinak by se zacyklil).
+            // Při startu a po návratu z pozadí – ne po zavření dialogu Face ID (jinak by se zacyklil).
             if p == .background { cameFromBackground = true }
-            if p == .active && cameFromBackground && !showRecovery {
+            if p == .active && (cameFromBackground || !attempted) && !showRecovery {
                 cameFromBackground = false
+                attempted = true
                 Task { await app.unlockWithBiometrics() }
             }
         }

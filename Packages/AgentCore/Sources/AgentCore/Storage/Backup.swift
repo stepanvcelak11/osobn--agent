@@ -53,17 +53,20 @@ public enum BackupService {
     }
 
     /// Nahradí všechna data obsahem zálohy (v jedné transakci – při chybě se nic nezmění).
-    public static func restore(_ p: BackupPayload, into store: DataStore) throws {
+    /// Nastavení vázaná na toto zařízení (nahrané modely) se zachovají.
+    public static func restore(_ p: BackupPayload, into store: DataStore, keepSettingPrefixes: [String] = ["model"]) throws {
         try store.db.transaction {
-            for t in ["notes", "tasks", "events", "reminders", "messages", "actions", "embeddings", "settings"] {
+            for t in ["notes", "tasks", "events", "reminders", "messages", "actions", "embeddings"] {
                 try store.db.execute("DELETE FROM \(t)")
             }
+            let keep = keepSettingPrefixes.map { "key NOT LIKE '\($0)%'" }.joined(separator: " AND ")
+            try store.db.execute("DELETE FROM settings" + (keep.isEmpty ? "" : " WHERE \(keep)"))
             for n in p.notes { try store.insert(n) }
             for t in p.tasks { try store.insert(t) }
             for e in p.events { try store.insert(e) }
             for r in p.reminders { try store.insert(r) }
             for m in p.messages { try store.append(m) }
-            for (k, v) in p.settings { try store.setSetting(k, v) }
+            for (k, v) in p.settings where !keepSettingPrefixes.contains(where: { k.hasPrefix($0) }) { try store.setSetting(k, v) }
         }
         store.changed()
     }

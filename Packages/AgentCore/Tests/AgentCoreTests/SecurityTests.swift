@@ -58,12 +58,14 @@ final class SecurityTests: XCTestCase {
 
         let target = try DataStore.inMemory()
         try target.insert(Note(title: "Přepíše se", body: ""))
+        try target.setSetting("models.installed", "[seznam]")
         let payload = try BackupService.open(blob, password: pw)
         try BackupService.restore(payload, into: target)
         XCTAssertEqual(try target.notes().map(\.body), ["TAJNY_OBSAH_XYZ"])
         XCTAssertEqual(try target.tasks().count, 1)
         XCTAssertEqual(try target.activeReminders().first?.recurrence?.hour, 8)
         XCTAssertEqual(try target.setting("x"), "y")
+        XCTAssertEqual(try target.setting("models.installed"), "[seznam]", "modely v telefonu zůstávají")
         XCTAssertEqual(try target.recentMessages().count, 1)
     }
 

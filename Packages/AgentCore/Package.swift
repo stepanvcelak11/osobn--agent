@@ -33,6 +33,8 @@ let package = Package(
                 .define("SQLCIPHER_CRYPTO_OPENSSL", .when(platforms: [.linux])),
                 .define("HAVE_USLEEP", to: "1"),
                 .define("NDEBUG"),                                // bez ladicích assertů SQLite
+                .define("SQLCIPHER_OMIT_LOG"),                    // žádné logy (ani do os_log)
+                .define("SQLCIPHER_OMIT_LOG_DEVICE"),
                 .unsafeFlags(["-w"]),
             ],
             linkerSettings: [

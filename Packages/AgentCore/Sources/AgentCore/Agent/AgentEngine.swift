@@ -174,9 +174,15 @@ public final class AgentEngine: @unchecked Sendable {
     private func runModel(_ text: String, model: LanguageModel, mode: AgentMode,
                           progress: (@Sendable (AgentProgress) -> Void)?) async throws -> AgentReply {
         let tools = mode == .capture ? Tools.capture : Tools.all
-        var messages: [PromptMessage] = [PromptMessage(.system, Prompts.system(now: clock(), calendar: calendar, tools: tools, capture: mode == .capture))]
-        messages += historyMessages()
-        messages.append(PromptMessage(.user, PromptSanitizer.clean(text)))
+        let system = PromptMessage(.system, Prompts.system(now: clock(), calendar: calendar, tools: tools, capture: mode == .capture))
+        let userMessage = PromptMessage(.user, PromptSanitizer.clean(text))
+        var history = historyMessages()
+        // Historie se ořízne odzadu, aby se vše vešlo do kontextu modelu (s rezervou na odpověď a výsledky nástrojů).
+        let budget = model.contextLength - 400 - 900
+        while !history.isEmpty && model.countTokens(model.template.render([system] + history + [userMessage])) > budget {
+            history.removeFirst(min(2, history.count))
+        }
+        var messages: [PromptMessage] = [system] + history + [userMessage]
         let grammar = GrammarBuilder.agentGrammar(tools: tools, allowAnswer: mode != .capture, allowAsk: true)
 
         var actions: [ActionRecord] = []
@@ -219,7 +225,9 @@ public final class AgentEngine: @unchecked Sendable {
                     return AgentReply(text: "", actions: actions, isQuestion: false, source: "model", stats: stats)
                 }
                 messages.append(PromptMessage(.assistant, decision.json))
-                messages.append(PromptMessage(.user, Prompts.toolResult(name: call.name, result: outcome.resultForModel)))
+                var result = outcome.resultForModel
+                if result.count > 3000 { result = String(result.prefix(3000)) + "\n…(zkráceno)" }
+                messages.append(PromptMessage(.user, Prompts.toolResult(name: call.name, result: result)))
             }
         }
         return AgentReply(text: lastReadResult ?? "", actions: actions, isQuestion: false, source: "model", stats: stats)

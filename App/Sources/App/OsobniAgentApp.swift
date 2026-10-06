@@ -3,8 +3,18 @@ import UIKit
 import UIKit.UIGestureRecognizerSubclass
 import AgentCore
 
+/// Delegát aplikace – jen kvůli bezpečnostním pojistkám.
+final class AppDelegate: NSObject, UIApplicationDelegate {
+    /// Zákaz klávesnic třetích stran: mohly by odesílat psaný text na internet. Funguje jen systémová klávesnice iOS.
+    func application(_ application: UIApplication,
+                     shouldAllowExtensionPointIdentifier extensionPointIdentifier: UIApplication.ExtensionPointIdentifier) -> Bool {
+        extensionPointIdentifier != .keyboard
+    }
+}
+
 @main
 struct OsobniAgentApp: App {
+    @UIApplicationDelegateAdaptor(AppDelegate.self) private var delegate
     @StateObject private var app = AppModel()
     @Environment(\.scenePhase) private var scenePhase
     @AppStorage("appearance") private var appearance: String = AppearanceMode.dark.rawValue
