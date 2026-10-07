@@ -65,7 +65,14 @@ struct TitleView: View {
 
     private var buttons: some View {
         VStack(spacing: 12) {
-            if let last = app.latestUnfinished {
+            let running = app.saves.filter { $0.end == nil }
+            if running.count > 1 {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("ROZEHRANÉ HRY").font(.caption2.weight(.bold)).tracking(2).foregroundStyle(Theme.dimText)
+                    ForEach(running.prefix(3)) { g in runningRow(g) }
+                }
+                Button("Nová hra") { showNewGame = true }.buttonStyle(EmberButtonStyle(prominent: false))
+            } else if let last = app.latestUnfinished {
                 Button { app.open(last.id) } label: {
                     VStack(spacing: 2) {
                         Text("Pokračovat")
@@ -81,6 +88,28 @@ struct TitleView: View {
                 Button("Kroniky her (\(app.saves.count))") { showSaves = true }.buttonStyle(EmberButtonStyle(prominent: false))
             }
         }
+    }
+
+    /// Řádek rozehrané hry – jedním klepnutím se přepneš mezi dlouhou a krátkou hrou.
+    private func runningRow(_ g: SaveSummary) -> some View {
+        Button { app.open(g.id) } label: {
+            HStack(spacing: 12) {
+                Image(systemName: g.mode.icon).font(.headline)
+                    .foregroundStyle(Color.black.opacity(0.8))
+                    .frame(width: 38, height: 38)
+                    .background(LinearGradient(colors: [Theme.gold, Theme.ember], startPoint: .topLeading, endPoint: .bottomTrailing), in: Circle())
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(g.title).font(.system(.subheadline, design: .serif).weight(.semibold)).foregroundStyle(Theme.parchment).lineLimit(1)
+                    Text("\(g.heroName) · \(g.mode.length) · den \(g.day) · ❤️ \(g.hp)").font(.caption2).foregroundStyle(Theme.dimText).lineLimit(1)
+                }
+                Spacer(minLength: 4)
+                Text(g.updatedAt, format: .relative(presentation: .named)).font(.caption2).foregroundStyle(Theme.dimText)
+                Image(systemName: "play.fill").font(.caption).foregroundStyle(Theme.ember)
+            }
+            .padding(10).panel(14)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Pokračovat: \(g.title), \(g.mode.title)")
     }
 
     @ViewBuilder private var modelStatus: some View {

@@ -50,7 +50,7 @@ extension GameState {
     enum CodingKeys: String, CodingKey {
         case id, version, mode, hero, settlement, journey, quest, threats, location, scene, turn, day, phase
         case worldTime, lastRealTime, lastTickAt, rngState, log, chronicle, achievements, end, epilogue
-        case createdAt, updatedAt, stats, weather, weatherDay, characters, contract, recentContracts, premise, memory, authorsNote
+        case createdAt, updatedAt, stats, weather, weatherDay, characters, contract, recentContracts, premise, memory, authorsNote, liveWorld
     }
 
     public init(from decoder: Decoder) throws {
@@ -90,5 +90,6 @@ extension GameState {
         premise = c.value(.premise, "")
         memory = c.value(.memory, "")
         authorsNote = c.value(.authorsNote, "")
+        liveWorld = c.value(.liveWorld, true)
     }
 }

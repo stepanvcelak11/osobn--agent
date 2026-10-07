@@ -223,7 +223,7 @@ struct GameView: View {
                 inputFocused = true
             }
         case .chronicle: ChronicleSheet(state: state)
-        case .settlement: SettlementSheet(state: state) { text in
+        case .settlement: SettlementSheet(state: state, onLiveWorld: { session.setLiveWorld($0) }) { text in
             sheet = nil
             input = text
             inputFocused = true

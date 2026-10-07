@@ -542,6 +542,8 @@ public struct GameState: Codable, Equatable, Identifiable, Sendable {
     public var memory = ""
     /// „Poznámka k vyprávění“: přání ke stylu a náladě (nemění pravidla).
     public var authorsNote = ""
+    /// Osada žije i když hráč nehraje (skutečný čas). Vypnuto = hra se při odchodu zastaví.
+    public var liveWorld = true
 
     public var season: Season { World.season(day: day) }
 
@@ -567,11 +569,13 @@ public struct NewGameSetup: Sendable {
     /// Povaha (nejvýš 2 vlastnosti) a volné body do schopností.
     public var traits: [String]
     public var bonusPoints: [Attribute: Int]
+    /// Osada žije i když hráč nehraje.
+    public var liveWorld: Bool
 
     public init(mode: GameMode, heroName: String, cityName: String, backgroundId: String, feminine: Bool = false,
                 seed: UInt64 = UInt64.random(in: 1...UInt64.max), premise: String = "",
-                traits: [String] = [], bonusPoints: [Attribute: Int] = [:]) {
-        self.traits = traits; self.bonusPoints = bonusPoints
+                traits: [String] = [], bonusPoints: [Attribute: Int] = [:], liveWorld: Bool = true) {
+        self.traits = traits; self.bonusPoints = bonusPoints; self.liveWorld = liveWorld
         self.mode = mode; self.heroName = heroName; self.cityName = cityName; self.backgroundId = backgroundId
         self.feminine = feminine; self.seed = seed; self.premise = premise
     }

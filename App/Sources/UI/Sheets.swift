@@ -142,12 +142,15 @@ struct ChronicleSheet: View {
 
 struct SettlementSheet: View {
     let state: GameState
+    var onLiveWorld: ((Bool) -> Void)? = nil
     var onOrder: (String) -> Void
+    @State private var live = true
 
     var body: some View {
         SheetContainer(title: state.mode.hasSettlement ? "🏰 \(state.settlement.name)" : "🐎 Karavana") {
             VStack(alignment: .leading, spacing: 16) {
                 overview
+                if state.mode.hasSettlement, let onLiveWorld { liveToggle(onLiveWorld) }
                 if state.mode == .campaign, let j = state.journey { journey(j) }
                 if state.mode == .realm { goal }
                 if state.mode.hasSettlement {
@@ -176,6 +179,21 @@ struct SettlementSheet: View {
             }
         }
         .padding(14).panel()
+    }
+
+    private func liveToggle(_ set: @escaping (Bool) -> Void) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Toggle(isOn: Binding(get: { live }, set: { live = $0; set($0) })) {
+                Label("Osada žije, i když nehraješ", systemImage: live ? "clock.arrow.circlepath" : "pause.circle")
+                    .font(.subheadline.weight(.semibold)).foregroundStyle(Theme.parchment)
+            }
+            .tint(Theme.ember)
+            Text(live ? "Skutečný čas se započítá (nejvýš 3 dny): sklizeň, stavby, ale i nájezdy. Hodí se, když se sem často vracíš."
+                      : "Hra je zastavená: když odejdeš, osada počká, dokud se nevrátíš. Ideální, když mezitím hraješ něco kratšího.")
+                .font(.caption).foregroundStyle(Theme.dimText)
+        }
+        .padding(14).panel()
+        .onAppear { live = state.liveWorld }
     }
 
     private var goal: some View {
@@ -466,6 +484,7 @@ struct HelpView: View {
         SheetContainer(title: "Jak hrát") {
             VStack(alignment: .leading, spacing: 14) {
                 section("Absolutní svoboda", "Žádná tlačítka s volbami. Napiš (nebo řekni), co tvůj hrdina udělá – „plížím se kolem stráže“, „nabídnu lapkům polovinu zlata“, „pojedu na koni do sousední vesnice“. Hraješ, jak dlouho chceš – žádné limity tahů.")
+                section("Více her najednou", "Můžeš mít rozehraných kolik her chceš – třeba dlouhou osadu a k tomu rychlou výpravu na cestu do práce. Každá hra se ukládá po každém tahu. Na titulní obrazovce je seznam rozehraných her, jedním klepnutím přepneš. U osady si v přehledu (🏰) zvolíš, jestli má žít i když nehraješ, nebo se zastavit a počkat na tebe.")
                 section("Čin, Řeč, Příběh, Pokračuj", "Tlačítkem vlevo od textu přepínáš, jak tah zadáváš. ČIN: co hrdina udělá (posoudí se a hodí kostkou). ŘEČ: co řekne nahlas – postavy odpoví. PŘÍBĚH: sám napíšeš, co se stane, a vypravěč naváže (bez kostek a bez odměn). Prázdné pole a šipka ⏩ = POKRAČUJ: vypravěč vypráví dál a svět jedná sám.")
                 section("Znovu a Vrátit", "Nelíbí se ti vyprávění? „Znovu“ ho převypráví – hod kostkou ale zůstane stejný, osud se přepsat nedá. „Vrátit tah“ vezme poslední tah zpět (jen dokud hra neskončila). Podržením prstu na textu ho zkopíruješ nebo necháš přečíst.")
                 section("🧠 Paměť vypravěče", "V menu si zapiš, co si má vypravěč vždy pamatovat (tajemství, sliby, nepřátele), a poznámku ke stylu („víc hororu“, „černý humor“). Při založení hry můžeš zadat i vlastní zápletku.")
@@ -504,26 +523,19 @@ struct SavesView: View {
     var body: some View {
         NavigationStack {
             List {
-                ForEach(app.saves) { s in
-                    Button {
-                        dismiss()
-                        app.open(s.id)
-                    } label: {
-                        HStack(spacing: 12) {
-                            Image(systemName: s.mode.icon).foregroundStyle(s.end == nil ? Theme.ember : Theme.dimText).frame(width: 28)
-                            VStack(alignment: .leading, spacing: 3) {
-                                Text(s.title).font(.system(.headline, design: .serif)).foregroundStyle(Theme.parchment).lineLimit(1)
-                                Text("\(s.heroName) · \(s.mode.title) · tah \(s.turn)").font(.caption).foregroundStyle(Theme.dimText)
-                                Text(s.end.map { "Konec: \($0.czechName)" } ?? "Rozehráno – ❤️ \(s.hp)").font(.caption2)
-                                    .foregroundStyle(s.end == nil ? Theme.ember : Theme.dimText)
-                            }
-                            Spacer()
-                            Text(s.updatedAt, format: .dateTime.day().month().hour().minute()).font(.caption2).foregroundStyle(Theme.dimText)
-                        }
-                    }
-                    .listRowBackground(Color.white.opacity(0.04))
+                let running = app.saves.filter { $0.end == nil }, done = app.saves.filter { $0.end != nil }
+                if !running.isEmpty {
+                    Section {
+                        ForEach(running) { s in row(s) }
+                            .onDelete { idx in for i in idx { app.delete(running[i].id) } }
+                    } header: { Text("Rozehrané – klepni a pokračuj").foregroundStyle(Theme.ember) }
                 }
-                .onDelete { idx in for i in idx { app.delete(app.saves[i].id) } }
+                if !done.isEmpty {
+                    Section {
+                        ForEach(done) { s in row(s) }
+                            .onDelete { idx in for i in idx { app.delete(done[i].id) } }
+                    } header: { Text("Dohrané").foregroundStyle(Theme.dimText) }
+                }
             }
             .scrollContentBackground(.hidden)
             .background(Theme.bg0)
@@ -531,5 +543,25 @@ struct SavesView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { doneButton { dismiss() } }
         }
+    }
+
+    private func row(_ s: SaveSummary) -> some View {
+        Button {
+            dismiss()
+            app.open(s.id)
+        } label: {
+            HStack(spacing: 12) {
+                Image(systemName: s.mode.icon).foregroundStyle(s.end == nil ? Theme.ember : Theme.dimText).frame(width: 28)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(s.title).font(.system(.headline, design: .serif)).foregroundStyle(Theme.parchment).lineLimit(1)
+                    Text("\(s.heroName) · \(s.mode.title) · tah \(s.turn)").font(.caption).foregroundStyle(Theme.dimText)
+                    Text(s.end.map { "Konec: \($0.czechName)" } ?? "Rozehráno – den \(s.day), ❤️ \(s.hp)").font(.caption2)
+                        .foregroundStyle(s.end == nil ? Theme.ember : Theme.dimText)
+                }
+                Spacer()
+                Text(s.updatedAt, format: .dateTime.day().month().hour().minute()).font(.caption2).foregroundStyle(Theme.dimText)
+            }
+        }
+        .listRowBackground(Color.white.opacity(0.04))
     }
 }

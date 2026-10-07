@@ -121,6 +121,7 @@ public final class GameEngine: @unchecked Sendable {
         }
         s.stats["start_pop"] = settlement.population
         s.stats["min_hp"] = 100
+        s.liveWorld = setup.liveWorld
         s.premise = String(CzechText.collapseSpaces(PromptSanitizer.clean(setup.premise)).trimmingCharacters(in: .whitespacesAndNewlines).prefix(400))
         World.updateWeather(&s)
         return (s, hook)

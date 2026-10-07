@@ -14,6 +14,7 @@ struct NewGameView: View {
     @State private var premise = ""
     @State private var traits: [String] = []
     @State private var bonus: [Attribute: Int] = [:]
+    @State private var liveWorld = true
     @FocusState private var focus: Bool
 
     var body: some View {
@@ -337,6 +338,18 @@ struct NewGameView: View {
                 }
                 .padding(16).panel()
 
+                if mode.hasSettlement {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Toggle(isOn: $liveWorld) {
+                            Text("Osada žije, i když nehraješ").font(.system(.headline, design: .serif)).foregroundStyle(Theme.parchment)
+                        }
+                        .tint(Theme.ember)
+                        Text(liveWorld ? "Čas běží i ve skutečnosti (nejvýš 3 dny) – vracíš se „podívat, co je nového“."
+                                       : "Hra se zastaví, kdykoli odejdeš. Dá se změnit i později v přehledu osady.")
+                            .font(.caption).foregroundStyle(Theme.dimText)
+                    }
+                    .padding(16).panel()
+                }
                 premiseCard
             }
             .padding(.horizontal, 20).padding(.bottom, 20)
@@ -417,7 +430,7 @@ struct NewGameView: View {
 
     private func start() {
         let setup = NewGameSetup(mode: mode, heroName: heroName, cityName: cityName, backgroundId: backgroundId, feminine: feminine,
-                                 premise: premise, traits: traits, bonusPoints: bonus)
+                                 premise: premise, traits: traits, bonusPoints: bonus, liveWorld: liveWorld)
         dismiss()
         app.startNewGame(setup)
     }

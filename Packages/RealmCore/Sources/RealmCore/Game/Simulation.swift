@@ -69,6 +69,8 @@ public enum Simulation {
         guard s.mode.hasSettlement, !s.isOver else { return SimulationReport() }
         let elapsed = now.timeIntervalSince(s.lastRealTime)
         s.lastRealTime = now
+        // Zastavená hra: skutečný čas se nepočítá, osada čeká na hráče.
+        guard s.liveWorld else { return SimulationReport() }
         guard elapsed > 60 else { return SimulationReport() }
         // Kdo byl dlouho pryč, ten se mezitím vyspal.
         if elapsed >= 6 * 3600 { s.hero.awakeHours = 0 }
@@ -299,7 +301,7 @@ public enum Simulation {
 
     /// Oznámení k naplánování (hrozby 2 h předem, dokončené stavby, nový den).
     public static func plannedNotifications(_ s: GameState, now: Date = Date(), includeDawn: Bool = true) -> [PlannedNotification] {
-        guard s.mode.hasSettlement, !s.isOver else { return [] }
+        guard s.mode.hasSettlement, !s.isOver, s.liveWorld else { return [] }
         // Herní čas běží dál skutečným tempem, když hráč nehraje.
         func real(_ world: Date) -> Date { now.addingTimeInterval(world.timeIntervalSince(s.worldTime)) }
         var out: [PlannedNotification] = []

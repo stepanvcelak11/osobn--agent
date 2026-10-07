@@ -63,6 +63,15 @@ final class GameSession: ObservableObject, Identifiable {
         save()
     }
 
+    /// Zastaví / pustí čas osady, když hráč nehraje.
+    func setLiveWorld(_ on: Bool) {
+        state.liveWorld = on
+        state.lastRealTime = Date()
+        save()
+        let s = state
+        Task { if on { await RealmNotifications.reschedule(for: s) } else { await RealmNotifications.cancel(gameId: s.id) } }
+    }
+
     func save() {
         try? store.save(state)
     }

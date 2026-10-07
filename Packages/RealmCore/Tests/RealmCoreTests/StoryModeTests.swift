@@ -78,3 +78,22 @@ final class StoryModeTests: XCTestCase {
 func XCTAssertThrowsAsync(_ body: () async throws -> Void, file: StaticString = #filePath, line: UInt = #line) async {
     do { try await body(); XCTFail("očekávána chyba", file: file, line: line) } catch {}
 }
+
+final class PausedWorldTests: XCTestCase {
+    func testPausedSettlementWaitsForPlayer() {
+        let t0 = Date(timeIntervalSince1970: 1_790_000_000)
+        var live = GameEngine.newGame(NewGameSetup(mode: .endless, heroName: "A", cityName: "B", backgroundId: "kupec", seed: 4), now: t0).state
+        var paused = GameEngine.newGame(NewGameSetup(mode: .endless, heroName: "A", cityName: "B", backgroundId: "kupec", seed: 4, liveWorld: false), now: t0).state
+        let week = t0.addingTimeInterval(7 * 86400)
+        Simulation.syncRealTime(&live, now: week)
+        Simulation.syncRealTime(&paused, now: week)
+        XCTAssertGreaterThan(live.worldTime, t0.addingTimeInterval(2 * 86400))
+        XCTAssertEqual(paused.worldTime, t0, "zastavená hra čeká")
+        XCTAssertEqual(paused.lastRealTime, week)
+        XCTAssertTrue(Simulation.plannedNotifications(paused, now: week).isEmpty)
+        // a po návratu běží dál jen herní čas tahů
+        paused.liveWorld = true
+        Simulation.syncRealTime(&paused, now: week.addingTimeInterval(30))
+        XCTAssertEqual(paused.worldTime, t0)
+    }
+}
