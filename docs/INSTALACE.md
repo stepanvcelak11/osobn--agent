@@ -16,10 +16,14 @@ počítač, kabel, Apple ID a Wi-Fi.
 ## 2. Připrav počítač
 
 **Windows**
-1. Nainstaluj **iTunes** a **iCloud** ve verzi **z webu Applu, ne z Microsoft Store** – Sideloadly s verzemi
-   ze Storu nefunguje. Správné odkazy najdeš na https://sideloadly.io hned u tlačítka Download
-   („iTunes … and iCloud … are required“).
-2. Restartuj počítač.
+1. Pokud máš iTunes nebo iCloud z **Microsoft Store**, nejdřív je odinstaluj
+   (Nastavení → Aplikace). Sideloadly s verzemi ze Storu nefunguje.
+2. Nainstaluj **iTunes** z webu Applu: https://www.apple.com/itunes/download/win64
+3. Nainstaluj **iCloud** z webu Applu. Apple ho na svém webu už nenabízí a odkazuje na Microsoft Store,
+   ale starší instalačka přímo z Applu pořád funguje (tenhle odkaz uvádí i Sideloadly):
+   https://updates.cdn-apple.com/2020/windows/001-39935-20200911-1A70AA56-F448-11EA-8CC0-99D41950005E/iCloudSetup.exe
+   Instalace stačí, do iCloudu se přihlašovat nemusíš. Kdyby instalátor nabídl aktualizaci, odmítni ji.
+4. Restartuj počítač.
 
 **Mac** – nic dalšího není potřeba.
 
@@ -78,6 +82,7 @@ a nainstaluj ho přes Sideloadly **stejně jako poprvé a se stejným Apple ID**
 
 | Problém | Řešení |
 |---|---|
+| Na webu Applu jde stáhnout jen iCloud z Microsoft Store | Použij přímý odkaz `iCloudSetup.exe` z kroku 2.3. Verzi ze Storu odinstaluj. |
 | Sideloadly nevidí iPhone | Odemkni telefon, zkus jiný kabel/port, na Windows zkontroluj, že je iTunes z webu Applu. |
 | „Untrusted developer“ / aplikace nejde otevřít | Krok 5.1 – důvěřovat Apple ID ve Správě zařízení. |
 | Aplikace spadne hned po otevření | Zapni Režim pro vývojáře (krok 5.2). Nebo vypršel 7denní podpis – krok 7. |
