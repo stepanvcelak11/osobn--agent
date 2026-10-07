@@ -114,7 +114,7 @@ export const CARDS = [
     opts: {
       left: { t: 'Snižte ceny!', e: { fin: -5, lid: 5 } },
       right: { t: 'Beru podíl', e: { fin: 15, lid: -10 } },
-      up: { t: 'Znárodnit elektrárnu', e: { fin: -10, lid: 5, dip: -5 }, unset: 'vrana' },
+      up: { t: 'Znárodnit elektrárnu', e: { fin: -10, lid: 5, dip: -5 }, unset: 'vrana', set: 'vrana_konec' },
       down: { t: 'Zdaňte jeho zisky', e: { fin: 10, lid: 5, sil: -5 } },
     } },
   { id: 'kasino', who: 'med', text: 'Postavme v hlavním městě obří kasino. Turisté se pohrnou!',
@@ -386,11 +386,11 @@ export const CARDS = [
       up: { t: 'Jako nepovinný předmět', e: { vir: 5 } },
       down: { t: 'Místo toho filozofii', e: { ved: 5, vir: -5, lid: 5 } },
     } },
-  { id: 'hrbitov', who: 'pou', text: 'Na starém hřbitově v noci svítí světla. Lidé říkají, že se vrací mrtví.',
+  { id: 'hrbitov', who: 'pou', not: ['podzemi'], text: 'Na starém hřbitově v noci svítí světla. Lidé říkají, že se vrací mrtví.',
     opts: {
       left: { t: 'Pověry', e: { vir: -5, ved: 5 } },
       right: { t: 'Pošlete kněze', e: { vir: 5, lid: 5 } },
-      up: { t: 'Pošlete vědce', e: { ved: 10, vir: -5 } },
+      up: { t: 'Pošlete vědce', e: { ved: 10, vir: -5 }, set: 'podzemi', next: 'podzemi1', in: 3 },
       down: { t: 'Pošlete vojáky', e: { sil: 5, lid: -5, vir: -5 } },
     } },
   { id: 'apatie', who: 'kaz', text: 'Mladí v nic nevěří. Ani v Boha, ani v republiku. Jen sedí a čekají.',

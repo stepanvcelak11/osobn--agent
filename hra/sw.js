@@ -1,7 +1,7 @@
 // Offline: všechny soubory hry v mezipaměti. Verzi při nasazení nahradí GitHub Actions (číslo commitu).
 const CACHE = 'rovnovaha-__VERSION__';
 const FILES = ['./', 'index.html', 'style.css', 'ui.js', 'game.js', 'cards.js', 'manifest.webmanifest',
-  'icons/icon-192.png', 'icons/icon-512.png', 'icons/apple-touch-icon.png', 'art.js'];
+  'icons/icon-192.png', 'icons/icon-512.png', 'icons/apple-touch-icon.png', 'art.js', 'world.js'];
 
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(FILES)).then(() => self.skipWaiting()));

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { effect, newGame, choose, nextLeader, currentCard, preview, fill, tenure, DIRS, cardById, METERS, CARDS, INTRO, PEOPLE, ENDINGS, KINDS, outcome, bestDir, skip, nudge, ready, CHARGE } from '../game.js';
+import { effect, newGame, choose, nextLeader, currentCard, preview, fill, tenure, DIRS, cardById, METERS, CARDS, INTRO, PEOPLE, ENDINGS, KINDS, outcome, bestDir, skip, nudge, ready, CHARGE, activeLaws, optionOf, taskProgress, upgrade, SPECIAL, TASKS } from '../game.js';
 
 const meterIds = new Set(METERS.map((m) => m.id));
 const all = [INTRO, ...CARDS];
@@ -8,7 +8,7 @@ const all = [INTRO, ...CARDS];
 test('balíček je v pořádku', () => {
   const ids = new Set();
   const setFlags = new Set();
-  for (const c of all) for (const d of DIRS) if (c.opts[d]?.set) setFlags.add(c.opts[d].set);
+  for (const c of all) for (const d of DIRS) { const o = c.opts[d]; if (o?.set) setFlags.add(o.set); if (o?.law) setFlags.add(`zakon_${o.law}`); }
   for (const c of all) {
     assert.ok(!ids.has(c.id), `duplicitní karta ${c.id}`);
     ids.add(c.id);
@@ -135,9 +135,10 @@ test('navazující příběhy opravdu navazují', () => {
   for (let i = 0; i < 300; i++) {
     const s = newGame({}, 500 + i);
     let g = 0;
-    while (g++ < 400) {
+    // Napůl rozumná hra, ať se svět dostane i do pozdějších ér a k tajným příběhům.
+    while (g++ < 900) {
       seen.add(s.card);
-      choose(s, randomDir(s));
+      choose(s, Math.random() < 0.5 ? randomDir(s) : wise(s));
       if (s.dead) nextLeader(s);
     }
   }
@@ -237,4 +238,84 @@ test('každý typ prezidenta vydrží s rozumnou hrou déle než náhoda', () =>
     assert.ok(months[20] >= 60, `${k.id}: medián ${months[20]}`);
     assert.ok(k.m && k.f && k.text && k.icon);
   }
+});
+
+// ── Hloubka světa ───────────────────────────────────────
+test('zákon platí a každý měsíc posouvá ukazatele, petice ho zruší', () => {
+  const s = onCard('vize', 'zakon_brannost');
+  choose(s, 'right');
+  assert.deepEqual(activeLaws(s), ['brannost']);
+  assert.ok(s.news.some((n) => n.kind === 'law'));
+  const sil = s.meters.sil, lid = s.meters.lid;
+  for (let i = 0; i < 4; i++) { s.card = 'intro2'; choose(s, 'left'); }
+  assert.equal(s.meters.sil, sil + 2, 'za 4 měsíce +2 Síla');
+  assert.equal(s.meters.lid, lid - 2);
+  s.card = 'zrus_brannost';
+  choose(s, 'right');
+  assert.deepEqual(activeLaws(s), []);
+});
+
+test('postavy si pamatují: komu volba pomůže, ten je vstřícnější', () => {
+  const s = onCard('vize', 'zakon_brannost');
+  choose(s, 'right'); // generálce (Síla) se líbí
+  assert.equal(s.rel.gen, 1);
+  s.card = 'zakon_brannost'; s.flags = [];
+  choose(s, 'left'); // „Nikdy“ – Síla dolů
+  assert.equal(s.rel.gen, 0);
+  s.rel.gen = -3;
+  let seen = false;
+  for (let i = 0; i < 300 && !seen; i++) { s.dead = null; s.meters = Object.fromEntries(Object.keys(s.meters).map((k) => [k, 50])); s.recent = []; s.card = 'intro2'; choose(s, 'left'); seen = s.card === 'gen_zla'; }
+  assert.ok(seen, 'nepřátelská generálka přijde s výhrůžkou');
+});
+
+test('podmíněná volba se odemkne až při splnění podmínky', () => {
+  const s = onCard('vize', 'valka_sousedu', { dip: 40 });
+  const card = cardById('valka_sousedu');
+  assert.equal(optionOf(s, card, 'up').t, 'Nabídneme mír');
+  s.meters.dip = 65;
+  assert.equal(optionOf(s, card, 'up').t, 'Zprostředkujeme mír');
+  for (const c of all) for (const d of DIRS) {
+    const o = c.opts[d];
+    if (o.need) { assert.ok(o.alt?.t && o.alt.e, `${c.id}.${d} nemá náhradu`); assert.ok(o.alt.t.length <= 30); }
+  }
+});
+
+test('úkol se plní, dává pečeť a nový úkol; éra se mění', () => {
+  const s = newGame({}, 77);
+  assert.ok(s.task && TASKS.some((t) => t.id === s.task.id));
+  s.task = { id: 'zakony', streak: 0 };
+  choose(s, 'left');
+  s.flags.push('zakon_brannost', 'zakon_cenzura');
+  s.card = 'zakon_lesy';
+  choose(s, 'right');
+  assert.deepEqual(s.tasksDone, ['zakony']);
+  assert.notEqual(s.task.id, 'zakony');
+  assert.ok(s.news.some((n) => n.kind === 'task'));
+  assert.equal(s.charge, CHARGE, 'odměna: nabitá schopnost');
+  s.total = 70; s.card = 'intro2'; s.meters = Object.fromEntries(Object.keys(s.meters).map((k) => [k, 50]));
+  choose(s, 'left');
+  assert.equal(s.era, 2);
+  assert.equal(s.card, 'era2');
+});
+
+test('tajný příběh končí legendou, ne katastrofou', () => {
+  const s = onCard('vize', 'signal3');
+  s.flags.push('signal');
+  const d = choose(s, 'right');
+  assert.equal(d.special, 'kontakt');
+  assert.equal(d.title, SPECIAL.kontakt.title);
+  assert.ok(s.endings.includes('x.kontakt'));
+  nextLeader(s);
+  assert.equal(s.dead, null);
+});
+
+test('stará uložená hra se doplní', () => {
+  const old = newGame({}, 5);
+  for (const k of ['rel', 'drift', 'task', 'tasksDone', 'era', 'news', 'charge']) delete old[k];
+  delete old.leader.kind;
+  const s = upgrade(JSON.parse(JSON.stringify(old)));
+  assert.equal(s.leader.kind, 'vize');
+  assert.ok(s.task);
+  choose(s, 'left'); choose(s, 'left');
+  assert.ok(taskProgress(s));
 });

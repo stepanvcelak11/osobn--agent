@@ -1,0 +1,430 @@
+// Hloubka světa Rovnováhy: vztahy postav, zákony, úkoly vůdců, éry, podmíněné volby a tajné příběhy.
+// Nové vlastnosti voleb:  law = zavede zákon, repeal = zruší zákon, rel = {postava: ±n} změna vztahu,
+//   need = {m, min|max} volba je dostupná jen při splnění podmínky (jinak platí `alt`), end = tajný konec.
+// Nové vlastnosti karet:  era = od které éry, seals = kolik splněných úkolů je potřeba,
+//   rel = [postava, práh] (záporný práh = nepřátelská, kladný = věrná).
+
+/// Na čem kterému člověku záleží – volby, které „jeho“ ukazatel zvednou, mu udělají radost.
+export const CARES = {
+  fin: 'fin', gen: 'sil', ved: 'ved', eko: 'pri', kaz: 'vir', vel: 'dip', odb: 'lid', med: 'fin', ork: 'ved', stin: 'sil',
+  far: 'pri', lek: 'lid', nula: 'ved', fed: 'dip', pou: 'vir', vrana: 'fin', upr: 'lid', dite: 'lid', prorok: 'vir', starosta: 'dip',
+};
+export const REL_MAX = 5;
+export const REL_LOYAL = 3;
+
+/// Zákony: dokud platí, každý měsíc posouvají ukazatele (po malých krocích).
+export const LAWS = {
+  dan_bohati: { name: 'Daň z bohatství', icon: '💰', per: { fin: 0.5, dip: -0.25 } },
+  brannost: { name: 'Branná povinnost', icon: '🪖', per: { sil: 0.5, lid: -0.5 } },
+  ochrana_lesu: { name: 'Ochrana lesů', icon: '🌲', per: { pri: 0.5, fin: -0.5 } },
+  statni_cirkev: { name: 'Státní církev', icon: '⛪', per: { vir: 0.5, ved: -0.5 } },
+  otevrene_hranice: { name: 'Otevřené hranice', icon: '🛂', per: { dip: 0.5, sil: -0.5 } },
+  robotizace: { name: 'Robotizace průmyslu', icon: '🤖', per: { ved: 0.5, fin: 0.25, lid: -0.5 } },
+  zakladni_prijem: { name: 'Základní příjem', icon: '🍞', per: { lid: 0.5, fin: -0.5 } },
+  cenzura: { name: 'Cenzura tisku', icon: '🔇', per: { vir: 0.25, lid: -0.25, ved: -0.25, sil: 0.25 } },
+  volny_trh: { name: 'Volný trh', icon: '📈', per: { fin: 0.5, pri: -0.5 } },
+  skolstvi: { name: 'Školy zdarma', icon: '🎓', per: { ved: 0.5, fin: -0.5 } },
+};
+
+/// Úkoly vůdců. Splněný úkol = pečeť; pečetě otevírají další éry a tajné příběhy.
+export const TASKS = [
+  { id: 'tri_roky', text: 'Vládni alespoň 3 roky.', type: 'months', n: 36 },
+  { id: 'klid', text: 'Udrž všech sedm ukazatelů mezi 30 a 70 % celý rok v kuse.', type: 'calm', n: 12 },
+  { id: 'zakony', text: 'Měj zároveň v platnosti 3 zákony.', type: 'laws', n: 3 },
+  { id: 'armada', text: 'Získej věrnost generálky Horákové.', type: 'rel', who: 'gen', n: REL_LOYAL },
+  { id: 'odbory', text: 'Získej věrnost odborů Franty Rybáře.', type: 'rel', who: 'odb', n: REL_LOYAL },
+  { id: 'pratele', text: 'Měj tři lidi, kteří jsou ti věrní.', type: 'friends', n: 3 },
+  { id: 'veda', text: 'Dostaň Vědu nad 75 % – a přežij to.', type: 'reach', m: 'ved', min: 75 },
+  { id: 'vira', text: 'Dostaň Víru nad 75 % – a přežij to.', type: 'reach', m: 'vir', min: 75 },
+  { id: 'priroda', text: 'Drž Přírodu nad 55 % celý rok v kuse.', type: 'hold', m: 'pri', min: 55, n: 12 },
+  { id: 'pokladna', text: 'Drž Finance nad 45 % dva roky v kuse.', type: 'hold', m: 'fin', min: 45, n: 24 },
+  { id: 'orakl', text: 'Svěř ORÁKLU elektrickou síť.', type: 'flag', flag: 'orakl_sit' },
+  { id: 'vrana', text: 'Zbav se Barona Vrány.', type: 'flag', flag: 'vrana_konec' },
+  { id: 'raketa', text: 'Vypusť první raketu od Velkého výpadku.', type: 'flag', flag: 'raketa', era: 2 },
+];
+
+/// Éry světa – svět se mění s časem a se splněnými úkoly.
+export const ERAS = [
+  { n: 1, name: 'Obnova' },
+  { n: 2, name: 'Rozmach', total: 60 },
+  { n: 3, name: 'Nové hranice', total: 150, seals: 2 },
+];
+
+/// Tajné konce – nejsou to katastrofy, ale legendy.
+export const SPECIAL = {
+  kontakt: { title: 'Ke hvězdám', icon: '🛸',
+    text: 'Vstoupil{a} jsi do světla jako první člověk, který opustil Zemi s návštěvníky z hvězd. Republika vytesala tvé jméno do kamene. Nikdo neví, jestli se někdy vrátíš.' },
+  podzemi: { title: 'Vládce podzemí', icon: '👑',
+    text: 'Usedl{a} jsi na trůn v hlubinách a lidé z bunkru tě přijali za svého panovníka. Nahoře po tobě zůstalo prázdné křeslo a legenda o tom, jak {ty} sestoupil{a} pod zem.' },
+  pravda: { title: 'Rada národů', icon: '🌍',
+    text: 'Odhalil{a} jsi pravdu o Velkém výpadku a svět tě zvolil do čela Rady národů. Republiku jsi opustil{a} jako hrdina – a poprvé po desetiletích lidé věřili, že budoucnost bude lepší.' },
+};
+
+const lawCard = (id, who, text, law, opts) => ({ id, who, text, not: [`zakon_${law}`], opts: { ...opts, right: { t: 'Uzákonit', ...opts.right, law } } });
+
+const repealCards = Object.entries(LAWS).map(([id, l]) => ({
+  id: `zrus_${id}`, who: 'tajemnik', req: [`zakon_${id}`], weight: 0.5,
+  text: `Lidé podepsali petici za zrušení zákona „${l.name}“. Prý už splnil, co měl – nebo naopak nikdy.`,
+  opts: {
+    left: { t: 'Zákon zůstane', e: { lid: -5, vir: 5 } },
+    right: { t: 'Zrušit ho', e: { lid: 5, vir: -5 }, repeal: id },
+    up: { t: 'Vypsat referendum', e: { lid: 5, fin: -5 }, repeal: id },
+    down: { t: 'Petici skartovat', e: { lid: -10, sil: 5 } },
+  },
+}));
+
+export const EXTRA = [
+  // ── Návrhy zákonů ────────────────────────────────────
+  lawCard('zakon_dan', 'fin', 'Navrhuji trvalou daň z bohatství, {osl}. Peníze by tekly každý měsíc – jen boháči budou zuřit.', 'dan_bohati', {
+    left: { t: 'Bohaté nechte být', e: { fin: -5, dip: 5 } },
+    right: { e: { fin: 5, lid: 5 } },
+    up: { t: 'Jednorázová sbírka', e: { fin: 10, dip: -5 } },
+    down: { t: 'Zdaňte Vránu', e: { fin: 10, lid: 5, dip: -5 }, rel: { vrana: -2 } },
+  }),
+  lawCard('zakon_brannost', 'gen', 'Armáda nemá dost vojáků. Chci zákon o branné povinnosti pro všechny mladé.', 'brannost', {
+    left: { t: 'Nikdy', e: { sil: -5, lid: 5 } },
+    right: { e: { sil: 5, lid: -5 } },
+    up: { t: 'Jen dobrovolníci', e: { sil: 5, fin: -5 } },
+    down: { t: 'Žoldnéři z ciziny', e: { sil: 10, fin: -10, dip: -5 } },
+  }),
+  lawCard('zakon_lesy', 'eko', 'Lesy mizí rychleji, než rostou. Potřebujeme zákon, který je ochrání navždy.', 'ochrana_lesu', {
+    left: { t: 'Dřevo potřebujeme', e: { pri: -5, fin: 5 } },
+    right: { e: { pri: 5, fin: -5 } },
+    up: { t: 'Vysaďte nové', e: { pri: 10, fin: -10 } },
+    down: { t: 'Les patří lidem', e: { pri: -5, lid: 5 } },
+  }),
+  lawCard('zakon_cirkev', 'kaz', 'Udělejte z víry státní církev, {osl}. Národ potřebuje společnou duši.', 'statni_cirkev', {
+    left: { t: 'Stát je světský', e: { vir: -5, ved: 5 } },
+    right: { e: { vir: 5, lid: -5 } },
+    up: { t: 'Svoboda vyznání', e: { vir: 5, sil: -5 } },
+    down: { t: 'Zdaňte kostely', e: { fin: 10, vir: -10 } },
+  }),
+  lawCard('zakon_hranice', 'vel', 'Otevřete hranice. Obchod, lidé i nápady budou proudit volně.', 'otevrene_hranice', {
+    left: { t: 'Hranice zavřít', e: { dip: -10, sil: 5 } },
+    right: { e: { dip: 5, fin: 5 } },
+    up: { t: 'Jen pro obchod', e: { dip: 5, fin: 5, lid: -5 } },
+    down: { t: 'Jen pro uprchlíky', e: { dip: 5, lid: -5, vir: 5 } },
+  }),
+  lawCard('zakon_roboti', 'ved', 'Roboti by mohli převzít práci v továrnách natrvalo. Chce to jen zákon.', 'robotizace', {
+    left: { t: 'Práce patří lidem', e: { lid: 5, ved: -5 } },
+    right: { e: { ved: 5, fin: 5 } },
+    up: { t: 'Jen v dolech', e: { ved: 5, lid: 5, fin: -5 } },
+    down: { t: 'Zakázat roboty', e: { ved: -10, lid: 5 } },
+  }),
+  lawCard('zakon_prijem', 'odb', 'Každý občan by měl dostávat základní příjem. Natrvalo a bez podmínek.', 'zakladni_prijem', {
+    left: { t: 'Nemáme na to', e: { lid: -5, fin: 5 } },
+    right: { e: { lid: 5, fin: -5 } },
+    up: { t: 'Jen pro nejchudší', e: { lid: 5, fin: -10 } },
+    down: { t: 'Místo peněz práce', e: { lid: 5, pri: -5, fin: -5 } },
+  }),
+  lawCard('zakon_cenzura', 'stin', 'Noviny šíří paniku. Dejte mi zákon a já je zkrotím.', 'cenzura', {
+    left: { t: 'Svoboda slova', e: { sil: -5, lid: 5 } },
+    right: { e: { sil: 5, ved: -5 } },
+    up: { t: 'Jen v době krize', e: { sil: 5, lid: -5 } },
+    down: { t: 'Zakažte jen lži', e: { ved: 5, sil: -5, vir: 5 } },
+  }),
+  lawCard('zakon_trh', 'vrana', 'Zrušte všechny regulace. Volný trh vyřeší všechno – a já vám rád pomůžu.', 'volny_trh', {
+    left: { t: 'Trh potřebuje pravidla', e: { fin: -5, pri: 5 } },
+    right: { e: { fin: 5, lid: -5 } },
+    up: { t: 'Jen pro malé firmy', e: { fin: 5, lid: 5, dip: -5 } },
+    down: { t: 'Vyveďte ho', e: { fin: -5, lid: 5, dip: -5 }, rel: { vrana: -2 } },
+  }),
+  lawCard('zakon_skoly', 'nula', 'Univerzity by měly být zdarma. Pro každého a navždy. Chytré hlavy jsou jediné bohatství, co nám zbylo.', 'skolstvi', {
+    left: { t: 'Kdo chce, ať platí', e: { ved: -5, fin: 5 } },
+    right: { e: { ved: 5, lid: 5 } },
+    up: { t: 'Stipendia pro nadané', e: { ved: 5, fin: -5 } },
+    down: { t: 'Řemesla místo škol', e: { ved: -5, lid: 5, pri: 5 } },
+  }),
+  ...repealCards,
+
+  // ── Postavy si pamatují ──────────────────────────────
+  { id: 'gen_zla', who: 'gen', rel: ['gen', -REL_LOYAL], text: 'Armáda vám přestává věřit, {osl}. Někteří důstojníci si šeptají o „jiném řešení“.',
+    opts: {
+      left: { t: 'Vyhoďte je', e: { sil: -10, lid: 5 }, rel: { gen: -1 } },
+      right: { t: 'Přidám armádě peníze', e: { sil: 10, fin: -10 }, rel: { gen: 3 } },
+      up: { t: 'Promluvím s nimi', e: { sil: 5, lid: -5 }, rel: { gen: 2 },
+        need: { m: 'vir', min: 60 }, alt: { t: 'Promluvím s nimi', e: { sil: 5, lid: -5 }, rel: { gen: 2 } } },
+      down: { t: 'Ať je Stín sleduje', e: { sil: -5, vir: -5 }, rel: { stin: 2, gen: -1 } },
+    } },
+  { id: 'gen_verna', who: 'gen', rel: ['gen', REL_LOYAL], text: 'Ať se stane cokoli, {osl}, armáda stojí za vámi. Stačí říct.',
+    opts: {
+      left: { t: 'Snad nebude třeba', e: { sil: -5, lid: 5 } },
+      right: { t: 'Pošlete vojáky na stavby', e: { sil: -5, fin: 10, lid: 5 } },
+      up: { t: 'Pomozte při povodních', e: { pri: 5, lid: 5, sil: -5 } },
+      down: { t: 'Hlídejte hranice', e: { sil: 5, dip: -5 } },
+    } },
+  { id: 'fin_zly', who: 'fin', rel: ['fin', -REL_LOYAL], text: 'Už nemám sílu hasit vaše výdaje, {osl}. Zvažuji rezignaci.',
+    opts: {
+      left: { t: 'Tak jděte', e: { fin: -10, lid: 5 } },
+      right: { t: 'Škrtejte, co chcete', e: { fin: 10, lid: -10 }, rel: { fin: 3 } },
+      up: { t: 'Zvýším vám plat', e: { fin: -5, lid: -5 }, rel: { fin: 2 } },
+      down: { t: 'Najdu lepšího', e: { fin: -5, ved: 5 } },
+    } },
+  { id: 'fin_verny', who: 'fin', rel: ['fin', REL_LOYAL], text: 'Našel jsem skryté rezervy po starém režimu. Patří vám, {osl}. Co s nimi?',
+    opts: {
+      left: { t: 'Do státní pokladny', e: { fin: 15 } },
+      right: { t: 'Rozdejte je lidem', e: { lid: 5, fin: 5 } },
+      up: { t: 'Na výzkum', e: { ved: 10, fin: 5 } },
+      down: { t: 'Na obnovu krajiny', e: { pri: 5, fin: 5 } },
+    } },
+  { id: 'ved_zla', who: 'ved', rel: ['ved', -REL_LOYAL], text: 'Vědci odcházejí do Federace. Říkají, že tady jejich práci nikdo neváží.',
+    opts: {
+      left: { t: 'Ať jdou', e: { ved: -15, fin: 5 } },
+      right: { t: 'Granty pro všechny', e: { ved: 10, fin: -10 }, rel: { ved: 3 } },
+      up: { t: 'Nová laboratoř', e: { ved: 5, fin: -5 }, rel: { ved: 2 } },
+      down: { t: 'Zakažte jim odjezd', e: { ved: -5, sil: 5, dip: -5 } },
+    } },
+  { id: 'ved_verna', who: 'ved', rel: ['ved', REL_LOYAL], text: 'Pro vás jsme pracovali i po nocích, {osl}. Máme průlom – levnou energii ze slunce.',
+    opts: {
+      left: { t: 'Utajte to', e: { sil: 5, ved: -5 } },
+      right: { t: 'Pro celou zemi', e: { ved: 10, pri: 5, fin: -5 } },
+      up: { t: 'Prodejte patent', e: { fin: 10, dip: 5 } },
+      down: { t: 'Darujte to světu', e: { dip: 10, ved: 5, fin: -5 } },
+    } },
+  { id: 'kaz_zly', who: 'kaz', rel: ['kaz', -REL_LOYAL], text: 'Ve svých kázáních říkám to, co si lidé myslí: vaše vláda je trestem za hříchy národa.',
+    opts: {
+      left: { t: 'Ať si mluví', e: { vir: -5, lid: -5 } },
+      right: { t: 'Daruji kostelu zvon', e: { vir: 10, fin: -5 }, rel: { kaz: 3 } },
+      up: { t: 'Pozvu ho na čaj', e: { vir: 5, lid: 5 }, rel: { kaz: 2 } },
+      down: { t: 'Zakažte mu kázat', e: { vir: -10, sil: 5 } },
+    } },
+  { id: 'kaz_verny', who: 'kaz', rel: ['kaz', REL_LOYAL], text: 'Za vaši vládu se modlí celé kláštery, {osl}. Lidé říkají, že vás vede prozřetelnost.',
+    opts: {
+      left: { t: 'Žádná prozřetelnost', e: { vir: -5, lid: 5 } },
+      right: { t: 'Děkuji za modlitby', e: { vir: 10 } },
+      up: { t: 'Pomozte chudým', e: { lid: 10, vir: 5, fin: -5 } },
+      down: { t: 'Ať kážou o práci', e: { fin: 5, vir: 5 } },
+    } },
+  { id: 'odb_zly', who: 'odb', rel: ['odb', -REL_LOYAL], text: 'Vyhlásili jsme generální stávku. Celá země stojí, dokud nás nezačnete poslouchat.',
+    opts: {
+      left: { t: 'Rozežeňte je', e: { lid: -10, sil: 5 } },
+      right: { t: 'Vyhovím všem', e: { lid: 10, fin: -15 }, rel: { odb: 3 } },
+      up: { t: 'Sednu si k jednání', e: { lid: 5, fin: -5 }, rel: { odb: 2 },
+        need: { m: 'lid', min: 60 }, alt: { t: 'Sednu si k jednání', e: { lid: 5, fin: -5 }, rel: { odb: 2 } } },
+      down: { t: 'Najmu stávkokaze', e: { fin: -5, lid: -10 } },
+    } },
+  { id: 'odb_verny', who: 'odb', rel: ['odb', REL_LOYAL], text: 'Dělníci vám věří, {osl}. Nabízejí, že o víkendech opraví mosty zadarmo.',
+    opts: {
+      left: { t: 'To nemohu přijmout', e: { lid: -5, vir: 5 } },
+      right: { t: 'S díky přijímám', e: { fin: 10 } },
+      up: { t: 'Ať opraví nemocnici', e: { lid: 5, fin: 5 } },
+      down: { t: 'Ať vysadí stromy', e: { pri: 5, lid: 5 } },
+    } },
+  { id: 'vel_zly', who: 'vel', rel: ['vel', -REL_LOYAL], text: 'Odjíždím, {osl}. Cítím se tu ponížený a moje vláda „přehodnocuje vztahy“.',
+    opts: {
+      left: { t: 'Šťastnou cestu', e: { dip: -15 } },
+      right: { t: 'Omluvím se', e: { dip: 10, vir: -5 }, rel: { vel: 3 } },
+      up: { t: 'Slavnostní večeře', e: { dip: 5, fin: -5 }, rel: { vel: 2 } },
+      down: { t: 'Vyhostíme i ostatní', e: { dip: -10, sil: 5, lid: 5 } },
+    } },
+  { id: 'vel_verny', who: 'vel', rel: ['vel', REL_LOYAL], text: 'Jste přítel, {osl}. Mohu vám zařídit obchodní smlouvu s půlkou kontinentu.',
+    opts: {
+      left: { t: 'Nechci být dlužník', e: { dip: -5, vir: 5 } },
+      right: { t: 'Zařiďte to', e: { dip: 10, fin: 10 } },
+      up: { t: 'Raději výměnu studentů', e: { dip: 5, ved: 5 } },
+      down: { t: 'Raději lékaře', e: { dip: 5, lid: 5 } },
+    } },
+  { id: 'eko_zla', who: 'eko', rel: ['eko', -REL_LOYAL], text: 'Moji lidé obsadili těžební stroje. Neodejdeme, dokud těžba nepřestane.',
+    opts: {
+      left: { t: 'Ať je policie odnese', e: { pri: -5, sil: 5, lid: -5 } },
+      right: { t: 'Zastavte těžbu', e: { pri: 10, fin: -10 }, rel: { eko: 3 } },
+      up: { t: 'Vyjednávejte', e: { pri: 5, fin: -5 }, rel: { eko: 2 } },
+      down: { t: 'Těžte jinde', e: { pri: -5, fin: 5, dip: -5 } },
+    } },
+  { id: 'eko_verna', who: 'eko', rel: ['eko', REL_LOYAL], text: 'Díky vám se do řek vrátili bobři a čistá voda. Lidé chtějí národní park.',
+    opts: {
+      left: { t: 'Na to nemáme', e: { pri: -5, fin: 5 } },
+      right: { t: 'Vyhlašte ho', e: { pri: 10, fin: -5 } },
+      up: { t: 'S turistickými stezkami', e: { pri: -5, fin: 10 } },
+      down: { t: 'Pro vědecký výzkum', e: { pri: 5, ved: 5 } },
+    } },
+  { id: 'vrana_zly', who: 'vrana', rel: ['vrana', -REL_LOYAL], text: 'Moje noviny o vás teď píšou každý den, {osl}. A nebude to nic hezkého.',
+    opts: {
+      left: { t: 'Ignorovat', e: { lid: -10 } },
+      right: { t: 'Usmířím se s ním', e: { fin: 5, lid: -5 }, rel: { vrana: 3 } },
+      up: { t: 'Zažaluji ho', e: { lid: 5, fin: -5 } },
+      down: { t: 'Zabavte mu majetek', e: { fin: 15, dip: -10 }, set: 'vrana_konec', rel: { vrana: -2 } },
+    } },
+  { id: 'vrana_verny', who: 'vrana', rel: ['vrana', REL_LOYAL], text: 'Posílám vám malý dárek, {osl}. Kufr plný peněz. Nic za to nechci. Zatím.',
+    opts: {
+      left: { t: 'Vraťte to', e: { fin: -5, vir: 5 }, rel: { vrana: -2 } },
+      right: { t: 'Do pokladny', e: { fin: 15, vir: -5, lid: -5 } },
+      up: { t: 'Pro sirotčince', e: { lid: 10, fin: 5, vir: -5 } },
+      down: { t: 'Předejte to policii', e: { sil: 5, lid: 5 }, rel: { vrana: -3 } },
+    } },
+
+  // ── Éry ──────────────────────────────────────────────
+  { id: 'era2', who: 'tajemnik', weight: 0, once: true,
+    text: 'Ulice se znovu rozsvítily, továrny jedou a lidé plánují budoucnost. Začíná éra Rozmachu, {osl}. Přijdou nové příležitosti – i nové hrozby.',
+    opts: {
+      left: { t: 'Opatrně', e: { sil: 5 } },
+      right: { t: 'Konečně!', e: { lid: 5 } },
+      up: { t: 'Investujme do vědy', e: { ved: 5 } },
+      down: { t: 'Myslete na přírodu', e: { pri: 5 } },
+    } },
+  { id: 'era3', who: 'tajemnik', weight: 0, once: true,
+    text: 'Republika se změnila k nepoznání. Mluví se o letech ke hvězdám, o strojích, které myslí, a o tom, co se doopravdy stalo při Velkém výpadku. Začíná éra Nových hranic.',
+    opts: {
+      left: { t: 'Ke hvězdám', e: { ved: 5 } },
+      right: { t: 'Ať lidé žijí v míru', e: { lid: 5 } },
+      up: { t: 'Chci znát pravdu', e: { vir: 5 }, next: 'pravda1', in: 3 },
+      down: { t: 'Posilme hranice', e: { sil: 5 } },
+    } },
+
+  // ── Éra Rozmachu ─────────────────────────────────────
+  { id: 'vesmir1', who: 'ved', era: 2, not: ['raketa'], text: 'Máme plány na první raketu od Velkého výpadku. Chcete, aby republika znovu dobyla vesmír?',
+    opts: {
+      left: { t: 'Máme jiné starosti', e: { ved: -5, lid: 5 } },
+      right: { t: 'Startujeme!', e: { ved: 10, fin: -10, vir: 5 }, set: 'raketa', next: 'vesmir2', in: 6 },
+      up: { t: 'Se Severní federací', e: { ved: 10, dip: 10, fin: -5 }, set: 'raketa', next: 'vesmir2', in: 6,
+        need: { m: 'dip', min: 60 }, alt: { t: 'Půjčíme si rakety', e: { ved: 5, fin: -10, dip: 5 } } },
+      down: { t: 'Satelity pro zemědělce', e: { ved: 5, pri: 5, fin: -5 } },
+    } },
+  { id: 'vesmir2', who: 'ved', weight: 0, req: ['raketa'], text: 'Raketa stojí na rampě. Celá země sleduje odpočítávání. Kdo poletí?',
+    opts: {
+      left: { t: 'Odložte start', e: { ved: -5, lid: -5 } },
+      right: { t: 'Nejlepší pilotka', e: { ved: 10, lid: 10 } },
+      up: { t: 'Robot', e: { ved: 10, vir: -10 } },
+      down: { t: 'Poletím osobně', e: { lid: 10, sil: -10, vir: 5 } },
+    } },
+  { id: 'megamesto', who: 'med', era: 2, text: 'Postavme megaměsto ze skla a oceli. Milion lidí pod jednou střechou!',
+    opts: {
+      left: { t: 'Raději malá města', e: { pri: 5, lid: 5, fin: -5 } },
+      right: { t: 'Stavte', e: { fin: 10, pri: -15 } },
+      up: { t: 'Se zahradami na střechách', e: { fin: 5, pri: -5, ved: 5 } },
+      down: { t: 'Podzemní město', e: { ved: 10, pri: 5, fin: -5 },
+        need: { m: 'ved', min: 60 }, alt: { t: 'Satelitní města', e: { fin: -5, pri: -5, lid: 5 } } },
+    } },
+  { id: 'roboti_prava', who: 'nula', era: 2, text: 'Továrních robotů je tolik, že se začali organizovat. Chtějí práva. Jako lidé.',
+    opts: {
+      left: { t: 'Jsou to stroje', e: { ved: -5, vir: 5 } },
+      right: { t: 'Ať mají práva', e: { ved: 5, lid: -10, vir: -5 } },
+      up: { t: 'Ať mají dny volna', e: { ved: 5, fin: -5 } },
+      down: { t: 'Přeprogramovat', e: { ved: -10, fin: -5 } },
+    } },
+  { id: 'valka_sousedu', who: 'fed', era: 2, text: 'Dva vaši sousedé spolu válčí. Federace chce, abyste se přidali na její stranu.',
+    opts: {
+      left: { t: 'Zůstaneme neutrální', e: { dip: -5, sil: 5 } },
+      right: { t: 'Přidáme se', e: { dip: 10, sil: -10, lid: -5 } },
+      up: { t: 'Zprostředkujeme mír', e: { dip: 10, vir: 5, fin: -5 },
+        need: { m: 'dip', min: 60 }, alt: { t: 'Nabídneme mír', e: { dip: 5, vir: 5, fin: -5 } } },
+      down: { t: 'Prodáme zbraně oběma', e: { fin: 15, dip: -10, vir: -5 } },
+    } },
+  { id: 'maso', who: 'far', era: 2, text: 'Vědci umí vypěstovat maso v laboratoři. My farmáři se bojíme o živobytí.',
+    opts: {
+      left: { t: 'Zakázat', e: { ved: -5, pri: -5, lid: 5 } },
+      right: { t: 'Povolit', e: { ved: 5, pri: 5, lid: -10 } },
+      up: { t: 'Jen pro armádu', e: { ved: 5, sil: 5, fin: -5 } },
+      down: { t: 'Dotace farmářům', e: { lid: 5, fin: -10, pri: -5 } },
+    } },
+
+  // ── Tajný příběh: Signál ─────────────────────────────
+  { id: 'signal1', who: 'ork', era: 2, req: ['orakl'], once: true, text: 'Zachytil jsem signál. Nepřichází ze Země. Opakuje se každých sedmnáct minut. Mám odpovědět?',
+    opts: {
+      left: { t: 'Mlč', e: { ved: -5, sil: 5 } },
+      right: { t: 'Odpověz', e: { ved: 5, vir: -5 }, set: 'signal', next: 'signal2', in: 4 },
+      up: { t: 'Nejdřív ho rozlušti', e: { ved: 5, fin: -5 }, set: 'signal', next: 'signal2', in: 7 },
+      down: { t: 'Řekni to světu', e: { dip: 10, vir: 5, sil: -5 } },
+    } },
+  { id: 'signal2', who: 'ork', weight: 0, req: ['signal'], text: 'Odpověděli. Jsou na cestě. Ptají se, kdo mluví za lidstvo.',
+    opts: {
+      left: { t: 'Nikdo', e: { vir: -5, ved: -5 }, unset: 'signal' },
+      right: { t: 'Já', e: { vir: 10, dip: -10 }, next: 'signal3', in: 5 },
+      up: { t: 'Celá Země spolu', e: { dip: 15, sil: -5 }, next: 'signal3', in: 6 },
+      down: { t: 'Připravte armádu', e: { sil: 15, ved: -5 }, next: 'signal3', in: 4 },
+    } },
+  { id: 'signal3', who: 'tajemnik', weight: 0, req: ['signal'], text: 'Nad hlavním městem visí světlo. Návštěvníci chtějí vzít jednoho člověka s sebou – zástupce lidstva.',
+    opts: {
+      left: { t: 'Odmítněte je', e: { sil: 5, vir: -10 }, unset: 'signal' },
+      right: { t: 'Poletím', e: { vir: 10 }, end: 'kontakt' },
+      up: { t: 'Ať letí ORÁKL', e: { ved: -15, vir: 5 }, unset: 'signal' },
+      down: { t: 'Ať letí dítě z ulice', e: { lid: 5, vir: 10 }, unset: 'signal' },
+    } },
+
+  // ── Tajný příběh: Podzemí (začíná u hřbitova) ────────
+  { id: 'podzemi1', who: 'ved', weight: 0, req: ['podzemi'], text: 'Pod hřbitovem jsme našli bunkr z doby před Velkým výpadkem. Je obydlený. Žijí tam lidé, kteří o nás nevědí.',
+    opts: {
+      left: { t: 'Zazděte vchod', e: { ved: -5, vir: 5 }, unset: 'podzemi' },
+      right: { t: 'Navažte kontakt', e: { ved: 10, lid: 5 }, next: 'podzemi2', in: 4 },
+      up: { t: 'Pošlete vojáky', e: { sil: 10, lid: -5 }, next: 'podzemi2', in: 4 },
+      down: { t: 'Utajte to', e: { sil: 5, vir: -5 }, next: 'podzemi2', in: 8 },
+    } },
+  { id: 'podzemi2', who: 'pou', weight: 0, req: ['podzemi'], text: 'Jsem z bunkru. Žijeme tam už tři generace. Máme stroje, které vy neumíte postavit. A máme z vás strach.',
+    opts: {
+      left: { t: 'Vraťte se dolů', e: { ved: -5, lid: 5 }, unset: 'podzemi' },
+      right: { t: 'Vítejte mezi námi', e: { ved: 10, lid: -5, vir: 5 }, next: 'podzemi3', in: 5 },
+      up: { t: 'Vyměňme si znalosti', e: { ved: 15, fin: -5 }, next: 'podzemi3', in: 5 },
+      down: { t: 'Zabavte ty stroje', e: { ved: 10, vir: -10 }, unset: 'podzemi' },
+    } },
+  { id: 'podzemi3', who: 'pou', weight: 0, req: ['podzemi'], text: 'V nejhlubším patře je trůn a na něm prázdná koruna. Podle našeho zákona patří tomu, kdo k nám první přišel v míru. Tobě.',
+    opts: {
+      left: { t: 'Odmítám', e: { vir: 5, lid: 5 }, unset: 'podzemi' },
+      right: { t: 'Usednu na trůn', e: { vir: 5 }, end: 'podzemi' },
+      up: { t: 'Korunu do muzea', e: { vir: -5, ved: 5, lid: 5 }, unset: 'podzemi' },
+      down: { t: 'Ať si zvolí vůdce', e: { dip: 5, lid: 5 }, unset: 'podzemi' },
+    } },
+
+  // ── Éra Nových hranic ────────────────────────────────
+  { id: 'mesic', who: 'ved', era: 3, text: 'Můžeme založit první osadu na Měsíci. Potřebujeme ale celý rozpočet na deset let.',
+    opts: {
+      left: { t: 'Země má přednost', e: { lid: 5, ved: -5 } },
+      right: { t: 'Letíme', e: { ved: 10, fin: -15 } },
+      up: { t: 'S celým světem', e: { ved: 10, dip: 10, fin: -5 },
+        need: { m: 'dip', min: 60 }, alt: { t: 'Sami a pomalu', e: { ved: 5, fin: -10 } } },
+      down: { t: 'Pošleme jen roboty', e: { ved: 5, fin: -5, vir: -5 } },
+    } },
+  { id: 'stit', who: 'eko', era: 3, text: 'Klima se znovu otepluje. Vědci navrhují zastínit Slunce obřím štítem na oběžné dráze.',
+    opts: {
+      left: { t: 'Je to šílenství', e: { pri: -5, ved: -5 } },
+      right: { t: 'Postavte ho', e: { ved: 5, pri: 5, fin: -15 },
+        need: { m: 'ved', min: 60 }, alt: { t: 'Zkusme to', e: { ved: 5, pri: -10, fin: -10 } } },
+      up: { t: 'Raději sázet lesy', e: { pri: 10, fin: -5 } },
+      down: { t: 'Ať to platí Federace', e: { dip: -10, pri: 5 } },
+    } },
+  { id: 'ai_volby', who: 'nula', era: 3, text: 'Moje umělá inteligence chce kandidovat ve volbách. Nemá zájmy, ego ani strach. A ústava o strojích nic neříká.',
+    opts: {
+      left: { t: 'Změňte ústavu', e: { ved: -10, vir: 5 } },
+      right: { t: 'Ať kandiduje', e: { ved: 15, lid: -10, vir: -5 } },
+      up: { t: 'Ať je mým rádcem', e: { ved: 5, fin: 5 } },
+      down: { t: 'Vypněte ji', e: { ved: -15, vir: 10 } },
+    } },
+  { id: 'nesmrtelnost', who: 'lek', era: 3, text: 'Našli jsme způsob, jak zastavit stárnutí. Je drahý – stačil by pro tisíc lidí.',
+    opts: {
+      left: { t: 'Zničte vzorec', e: { ved: -10, vir: 5 } },
+      right: { t: 'Pro nejlepší mozky', e: { ved: 5, lid: -10 } },
+      up: { t: 'Levná verze pro všechny', e: { ved: 5, lid: 10, fin: -10 },
+        need: { m: 'ved', min: 60 }, alt: { t: 'Loterie pro všechny', e: { lid: 5, vir: -5, fin: -5 } } },
+      down: { t: 'Nejdřív pro mě', e: { lid: -15, vir: -5, fin: 5 } },
+    } },
+  { id: 'sjednoceni', who: 'fed', era: 3, text: 'Federace navrhuje sjednocení. Jeden stát, jedna měna, jedna vláda. Vy byste získal{a} vysoký úřad.',
+    opts: {
+      left: { t: 'Nikdy', e: { dip: -10, vir: 5 } },
+      right: { t: 'Souhlasím', e: { dip: 15, fin: 10, vir: -10 } },
+      up: { t: 'Jen společný trh', e: { dip: 5, fin: 10 } },
+      down: { t: 'Referendum', e: { lid: 5, dip: -5, vir: 5 },
+        need: { m: 'lid', min: 60 }, alt: { t: 'Referendum', e: { lid: -5, dip: -5, vir: 5 } } },
+    } },
+
+  // ── Tajný příběh: Pravda o Velkém výpadku ────────────
+  { id: 'pravda1', who: 'stin', era: 3, seals: 2, once: true, not: ['pravda'], text: 'V archivu tajné služby jsem našel složku „Výpadek“. Velký výpadek nebyla nehoda. Chcete vědět, kdo ho způsobil?',
+    opts: {
+      left: { t: 'Spalte ji', e: { sil: 5, vir: -5 } },
+      right: { t: 'Chci to vědět', e: { sil: -5, ved: 5 }, set: 'pravda', next: 'pravda2', in: 3 },
+      up: { t: 'Jen pro mé oči', e: { sil: 5, ved: 5 }, set: 'pravda', next: 'pravda2', in: 5 },
+      down: { t: 'Zveřejněte ji', e: { lid: 10, sil: -10, dip: -5 }, set: 'pravda', next: 'pravda2', in: 2 },
+    } },
+  { id: 'pravda2', who: 'fed', weight: 0, req: ['pravda'], text: '„Ta složka je podvrh. A jestli ne – pak jsme to byli my, kdo vypnul svět. Abychom ho mohli poskládat znovu, podle sebe.“',
+    opts: {
+      left: { t: 'Mlčme o tom', e: { dip: 5, vir: -10 }, unset: 'pravda' },
+      right: { t: 'Žádám omluvu', e: { dip: -10, vir: 10 }, next: 'pravda3', in: 4 },
+      up: { t: 'Žádám odškodnění', e: { fin: 15, dip: -10 }, next: 'pravda3', in: 4 },
+      down: { t: 'Vyhlašuji válku', e: { sil: 10, dip: -20 }, unset: 'pravda' },
+    } },
+  { id: 'pravda3', who: 'tajemnik', weight: 0, req: ['pravda'], text: 'Celý svět zná pravdu. Národy se scházejí v našem hlavním městě a chtějí nový začátek – bez Federace. Navrhují tě do čela Rady národů.',
+    opts: {
+      left: { t: 'Zůstanu doma', e: { lid: 5 }, unset: 'pravda' },
+      right: { t: 'Přijímám', e: { dip: 10 }, end: 'pravda' },
+      up: { t: 'Ať vede někdo nestranný', e: { dip: 10, vir: 5 }, unset: 'pravda' },
+      down: { t: 'Rada je zbytečná', e: { dip: -10, sil: 5 }, unset: 'pravda' },
+    } },
+];

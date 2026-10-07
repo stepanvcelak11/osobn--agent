@@ -25,6 +25,16 @@ Sedm ukazatelů drží zemi pohromadě. **Ideál je uprostřed – oba kraje jso
 - Když vláda padne, úřad převezme **nástupce** – svět si ale pamatuje, co se stalo.
 - **Kronika** ukazuje všechny vůdce a sbírku **14 konců**.
 
+## Hloubka hry
+
+- **Pět typů vůdců:** Vizionář (vidí směr změn), Krizový manažer (návrat z krajnosti ×2), Vyčkávač (každých 5 rozhodnutí odloží kartu),
+  Kormidelník (každých 5 rozhodnutí posune ukazatel o 15 k rovnováze), Prezident s rádcem (rada je v 70 % nejlepší).
+- **Lidé si pamatují** – věrní pomáhají, rozzlobení škodí.
+- **Zákony** platí, dokud je někdo nezruší, a každý měsíc posouvají ukazatele.
+- **Úkoly vůdců** dávají pečetě; čas a pečetě otevírají **éry** (Obnova → Rozmach → Nové hranice).
+- **Podmíněné volby** (klíč) se odemknou jen silné zemi; **tři tajné příběhy** končí legendou (17 konců celkem).
+- Obsah hloubky je v `hra/world.js`.
+
 ## Na iPhonu jako aplikace (offline)
 
 1. Otevři odkaz výše v **Safari**.

@@ -86,7 +86,7 @@ function frame(bg, inner, person) {
     <rect width="200" height="220" fill="${bg}"/>
     <circle cx="100" cy="230" r="120" fill="#ffffff" opacity=".12"/>
     ${inner}
-  </svg><span class="badge">${person.icon}</span>`;
+  </svg>`;
 }
 
 // Ikony ukazatelů (24×24). `lines` = jemné detaily v barvě pozadí nad výplní.
@@ -108,4 +108,36 @@ export function meterIcon(id) {
     <path d="${i.d}" class="full" clip-path="url(#clip-${id})"/>
     ${i.lines ? `<path d="${i.lines}" class="lines"/>` : ''}
   </svg>`;
+}
+
+/** Ukazatel bez plnění (do seznamů). */
+export function glyph(id, cls = 'glyph') {
+  const i = ICONS[id];
+  return `<svg class="${cls}" viewBox="0 0 24 24" aria-hidden="true"><path d="${i.d}" class="full"/>${i.lines ? `<path d="${i.lines}" class="lines"/>` : ''}</svg>`;
+}
+
+// Kreslené ikony (tahy, 24×24) – typy vůdců, zákony, nálady, tajné konce.
+const LINE = {
+  vize: '<path d="M2 12s3.8-7 10-7 10 7 10 7-3.8 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3.2"/>',
+  krize: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/><path d="M5.6 5.6l3.6 3.6M18.4 5.6l-3.6 3.6M5.6 18.4l3.6-3.6M18.4 18.4l-3.6-3.6"/>',
+  odklad: '<path d="M4 6l7 6-7 6zM11 6l7 6-7 6z"/><path d="M20.5 5.5v13"/>',
+  kormidlo: '<circle cx="12" cy="12" r="6.5"/><circle cx="12" cy="12" r="1.6"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4M4.9 4.9l2.8 2.8M16.3 16.3l2.8 2.8M4.9 19.1l2.8-2.8M16.3 7.7l2.8-2.8"/>',
+  rada: '<path d="M4 5.5h16a1.5 1.5 0 0 1 1.5 1.5v8a1.5 1.5 0 0 1-1.5 1.5h-9l-5 4v-4H4A1.5 1.5 0 0 1 2.5 15V7A1.5 1.5 0 0 1 4 5.5z"/><path d="M8 11h.01M12 11h.01M16 11h.01" stroke-width="2.6"/>',
+  law: '<path d="M7 3.5h10.5a2 2 0 0 1 2 2V17"/><path d="M5 7.5v11a2 2 0 0 0 2 2h9.5a2 2 0 0 0 2-2V17H7.5"/><path d="M5 7.5a2 2 0 1 1 2-2v2zM9.5 9h6M9.5 12.5h6"/>',
+  task: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.2"/>',
+  era: '<path d="M12 3v2.5M12 18.5V21M3 12h2.5M18.5 12H21M5.6 5.6l1.8 1.8M16.6 16.6l1.8 1.8M5.6 18.4l1.8-1.8M16.6 7.4l1.8-1.8"/><circle cx="12" cy="12" r="4"/>',
+  people: '<circle cx="9" cy="8" r="3.2"/><path d="M3 20c0-3.6 2.7-6.2 6-6.2s6 2.6 6 6.2"/><circle cx="17" cy="9" r="2.5"/><path d="M16.5 13.8c2.6 0 4.5 2.2 4.5 5.2"/>',
+  key: '<circle cx="8" cy="15" r="4"/><path d="M11 12l8-8M16 7l2.5 2.5M18.5 4.5L21 7"/>',
+  kontakt: '<ellipse cx="12" cy="13" rx="10" ry="3.5"/><path d="M6.5 11.5a5.5 5.5 0 0 1 11 0"/><path d="M8 18l-1.5 3M16 18l1.5 3M12 17v4"/>',
+  podzemi: '<path d="M3 18h18l-1.5-10-4.5 4-3-6-3 6-4.5-4z"/><path d="M4.5 21h15"/>',
+  pravda: '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c-2.6 2.6-4 5.6-4 9s1.4 6.4 4 9M12 3c2.6 2.6 4 5.6 4 9s-1.4 6.4-4 9"/>',
+};
+export function icon(name, cls = 'ico') {
+  return `<svg class="${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${LINE[name]}</svg>`;
+}
+/** Nálada postavy: věrná (srdce) / nepřátelská (blesk). */
+export function mood(rel, loyal) {
+  if (rel >= loyal) return '<svg class="mood good" viewBox="0 0 24 24" aria-label="věrný"><path d="M12 20.5S3 15 3 9a4.5 4.5 0 0 1 9-1.6A4.5 4.5 0 0 1 21 9c0 6-9 11.5-9 11.5z"/></svg>';
+  if (rel <= -loyal) return '<svg class="mood bad" viewBox="0 0 24 24" aria-label="nepřátelský"><path d="M13.5 2L5 13.5h6L9.5 22 19 9.5h-6z"/></svg>';
+  return '';
 }
