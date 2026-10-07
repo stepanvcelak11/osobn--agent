@@ -41,12 +41,15 @@ public enum Grammars {
         if mode != .quest {
             root += #" "," ws "\"food\":" ws int "," ws "\"pop\":" ws int "," ws "\"defense\":" ws int "," ws "\"morale\":" ws int"#
         }
-        root += #" "," ws "\"items_gained\":" ws gained "," ws "\"items_lost\":" ws names "," ws "\"location\":" ws short "," ws "\"scene\":" ws scene "," ws "\"chronicle\":" ws short"#
+        root += #" "," ws "\"items_gained\":" ws gained "," ws "\"items_lost\":" ws names "," ws "\"location\":" ws short "," ws "\"scene\":" ws scene "," ws "\"chronicle\":" ws short "," ws "\"npc\":" ws npc"#
+        if mode != .quest { root += #" "," ws "\"contract_done\":" ws bool"# }
         if mode.hasSettlement { root += #" "," ws "\"resolve_threat\":" ws bool"# }
         root += #" ws "}""#
         return [root, common,
                 #"gained ::= "[" ws ( gitem ( "," ws gitem )? )? ws "]""#,
                 #"gitem ::= "{" ws "\"name\":" ws name "," ws "\"kind\":" ws kind ws "}""#,
+                #"npc ::= "null" | "{" ws "\"name\":" ws name "," ws "\"role\":" ws name "," ws "\"attitude\":" ws attitude ws "}""#,
+                enumRule("attitude", Attitude.allCases.map(\.rawValue)),
                 enumRule("kind", ItemKind.allCases.map(\.rawValue)),
                 enumRule("scene", SceneKind.allCases.map(\.rawValue))].joined(separator: "\n") + "\n"
     }

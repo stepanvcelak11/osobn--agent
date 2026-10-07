@@ -25,6 +25,11 @@ public enum Achievements {
         Achievement(id: "vitez_vyprava", title: "Hrdina výpravy", detail: "Splň Rychlou výpravu.", icon: "flag.fill"),
         Achievement(id: "bleskovka", title: "Blesková výprava", detail: "Splň výpravu do 6 tahů.", icon: "bolt.fill"),
         Achievement(id: "vitez_karavana", title: "Údolí Úsvitu", detail: "Doveď karavanu do cíle.", icon: "sunrise.fill"),
+        Achievement(id: "zkuseny", title: "Zkušený", detail: "Dosáhni 3. úrovně.", icon: "star.fill"),
+        Achievement(id: "veteran", title: "Veterán", detail: "Dosáhni 5. úrovně.", icon: "star.circle.fill"),
+        Achievement(id: "spolehlivy", title: "Spolehlivá ruka", detail: "Splň 3 zakázky.", icon: "checkmark.seal.fill"),
+        Achievement(id: "zname_tvare", title: "Známá tvář", detail: "Poznej 5 postav.", icon: "person.2.fill"),
+        Achievement(id: "zima", title: "Přežili jsme zimu", detail: "Doveď osadu do druhého jara.", icon: "snowflake"),
         Achievement(id: "bez_ztrat", title: "Nikdo nezůstal pozadu", detail: "Doveď karavanu bez ztráty jediného člověka.", icon: "hand.raised.fill"),
     ]
 
@@ -53,6 +58,11 @@ public enum Achievements {
         check("mesto_povstalo", s.mode == .realm && s.end == .victory)
         check("rise", s.mode == .endless && s.settlement.population >= 200)
         check("bez_ztrat", s.mode == .campaign && s.end == .victory && (st["pop_lost"] ?? 0) == 0)
+        check("zkuseny", s.hero.level >= 3)
+        check("veteran", s.hero.level >= 5)
+        check("spolehlivy", (st["contracts_done"] ?? 0) >= 3)
+        check("zname_tvare", s.characters.count >= 5)
+        check("zima", s.mode.hasSettlement && s.day > World.seasonDays * 4)
         s.achievements.append(contentsOf: got)
         return got.compactMap(byId)
     }

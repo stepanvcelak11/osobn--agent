@@ -70,6 +70,8 @@ public enum Simulation {
         let elapsed = now.timeIntervalSince(s.lastRealTime)
         s.lastRealTime = now
         guard elapsed > 60 else { return SimulationReport() }
+        // Kdo byl dlouho pryč, ten se mezitím vyspal.
+        if elapsed >= 6 * 3600 { s.hero.awakeHours = 0 }
         s.worldTime = s.worldTime.addingTimeInterval(min(elapsed, maxRealCatchUp))
         return advance(&s, to: s.worldTime)
     }
@@ -98,6 +100,8 @@ public enum Simulation {
         s.day = max(1, daysBetween(s.createdAt, now) + 1)
         s.lastTickAt = now
         s.log.append(contentsOf: report.entries)
+        World.updateWeather(&s)
+        s.hero.conditions.removeAll { $0.until <= now }
         _ = Achievements.evaluate(&s)
         return report
     }
@@ -123,6 +127,13 @@ public enum Simulation {
             s.settlement.foodCapacity = foodCapacity(s.settlement)
             s.stats["built", default: 0] += 1
             report.entries.append(LogEntry(kind: .event, text: "🔨 Dokončeno: \(c.kind.czechName) (\(c.kind.effect)).", date: c.finishAt))
+        }
+        if let c = s.contract, c.deadline <= date {
+            s.contract = nil
+            applyDelta(&s, StatDelta(morale: -5))
+            s.stats["contracts_failed", default: 0] += 1
+            report.entries.append(LogEntry(kind: .event, text: "⌛ Zakázka propadla: \(c.title). Lidé si to pamatují (morálka −5).",
+                                           date: c.deadline, delta: StatDelta(morale: -5)))
         }
         let due = s.threats.filter { $0.deadline <= date }.sorted { $0.deadline < $1.deadline }
         for t in due {
@@ -204,9 +215,10 @@ public enum Simulation {
         let st = s.settlement
         var d = StatDelta()
         var notes: [String] = []
-        // Hospodaření
-        let production = 8 + st.count(.farma) * 15 + st.population / 4
-        let consumption = st.population
+        // Hospodaření: úroda podle ročního období, v mrazu se jí víc
+        let season = World.season(day: daysBetween(s.createdAt, dawn) + 1)
+        let production = Int((Double(8 + st.count(.farma) * 15 + st.population / 4) * season.harvest).rounded())
+        let consumption = Int((Double(st.population) * s.weather.foodFactor).rounded())
         d.food = production - consumption
         d.gold = 5 + st.count(.trziste) * 12 + st.population / 10
         let foodAfter = st.food + d.food
@@ -228,9 +240,13 @@ public enum Simulation {
             d.pop += born
             notes.append("přibylo \(born) obyvatel")
         }
-        // Hrdina si odpočine
+        // Hrdina si odpočine; ranhojič vyléčí horečku i rány
         d.hp += 5 + st.count(.ranhojicstvi) * 5
         d.stress -= 5 + st.count(.kaple) * 5
+        if st.count(.ranhojicstvi) > 0 && s.hero.conditions.contains(where: { $0.kind == .horecka || $0.kind == .krvaceni }) {
+            s.hero.conditions.removeAll { $0.kind == .horecka || $0.kind == .krvaceni }
+            notes.append("ranhojič tě dal do pořádku")
+        }
         applyDelta(&s, d)
         s.stats["days", default: 0] += 1
         let dayN = (s.stats["days"] ?? 0) + 1
@@ -249,6 +265,10 @@ public enum Simulation {
                            deadline: dawn.addingTimeInterval(hours * 3600))
             s.threats.append(t)
             report.entries.append(LogEntry(kind: .event, text: "⚠️ Hrozba: \(t.title) (\(kind.czechName.lowercased())) – udeří za \(Int(hours)) h. Připrav osadu, nebo jednej.", date: dawn))
+        }
+        // Zakázka od obyvatel
+        if dayN >= 2 && s.contract == nil && s.chance(45), let e = World.offerContract(&s, at: dawn) {
+            report.entries.append(e)
         }
         // Náhodná událost
         if s.chance(40) {

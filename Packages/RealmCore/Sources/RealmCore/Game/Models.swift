@@ -130,6 +130,20 @@ public struct Hero: Codable, Equatable, Sendable {
     /// 0–100, vysoký stres = paranoia a postihy
     public var stress: Int
     public var items: [Item]
+    /// Zkušenosti a úroveň (úroveň zvedá nejpoužívanější schopnost).
+    public var xp = 0
+    public var level = 1
+    /// Kolikrát se zkoušela která schopnost.
+    public var statUse: [String: Int] = [:]
+    /// Hodiny od posledního spánku (únava).
+    public var awakeHours: Double = 0
+    public var conditions: [Condition] = []
+
+    public init(name: String, feminine: Bool = false, background: String, attributes: [Attribute: Int], hp: Int,
+                stress: Int, items: [Item]) {
+        self.name = name; self.feminine = feminine; self.background = background; self.attributes = attributes
+        self.hp = hp; self.stress = stress; self.items = items
+    }
 
     public func score(_ a: Attribute) -> Int { attributes[a] ?? 0 }
 
@@ -299,6 +313,18 @@ public struct QuestInfo: Codable, Equatable, Sendable {
     /// Nezdary – když dosáhnou maxima, cíl je ztracen.
     public var setbacks: Int = 0
     public var maxSetbacks: Int = 4
+    /// Etapy cesty k cíli (jedna na každý zdařilý krok).
+    public var stages: [String] = []
+
+    public init(objective: String, steps: Int, stages: [String] = []) {
+        self.objective = objective; self.steps = steps; self.stages = stages
+    }
+
+    /// Co hrdinu čeká teď.
+    public var currentStage: String? {
+        guard progress < steps, progress < stages.count else { return nil }
+        return stages[progress]
+    }
 }
 
 // MARK: - Hrozby (C)
@@ -457,6 +483,16 @@ public struct GameState: Codable, Equatable, Identifiable, Sendable {
     public var updatedAt = Date()
     /// Počítadla pro úspěchy a pravidla
     public var stats: [String: Int] = [:]
+    /// Počasí platí pro jeden herní den.
+    public var weather: Weather = .jasno
+    public var weatherDay = 0
+    /// Postavy, které hrdina potkal (paměť vypravěče).
+    public var characters: [NPC] = []
+    /// Aktivní zakázka (vedlejší úkol) a nedávno zadané (aby se neopakovaly).
+    public var contract: Contract?
+    public var recentContracts: [String] = []
+
+    public var season: Season { World.season(day: day) }
 
     public var isOver: Bool { end != nil }
 

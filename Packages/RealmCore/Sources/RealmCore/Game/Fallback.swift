@@ -81,6 +81,7 @@ public enum Fallback {
         if r.mandatory.hp < 0 { text += " Rána pálí a krev ti stéká po paži." }
         if r.mandatory.hp > 0 && r.intent.category != .rest { text += " Bolest na chvíli poleví." }
         if state.hero.stress >= 70 { text += " A ty stíny… hýbou se, nebo se ti to jen zdá?" }
+        if state.chance(35), let w = weatherLine[state.weather] { text += " " + w }
         text += " Co uděláš teď?"
         var out = NarratorOutput(narration: text, proposed: r.mandatory)
         if [.success, .critSuccess].contains(r.roll.outcome) && r.intent.category == .explore && state.chance(30) {
@@ -89,6 +90,18 @@ public enum Fallback {
             if out.itemsGained[0].0 == "Zrezivělý klíč" { out.itemsGained[0].1 = .key }
         }
         if let a = r.arrival { out.location = a.stop.name; out.scene = a.stop.scene }
+        if r.intent.category == .social && [.success, .critSuccess, .partial].contains(r.roll.outcome) && state.chance(60) {
+            let p = state.pick(people)
+            out.npc = (p.0, p.1, r.roll.outcome == .partial ? .neutral : .friend)
+        }
+        if r.contractEligible, let c = state.contract {
+            let f = CzechText.fold(r.intent.summary)
+            let stems = CzechText.fold(c.title).split(separator: " ").filter { $0.count >= 5 }.map { String($0.prefix(5)) }
+            if f.contains("zakazk") || stems.contains(where: { f.contains($0) }) {
+                out.contractDone = true
+                out.narration = out.narration.replacingOccurrences(of: " Co uděláš teď?", with: "") + " Zakázka je splněna – \(c.giver) bude spokojen. Co uděláš teď?"
+            }
+        }
         if r.losesQuest {
             out.narration = out.narration.replacingOccurrences(of: " Co uděláš teď?", with: "") + " A pak je pozdě. Cíl výpravy je nenávratně ztracen."
         } else if r.completesQuest {
@@ -96,6 +109,22 @@ public enum Fallback {
         }
         return out
     }
+
+    static let weatherLine: [Weather: String] = [
+        .dest: "Déšť ti stéká za límec a bláto čvachtá pod nohama.",
+        .mlha: "Mlha polyká zvuky i tvary – každý stín může být cokoli.",
+        .bourka: "Nad hlavou práskne hrom a vichr rve plášť.",
+        .snih: "Sníh tlumí kroky a mráz zalézá pod kůži.",
+        .mraz: "Mráz štípe do tváří, dech se mění v páru.",
+        .jasno: "Slunce na chvíli prorazí šeď, ale nehřeje.",
+        .zatazeno: "Šedé nebe visí nízko jako víko rakve.",
+    ]
+
+    static let people: [(String, String)] = [
+        ("Stará Jitka", "kořenářka"), ("Matěj Jednooký", "převozník"), ("Bratr Kliment", "potulný mnich"),
+        ("Ilsa", "lovkyně"), ("Vojtěch z Brodu", "kupec"), ("Hubert", "hostinský"), ("Dorota", "vdova po strážném"),
+        ("Šimon Kulhavý", "zvěd"), ("Agáta", "kovářka"), ("Lukáš Rudovous", "vysloužilý voják"),
+    ]
 
     public static func intro(state: GameState, hook: String?) -> String {
         let h = state.hero

@@ -65,33 +65,43 @@ public enum Catalog {
         public let location: String
         public let scene: SceneKind
         public let hook: String
+        /// Tři etapy cesty k cíli.
+        public let stages: [String]
     }
 
     public static let quests: [QuestTemplate] = [
         QuestTemplate(objective: "Vynes Srdce mlhy z kobky pod vypáleným klášterem",
                       location: "Kobka pod klášterem sv. Havla", scene: .dungeon,
-                      hook: "Mniši zmizeli před třemi zimami. Od té doby z kobky stoupá mlha, která zabíjí dobytek."),
+                      hook: "Mniši zmizeli před třemi zimami. Od té doby z kobky stoupá mlha, která zabíjí dobytek.",
+                      stages: ["Najdi cestu do kobky pod spáleništěm", "Projdi chodby zamořené mlhou", "Vyrvi Srdce mlhy jeho strážci"]),
         QuestTemplate(objective: "Zabij Šedou vlčici, která terorizuje cestu k městu",
                       location: "Vlčí roklina", scene: .forest,
-                      hook: "Kupci přestali jezdit. Na stromech visí roztrhané plachty vozů."),
+                      hook: "Kupci přestali jezdit. Na stromech visí roztrhané plachty vozů.",
+                      stages: ["Vystopuj vlčici v roklině", "Najdi její doupě", "Postav se Šedé vlčici"]),
         QuestTemplate(objective: "Osvoboď kováře, kterého drží lapkové ve staré mýtnici",
                       location: "Stará mýtnice u brodu", scene: .ruins,
-                      hook: "Bez kováře nebudou zbraně ani hřeby. Lapkové chtějí výkupné, které nikdo nemá."),
+                      hook: "Bez kováře nebudou zbraně ani hřeby. Lapkové chtějí výkupné, které nikdo nemá.",
+                      stages: ["Zjisti, kolik lapků mýtnici hlídá", "Dostaň se dovnitř", "Vyveď kováře na svobodu"]),
         QuestTemplate(objective: "Zjisti, kdo otravuje studnu na náměstí, a zastav ho",
                       location: "Náměstí a podzemní stoky", scene: .town,
-                      hook: "Třetí dítě tento týden. Voda páchne železem a lidé si šeptají o čarodějnici."),
+                      hook: "Třetí dítě tento týden. Voda páchne železem a lidé si šeptají o čarodějnici.",
+                      stages: ["Vyptej se lidí a najdi stopu", "Sestup do stok k pramenu jedu", "Zastav travíře"]),
         QuestTemplate(objective: "Získej zpět ukradenou korouhev z tábora nájezdníků",
                       location: "Tábor nájezdníků v Černém dole", scene: .camp,
-                      hook: "Bez korouhve se městská rada rozpadne a každý cech půjde svou cestou."),
+                      hook: "Bez korouhve se městská rada rozpadne a každý cech půjde svou cestou.",
+                      stages: ["Dostaň se k táboru nepozorovaně", "Najdi stan, kde leží korouhev", "Uteč i s korouhví"]),
         QuestTemplate(objective: "Dones lék z bylinářčiny chatrče uprostřed Mrtvé bažiny",
                       location: "Mrtvá bažina", scene: .swamp,
-                      hook: "Horečka kosí čtvrť u přístavu. Stará bylinářka prý lék má – pokud ještě žije."),
+                      hook: "Horečka kosí čtvrť u přístavu. Stará bylinářka prý lék má – pokud ještě žije.",
+                      stages: ["Najdi bezpečnou stezku bažinou", "Dojdi k chatrči a získej lék", "Vrať se z bažiny živý"]),
         QuestTemplate(objective: "Zapal znovu signální oheň na Havraní věži",
                       location: "Havraní věž", scene: .mountain,
-                      hook: "Oheň zhasl a z hor se blíží něco, co chce, aby zůstal zhasnutý."),
+                      hook: "Oheň zhasl a z hor se blíží něco, co chce, aby zůstal zhasnutý.",
+                      stages: ["Vystoupej po útesu k věži", "Projdi věží až k ohništi", "Zapal signální oheň"]),
         QuestTemplate(objective: "Vynes z hrobky prvního krále jeho prsten dřív, než ji vykradou jiní",
                       location: "Královská hrobka", scene: .dungeon,
-                      hook: "Kdo nosí prsten, toho rada poslechne. Za úsvitu dorazí žoldáci, kteří ho chtějí také."),
+                      hook: "Kdo nosí prsten, toho rada poslechne. Za úsvitu dorazí žoldáci, kteří ho chtějí také.",
+                      stages: ["Najdi tajný vchod do hrobky", "Projdi pastmi a kryptami", "Vezmi prsten a uteč před žoldáky"]),
     ]
 
     /// Kolik zdařilých kroků vede ke splnění cíle Rychlé výpravy.

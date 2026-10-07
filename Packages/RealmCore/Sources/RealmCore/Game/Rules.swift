@@ -149,6 +149,11 @@ public struct Resolution: Equatable, Sendable {
     public var losesQuest = false
     /// Herní hodiny, které čin zabere.
     public var hours: Double = 1
+    /// Stavy, které tah přidá nebo vyléčí.
+    public var newConditions: [ConditionKind] = []
+    public var cures: [ConditionKind] = []
+    /// Tah může splnit aktivní zakázku (pokud to vypravěč potvrdí).
+    public var contractEligible = false
 }
 
 public enum Rules {
@@ -188,6 +193,10 @@ public enum Rules {
         mod += min(itemBonus, 3)
         let s = state.hero.stress
         if s >= 90 { mod -= 3 } else if s >= 70 { mod -= 2 } else if s >= 50 { mod -= 1 }
+        let w = state.weather.modifier(intent.category)
+        if w != 0 { notes.append("Počasí (\(state.weather.czechName.lowercased())): \(w > 0 ? "+" : "")\(w) k hodu.") }
+        mod += w
+        for c in World.conditions(state.hero, at: state.worldTime) { mod += c.rollModifier }
         let hp = state.hero.hp
         if hp < 25 { mod -= 2 } else if hp < 50 { mod -= 1 }
         if state.phase == 3 {
@@ -242,6 +251,25 @@ public enum Rules {
                 mandatory.stress -= 15
                 notes.append("\(it.name): nervy povolí (−15 stresu).")
             }
+        }
+
+        // Stavy hrdiny
+        let active = World.conditions(state.hero, at: state.worldTime)
+        let healed = used.contains { $0.kind == .consumable && $0.heals }
+        if healed { res.cures += [.krvaceni, .horecka] }
+        if active.contains(.krvaceni) && !healed {
+            mandatory.hp -= 2
+            notes.append("Hrdina krvácí z otevřené rány (zdraví −2), dokud ji neošetří.")
+        }
+        if active.contains(.horecka) && !healed {
+            mandatory.hp -= 1
+            notes.append("Hrdinu trápí horečka – třes, pot, mžitky před očima.")
+        }
+        if active.contains(.vycerpani) && intent.category != .rest {
+            mandatory.stress += 3
+            notes.append("Hrdina je k smrti vyčerpaný – oči se mu klíží, ruce se třesou. Potřebuje spánek.")
+        } else if active.contains(.unava) && intent.category != .rest {
+            notes.append("Hrdina je unavený – dlouho nespal.")
         }
 
         // Stavba (Živý simulátor)
@@ -300,10 +328,26 @@ public enum Rules {
             notes.append("Zbroj pohltila část zásahu.")
         }
         mandatory.hp -= damage
+        // Nové stavy podle výsledku
+        if damage > 0 && (roll.outcome == .critFail && intent.risk != .low || roll.outcome == .fail && intent.risk == .high && state.chance(50)) {
+            res.newConditions.append(.krvaceni)
+            notes.append("Hrdina utrží krvácející ránu – dokud ji neošetří, bude slábnout.")
+        }
+        if [.fail, .critFail].contains(roll.outcome) && state.scene == .swamp && state.chance(35) {
+            res.newConditions.append(.horecka)
+            notes.append("Z bažiny si hrdina odnáší horečku.")
+        }
+        if roll.outcome == .critSuccess {
+            res.newConditions.append(.odhodlani)
+        }
+        if intent.category == .craft && [.success, .critSuccess].contains(roll.outcome) && active.contains(.krvaceni) {
+            res.cures.append(.krvaceni)
+        }
         if intent.category == .combat && roll.outcome != .impossible {
             mandatory.stress += 3
         }
         if intent.category == .rest {
+            res.cures.append(.krvaceni)
             switch state.mode {
             case .quest: mandatory.hp += 5; mandatory.stress -= 8
             case .campaign: mandatory.hp += 8; mandatory.stress -= 10; mandatory.food -= max(1, state.settlement.population / 8)
@@ -311,8 +355,12 @@ public enum Rules {
             }
         }
 
-        // Čas činu
+        // Čas činu (bouřka a sníh cestu zdrží)
         var hours = hours(for: intent, mode: state.mode)
+        if intent.category == .travel && [.bourka, .snih].contains(state.weather) {
+            hours *= 1.5
+            notes.append("\(state.weather.czechName) cestu zdržuje.")
+        }
 
         // Cesta světem: přesun a spotřeba podle uplynulého času
         if state.mode == .campaign {
@@ -331,7 +379,7 @@ public enum Rules {
                 }
             }
             // Karavana sní za den zhruba 0,4 jídla na člověka
-            mandatory.food -= Int((Double(state.settlement.population) * 0.4 * hours / 24).rounded())
+            mandatory.food -= Int((Double(state.settlement.population) * 0.4 * state.weather.foodFactor * hours / 24).rounded())
         }
         res.hours = hours
 
@@ -357,6 +405,11 @@ public enum Rules {
             default: break
             }
             res.losesQuest = res.questSetback > 0 && q.setbacks + res.questSetback >= q.maxSetbacks
+        }
+
+        // Zakázka
+        if let c = state.contract, [.success, .critSuccess].contains(roll.outcome), c.categories.contains(intent.category) {
+            res.contractEligible = true
         }
 
         res.intent = intent

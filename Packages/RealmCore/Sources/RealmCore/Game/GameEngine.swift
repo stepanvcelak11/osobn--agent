@@ -11,6 +11,9 @@ public struct NarratorOutput: Sendable {
     public var chronicle: String?
     public var objectiveDone = false
     public var resolveThreat = false
+    public var contractDone = false
+    /// Postava, se kterou hrdina jednal (paměť světa).
+    public var npc: (name: String, role: String, attitude: Attitude)?
 
     public init(narration: String, proposed: StatDelta) {
         self.narration = narration; self.proposed = proposed
@@ -33,6 +36,10 @@ public struct NarratorOutput: Sendable {
         o.chronicle = v.nonEmptyString("chronicle")
         o.objectiveDone = v["objective_done"]?.boolValue ?? false
         o.resolveThreat = v["resolve_threat"]?.boolValue ?? false
+        o.contractDone = v["contract_done"]?.boolValue ?? false
+        if let n = v["npc"], let name = n.nonEmptyString("name") {
+            o.npc = (name, n.nonEmptyString("role") ?? "", n["attitude"]?.stringValue.flatMap(Attitude.init(rawValue:)) ?? .neutral)
+        }
         return o
     }
 }
@@ -88,7 +95,7 @@ public final class GameEngine: @unchecked Sendable {
         switch setup.mode {
         case .quest:
             let q = s.pick(Catalog.quests)
-            s.quest = QuestInfo(objective: q.objective, steps: Catalog.questSteps)
+            s.quest = QuestInfo(objective: q.objective, steps: Catalog.questSteps, stages: q.stages)
             s.location = q.location; s.scene = q.scene; hook = q.hook
         case .campaign:
             let middle = Array(s.shuffled(Catalog.campaignWaypoints).prefix(Catalog.campaignMiddleStops))
@@ -232,7 +239,7 @@ public final class GameEngine: @unchecked Sendable {
             let prompt = model.template.render(m)
             let streamer = FieldStreamer(field: "narration") { onEvent(.narrating($0)) }
             if let out = try? await model.generate(prompt: prompt,
-                                                   options: GenerationOptions(maxTokens: 460, temperature: 0.8, topP: 0.95,
+                                                   options: GenerationOptions(maxTokens: 540, temperature: 0.8, topP: 0.95,
                                                                               grammar: Grammars.narrator(mode: s.mode)),
                                                    onToken: { streamer.feed($0); return !Task.isCancelled }) {
                 if let v = JSONTools.parseObject(out.text), let o = NarratorOutput.parse(v, mandatory: res.mandatory) {
@@ -340,10 +347,12 @@ public final class GameEngine: @unchecked Sendable {
         }
 
         // Hrozby (C)
+        var threatXP = 0
         if s.mode.hasSettlement, o.resolveThreat, !s.threats.isEmpty {
             s.threats.sort { $0.deadline < $1.deadline }
             if outcome == .success || outcome == .critSuccess {
                 let t = s.threats.removeFirst()
+                threatXP = 25
                 s.stats["threats_repelled", default: 0] += 1
                 extra.append(LogEntry(kind: .event, text: "🛡️ Hrozba zažehnána: \(t.title)."))
             } else if outcome == .partial {
@@ -357,6 +366,48 @@ public final class GameEngine: @unchecked Sendable {
             s.chronicle.append(String(c.prefix(120)))
             if s.chronicle.count > 60 { s.chronicle.removeFirst(s.chronicle.count - 60) }
         }
+
+        // Postavy
+        if let n = o.npc { World.meet(&s, name: n.name, role: n.role, attitude: n.attitude) }
+
+        // Stavy hrdiny
+        for c in r.cures {
+            if let i = s.hero.conditions.firstIndex(where: { $0.kind == c }) {
+                s.hero.conditions.remove(at: i)
+                extra.append(LogEntry(kind: .event, text: c == .krvaceni ? "🩹 Rána je ošetřená a přestala krvácet." : "🌿 Horečka ustoupila."))
+            }
+        }
+        for c in r.newConditions where !r.cures.contains(c) {
+            let hours: Double = c == .krvaceni ? 12 : (c == .horecka ? 48 : 6)
+            if World.addCondition(&s, c, hours: hours + r.hours), !c.isGood {
+                extra.append(LogEntry(kind: .event, text: c == .krvaceni ? "🩸 Krvácíš. Ošetři ránu, než tě oslabí." : "🤒 Chytil\(s.hero.feminine ? "a" : "") jsi horečku."))
+            }
+        }
+        if r.intent.category == .rest && r.hours >= 6 { s.hero.awakeHours = 0 }
+        else if r.hours >= 20 { s.hero.awakeHours = max(s.hero.awakeHours, 14) }
+        else { s.hero.awakeHours += r.hours }
+        if let st = r.roll.stat, r.roll.outcome != .auto && r.roll.outcome != .impossible {
+            s.hero.statUse[st.rawValue, default: 0] += 1
+        }
+
+        // Zakázka
+        var xp = World.xp(for: outcome)
+        if let c = s.contract, r.contractEligible, o.contractDone {
+            s.contract = nil
+            let rw = c.reward
+            s.settlement.gold += rw.gold
+            if s.mode != .quest {
+                s.settlement.food = min(s.settlement.foodCapacity, s.settlement.food + rw.food)
+                s.settlement.population += rw.pop
+                s.settlement.defense += rw.defense
+                s.settlement.morale = min(100, s.settlement.morale + rw.morale)
+            }
+            s.stats["contracts_done", default: 0] += 1
+            xp += 40
+            extra.append(LogEntry(kind: .event, text: "✅ Zakázka splněna: \(c.title). Odměna: \(rw.text).", delta: rw.delta))
+        }
+        if r.questGain > 0 { xp += 20 * r.questGain }
+        if r.arrival != nil { xp += 20 }
 
         // Čas
         s.turn += 1
@@ -401,8 +452,18 @@ public final class GameEngine: @unchecked Sendable {
         s.worldTime = s.worldTime.addingTimeInterval(r.hours * 3600)
         s.phase = Simulation.phase(for: s.worldTime)
         s.day = max(1, Simulation.daysBetween(s.createdAt, s.worldTime) + 1)
+        World.updateWeather(&s)
+        s.hero.conditions.removeAll { $0.until <= s.worldTime }
+        if s.mode == .campaign && s.end == nil {
+            if let e = World.expireContract(&s) { s.log.append(e) }
+            if r.arrival != nil && !(r.arrival?.isDestination ?? false) && s.chance(55), let e = World.offerContract(&s, at: s.worldTime) {
+                s.log.append(e)
+            }
+        }
+        if s.end == nil { s.log.append(contentsOf: World.gainXP(&s, xp + threatXP)) }
         if s.mode.hasSettlement && s.end == nil {
             Simulation.advance(&s, to: s.worldTime)
+            if s.end == nil { s.log.append(contentsOf: World.checkRank(&s)) }
             if s.mode == .realm && s.end == nil && Catalog.realmGoalMet(s.settlement) {
                 s.end = .victory
                 s.log.append(LogEntry(kind: .event, text: "🏰 \(s.settlement.name) se stala městem! Cíl vlády je splněn."))
