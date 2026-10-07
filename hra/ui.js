@@ -6,6 +6,17 @@ const SAVE = 'rovnovaha.save';
 const app = document.getElementById('app');
 let state = load();
 
+// Výška aplikace = skutečně viditelná plocha. CSS jednotky (vh, lvh, %) v aplikaci z plochy iPhonu
+// občas vrací špatnou výšku a dole pak zůstane prázdný pruh nebo se obsah usekne.
+function fitApp() {
+  document.documentElement.style.setProperty('--app-h', `${window.innerHeight}px`);
+}
+fitApp();
+window.addEventListener('resize', () => { fitApp(); if (ui) fitText(ui.q); });
+window.addEventListener('orientationchange', () => setTimeout(fitApp, 300));
+document.addEventListener('focusout', () => setTimeout(() => { window.scrollTo(0, 0); fitApp(); }, 250));
+window.addEventListener('pageshow', fitApp);
+
 function load() {
   try {
     const s = JSON.parse(localStorage.getItem(SAVE));
@@ -22,23 +33,39 @@ const ARROW = { left: '←', right: '→', up: '↑', down: '↓' };
 const kindName = (k, female) => (female ? k.f : k.m);
 const DIR_WORD = { left: 'doleva ←', right: 'doprava →', up: 'nahoru ↑', down: 'dolů ↓' };
 
-/** Výběr typu prezidenta (start i nástupce). */
-function kindPicker(selected, female) {
-  return `<div class="kinds">${KINDS.map((k) => `
-    <button class="kind${k.id === selected ? ' on' : ''}" data-k="${k.id}">${icon(k.id)}<div><b>${female == null ? k.m.replace('Prezident s rádcem', 'S rádcem') : kindName(k, female)}</b><small>${k.text}</small></div></button>`).join('')}</div>`;
+/** Výběr typu prezidenta (start i nástupce): řada ikon a pod ní popis vybraného typu. Popis jde i přetáhnout prstem. */
+function kindPicker() {
+  return `<div class="kinds">${KINDS.map((k) => `<button class="kind" data-k="${k.id}" aria-label="${k.m}">${icon(k.id)}<span>${k.short}</span></button>`).join('')}</div>
+    <div class="kdesc" id="kd"></div>`;
 }
-function bindPicker(root, onPick) {
-  for (const b of root.querySelectorAll('.kind')) b.onclick = () => {
-    for (const x of root.querySelectorAll('.kind')) x.classList.toggle('on', x === b);
-    onPick(b.dataset.k);
+function bindPicker(root, selected, female, onPick) {
+  let cur = selected;
+  const show = (id) => {
+    cur = id;
+    const k = KINDS.find((x) => x.id === id);
+    for (const b of root.querySelectorAll('.kind')) b.classList.toggle('on', b.dataset.k === id);
+    const name = female() == null ? k.m.replace('Prezident s rádcem', 'S rádcem') : kindName(k, female());
+    root.querySelector('.kdesc').innerHTML = `${icon(k.id, 'ico lg')}<div><b>${name}</b><small>${k.text}</small></div>`;
+    onPick(id);
   };
+  for (const b of root.querySelectorAll('.kind')) b.onclick = () => show(b.dataset.k);
+  const d = root.querySelector('.kdesc');
+  let x0 = null;
+  d.onpointerdown = (e) => (x0 = e.clientX);
+  d.onpointerup = (e) => {
+    if (x0 == null) return;
+    const dx = e.clientX - x0, i = KINDS.findIndex((k) => k.id === cur);
+    x0 = null;
+    if (Math.abs(dx) > 40) show(KINDS[(i + (dx < 0 ? 1 : KINDS.length - 1)) % KINDS.length].id);
+  };
+  show(cur);
+  return { refresh: () => show(cur) };
 }
 const $ = (sel) => app.querySelector(sel);
 
 // ── Úvod ─────────────────────────────────────────────
 function startScreen() {
   document.body.classList.remove('game');
-  let female = false, kind = 'vize';
   app.innerHTML = `
     <div class="start">
       <img class="logo" src="icons/icon-192.png" alt="">
@@ -47,22 +74,37 @@ function startScreen() {
         Udrž sedm sil v rovnováze – ideál je uprostřed, na krajích čeká katastrofa.</p>
       <div class="col">
         ${state ? `<button class="primary" id="cont">Pokračovat – ${esc(state.leader.name)}</button>` : ''}
-        <input id="name" maxlength="30" placeholder="Tvoje jméno" autocomplete="off" enterkeyhint="go">
-        <div class="seg"><button id="m" class="on">Prezident</button><button id="f">Prezidentka</button></div>
-        <div class="label">Jaký budeš vůdce?</div>
-        <div id="kp">${kindPicker(kind, false)}</div>
-        <button class="${state ? 'ghost' : 'primary'}" id="new">${state ? 'Nová hra od začátku' : 'Začít vládnout'}</button>
+        <button class="${state ? 'ghost' : 'primary'}" id="new">${state ? 'Nová hra od začátku' : 'Nová hra'}</button>
         <button class="ghost" id="help">Jak hrát</button>
       </div>
     </div>`;
-  const picker = () => { $('#kp').innerHTML = kindPicker(kind, female); bindPicker($('#kp'), (k) => (kind = k)); };
-  picker();
-  const seg = (f) => { female = f; $('#m').classList.toggle('on', !f); $('#f').classList.toggle('on', f); picker(); };
-  $('#m').onclick = () => seg(false);
-  $('#f').onclick = () => seg(true);
   $('#help').onclick = () => helpScreen(startScreen);
   if (state) $('#cont').onclick = () => (state.dead ? deathScreen() : gameScreen());
-  $('#new').onclick = () => {
+  $('#new').onclick = setupScreen;
+}
+
+/** Nový vůdce: jméno, prezident/prezidentka a typ – vše na jedné obrazovce bez posouvání. */
+function setupScreen() {
+  let female = false, kind = 'vize';
+  app.innerHTML = `
+    <div class="start setup">
+      <h2 class="title">Kdo povede republiku?</h2>
+      <input id="name" maxlength="30" placeholder="Tvoje jméno" autocomplete="off" enterkeyhint="done">
+      <div class="seg"><button id="m" class="on">Prezident</button><button id="f">Prezidentka</button></div>
+      <div class="label">Jaký budeš vůdce?</div>
+      <div id="kp">${kindPicker()}</div>
+      <div class="col">
+        <button class="primary" id="go">Začít vládnout</button>
+        <button class="ghost" id="back">Zpět</button>
+      </div>
+    </div>`;
+  const picker = bindPicker($('#kp'), kind, () => female, (k) => (kind = k));
+  const seg = (f) => { female = f; $('#m').classList.toggle('on', !f); $('#f').classList.toggle('on', f); picker.refresh(); };
+  $('#m').onclick = () => seg(false);
+  $('#f').onclick = () => seg(true);
+  $('#name').onkeydown = (e) => { if (e.key === 'Enter') e.target.blur(); };
+  $('#back').onclick = startScreen;
+  $('#go').onclick = () => {
     if (state && !confirm('Opravdu začít znovu? Současná hra i kronika vůdců se smažou (odemčené konce zůstanou).')) return;
     const keep = state ? { endings: state.endings, best: state.best } : null;
     state = newGame({ name: $('#name').value, female, kind }, (Math.random() * 2 ** 32) >>> 0);
@@ -435,12 +477,12 @@ function deathScreen() {
         <div class="stat"><span class="small">Odemčené konce</span><b>${state.endings.length} z ${total}</b></div>
       </div>
       <div class="label">Jaký bude nástupce?</div>
-      <div id="kp">${kindPicker(l.kind, null)}</div>
+      <div id="kp">${kindPicker()}</div>
       <button class="primary" id="next">Úřad přebírá nástupce</button>
       <button class="ghost" id="chron">Kronika a konce</button>
     </div>`;
   let kind = l.kind;
-  bindPicker($('#kp'), (k) => (kind = k));
+  bindPicker($('#kp'), kind, () => null, (k) => (kind = k));
   $('#next').onclick = () => { nextLeader(state, kind); save(); gameScreen(); toast(`Úkol: ${taskById(state.task.id).text}`, 'newtask'); };
   $('#chron').onclick = () => chronicleScreen(deathScreen);
 }

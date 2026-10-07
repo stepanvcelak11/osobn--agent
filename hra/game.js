@@ -17,11 +17,11 @@ export function cardById(id) { return BY_ID.get(id); }
 
 /// Typy prezidenta – každý má jednu schopnost.
 export const KINDS = [
-  { id: 'vize', m: 'Vizionář', f: 'Vizionářka', icon: '🔭', text: 'Při tažení vidí, jestli volba ukazatel zvedne, nebo sníží – ale ne o kolik.' },
-  { id: 'krize', m: 'Krizový manažer', f: 'Krizová manažerka', icon: '🧯', text: 'Když je ukazatel v krajnosti (pod 30 % nebo nad 70 %), kroky zpět k rovnováze mají dvojnásobný účinek.' },
-  { id: 'odklad', m: 'Vyčkávač', f: 'Vyčkávačka', icon: '⏭️', text: 'Po každých 5 rozhodnutích může jednu kartu odložit – nic se nestane a jde se dál.' },
-  { id: 'kormidlo', m: 'Kormidelník', f: 'Kormidelnice', icon: '🧭', text: 'Po každých 5 rozhodnutích může jeden ukazatel posunout o 15 bodů k rovnováze.' },
-  { id: 'rada', m: 'Prezident s rádcem', f: 'Prezidentka s rádcem', icon: '🦉', text: 'Rádce mu ke každé kartě poradí. V 7 případech z 10 radí to nejlepší, jinak se mýlí.' },
+  { id: 'vize', short: 'Vizionář', m: 'Vizionář', f: 'Vizionářka', icon: '🔭', text: 'Při tažení vidí, jestli volba ukazatel zvedne, nebo sníží – ale ne o kolik.' },
+  { id: 'krize', short: 'Krizový', m: 'Krizový manažer', f: 'Krizová manažerka', icon: '🧯', text: 'Když je ukazatel v krajnosti (pod 30 % nebo nad 70 %), kroky zpět k rovnováze mají dvojnásobný účinek.' },
+  { id: 'odklad', short: 'Vyčkávač', m: 'Vyčkávač', f: 'Vyčkávačka', icon: '⏭️', text: 'Po každých 5 rozhodnutích může jednu kartu odložit – nic se nestane a jde se dál.' },
+  { id: 'kormidlo', short: 'Kormidelník', m: 'Kormidelník', f: 'Kormidelnice', icon: '🧭', text: 'Po každých 5 rozhodnutích může jeden ukazatel posunout o 15 bodů k rovnováze.' },
+  { id: 'rada', short: 'Rádce', m: 'Prezident s rádcem', f: 'Prezidentka s rádcem', icon: '🦉', text: 'Rádce mu ke každé kartě poradí. V 7 případech z 10 radí to nejlepší, jinak se mýlí.' },
 ];
 export const CHARGE = 5;     // po kolika rozhodnutích se nabije schopnost
 export const NUDGE = 15;     // o kolik posune Kormidelník
