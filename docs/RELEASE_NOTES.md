@@ -1,10 +1,11 @@
-Verze 1.1
+## Pocket Realm 2.0
 
-- **Budíky, minutky a stopky** – hlasem nebo psaním („vzbuď mě zítra v 6:30“, „minutka 10 minut na těstoviny“, „spusť stopky“). Na iOS 26 skutečné budíky Apple s odložením a odpočtem na zamčené obrazovce.
-- **Kalendář a Připomínky Apple** – volitelné zapisování událostí, připomínek a úkolů a zobrazení tvých událostí v přehledu.
-- **Poznámky Apple** přes zkratku.
-- **Nahrávání a shrnutí přednášek / porad** – i při zamčeném telefonu, přepis a shrnutí offline, navržené úkoly. Zpracuje i zvukový soubor z Diktafonu.
-- **Preferuji psaní** – ovládání bez mluvení.
-- Rychlé akce na přehledu (Nahrát, Hodiny, Zachytit, Napsat).
+Temné offline RPG s AI vypravěčem, který běží celý v iPhonu.
 
-Instalace: stáhni `OsobniAgent-unsigned.ipa` a postupuj podle [docs/INSTALACE.md](https://github.com/stepanvcelak11/osobn--agent/blob/main/docs/INSTALACE.md).
+- Tři módy: **Rychlá výprava** (5–10 min), **Cesta světem** (1–2 h, karavana), **Živý simulátor** (osada v reálném čase).
+- Volný text místo tlačítek, hod k20, férová pravidla, která model nemůže obejít.
+- Dashboard 🏰 👥 🪙 🍞 🛡️ ❤️ 🧠 🎒, paranoidní vypravěč při vysokém stresu, kronika, úspěchy, epilog.
+- Vypravěč nahlas a diktování tahů – vše offline.
+- Bez modelu hraje jednoduchý záložní vypravěč; doporučený model: **Gemma 3 4B Instruct Q4_K_M**.
+
+Instalace: stáhni `PocketRealm-unsigned.ipa` a nainstaluj přes Sideloadly / AltStore. Podrobnosti v README.

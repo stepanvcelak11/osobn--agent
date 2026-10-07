@@ -1,6 +1,6 @@
 import Foundation
 import SwiftUI
-import AgentCore
+import RealmCore
 
 struct InstalledModel: Codable, Identifiable, Equatable {
     var id: String
@@ -35,21 +35,12 @@ final class ModelManager: ObservableObject {
     @Published var importProgress: Double?
     @Published var importStatus: String = ""
 
-    private var store: DataStore?
-    private let manifestKey = "models.installed"
+    private func activeKey(_ kind: ModelKind) -> String { "model.active.\(kind.rawValue)" }
 
-    func attach(store: DataStore) {
-        self.store = store
-        reload()
-    }
-
-    func detach() {
-        store = nil
-        installed = []
-    }
+    init() { reload() }
 
     func reload() {
-        guard let store, let json = try? store.setting(manifestKey), let data = json.data(using: .utf8),
+        guard let data = try? Data(contentsOf: AppPaths.modelManifest),
               let list = try? JSONDecoder.withDates.decode([InstalledModel].self, from: data) else {
             installed = []
             return
@@ -58,19 +49,17 @@ final class ModelManager: ObservableObject {
     }
 
     private func save() {
-        guard let store, let data = try? JSONEncoder.withDates.encode(installed) else { return }
-        try? store.setSetting(manifestKey, String(decoding: data, as: UTF8.self))
+        guard let data = try? JSONEncoder.withDates.encode(installed) else { return }
+        try? data.write(to: AppPaths.modelManifest, options: .atomic)
     }
 
     func active(_ kind: ModelKind) -> InstalledModel? {
-        guard let id = try? store?.setting("model.active.\(kind.rawValue)") else {
-            return installed.first { $0.kind == kind }
-        }
-        return installed.first { $0.id == id } ?? installed.first { $0.kind == kind }
+        let id = UserDefaults.standard.string(forKey: activeKey(kind))
+        return installed.first { $0.id == id && $0.kind == kind } ?? installed.first { $0.kind == kind }
     }
 
     func activate(_ m: InstalledModel) {
-        try? store?.setSetting("model.active.\(m.kind.rawValue)", m.id)
+        UserDefaults.standard.set(m.id, forKey: activeKey(m.kind))
         objectWillChange.send()
     }
 

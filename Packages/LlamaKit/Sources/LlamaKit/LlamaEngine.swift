@@ -1,5 +1,5 @@
 import Foundation
-import AgentCore
+import RealmCore
 @_implementationOnly import llama
 
 public struct LlamaLoadOptions: Sendable {

@@ -61,7 +61,7 @@ final class AudioRecorder: ObservableObject {
     private let collector = PCMCollector()
     private var startDate: Date?
     private var timer: Timer?
-    private let maxSeconds: TimeInterval = 90
+    private let maxSeconds: TimeInterval = 45
 
     static func requestPermission() async -> Bool {
         await withCheckedContinuation { cont in
@@ -71,7 +71,6 @@ final class AudioRecorder: ObservableObject {
 
     func start() async throws {
         guard !isRecording else { return }
-        guard !LongRecorder.busy else { throw SpeechError.busy }
         guard await Self.requestPermission() else { throw SpeechError.micDenied }
         let session = AVAudioSession.sharedInstance()
         try session.setCategory(.playAndRecord, mode: .measurement, options: [.defaultToSpeaker])
@@ -135,12 +134,12 @@ final class Speaker: NSObject, ObservableObject, AVSpeechSynthesizerDelegate {
     }
 
     func speak(_ text: String) {
-        guard !text.isEmpty, !LongRecorder.busy else { return }
+        guard !text.isEmpty else { return }
         stop()
         let u = AVSpeechUtterance(string: text)
         let preferred = UserDefaults.standard.string(forKey: "tts.voice")
         u.voice = Self.czechVoices.first { $0.identifier == preferred } ?? Self.czechVoices.first ?? AVSpeechSynthesisVoice(language: "cs-CZ")
-        let rate = UserDefaults.standard.object(forKey: "tts.rate") as? Float ?? 0.5
+        let rate = Float(UserDefaults.standard.object(forKey: "tts.rate") as? Double ?? 0.5)
         u.rate = AVSpeechUtteranceMinimumSpeechRate + (AVSpeechUtteranceMaximumSpeechRate - AVSpeechUtteranceMinimumSpeechRate) * rate
         try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .spokenAudio, options: [.duckOthers])
         try? AVAudioSession.sharedInstance().setActive(true)

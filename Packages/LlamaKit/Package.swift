@@ -6,7 +6,7 @@ let package = Package(
     name: "LlamaKit",
     platforms: [.iOS(.v17), .macOS(.v14)],
     products: [.library(name: "LlamaKit", targets: ["LlamaKit"])],
-    dependencies: [.package(path: "../AgentCore")],
+    dependencies: [.package(path: "../RealmCore")],
     targets: [
         .binaryTarget(
             name: "llama",
@@ -15,7 +15,7 @@ let package = Package(
         ),
         .target(
             name: "LlamaKit",
-            dependencies: ["llama", .product(name: "AgentCore", package: "AgentCore")],
+            dependencies: ["llama", .product(name: "RealmCore", package: "RealmCore")],
             path: "Sources/LlamaKit"
         ),
     ],

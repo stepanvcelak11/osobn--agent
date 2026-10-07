@@ -3,7 +3,7 @@ name: Jádro – testy (Linux)
 on:
   push:
     branches: [main]
-    paths: ["Packages/AgentCore/**", "tools/**", ".github/workflows/core-tests.yml"]
+    paths: ["Packages/RealmCore/**", "tools/**", ".github/workflows/core-tests.yml"]
   pull_request:
   workflow_dispatch:
 
@@ -16,14 +16,12 @@ jobs:
     container: swift:6.1-noble
     steps:
       - uses: actions/checkout@v4
-      - name: OpenSSL (jen pro SQLCipher v testech na Linuxu)
-        run: apt-get update -qq && apt-get install -y -qq libssl-dev >/dev/null
       - name: swift test
-        working-directory: Packages/AgentCore
+        working-directory: Packages/RealmCore
         env:
-          GRAMMAR_DUMP_DIR: ${{ github.workspace }}/grammars
+          GRAMMAR_DUMP: ${{ github.workspace }}/grammars
         run: |
-          mkdir -p "$GRAMMAR_DUMP_DIR"
+          mkdir -p "$GRAMMAR_DUMP"
           swift test 2>&1 | tee test.log
           grep -E "Executed .* tests, with 0 failures" test.log
       - uses: actions/upload-artifact@v4

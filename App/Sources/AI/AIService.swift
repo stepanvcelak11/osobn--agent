@@ -1,10 +1,10 @@
 import Foundation
 import SwiftUI
-import AgentCore
+import RealmCore
 import LlamaKit
 import WhisperBridge
 
-/// Drží načtené lokální modely (jazykový model, vektory, řeč).
+/// Drží načtené lokální modely (vypravěč a volitelně rozpoznávání řeči).
 @MainActor
 final class AIService: ObservableObject {
     enum State: Equatable {
@@ -16,16 +16,14 @@ final class AIService: ObservableObject {
 
     @Published private(set) var llmState: State = .none
     @Published private(set) var speechState: State = .none
-    @Published private(set) var embeddingState: State = .none
 
     private(set) var llm: LlamaEngine?
-    private(set) var embedder: LlamaEmbedder?
     private var whisper: WhisperTranscriber?
     private var whisperModelId: String?
     private var whisperReleaseTask: Task<Void, Never>?
 
     var contextLength: Int {
-        get { UserDefaults.standard.object(forKey: "llm.context") as? Int ?? 3072 }
+        get { UserDefaults.standard.object(forKey: "llm.context") as? Int ?? 4096 }
         set { UserDefaults.standard.set(newValue, forKey: "llm.context") }
     }
 
@@ -51,21 +49,7 @@ final class AIService: ObservableObject {
         }
     }
 
-    func loadEmbedder(_ m: InstalledModel?) async {
-        guard let m else { embedder = nil; embeddingState = .none; return }
-        if case .ready(let n) = embeddingState, n == m.displayName, embedder != nil { return }
-        embeddingState = .loading(m.displayName)
-        let path = m.url.path, id = m.id
-        do {
-            embedder = try await Task.detached(priority: .utility) { try LlamaEmbedder(path: path, modelId: id) }.value
-            embeddingState = .ready(m.displayName)
-        } catch {
-            embedder = nil
-            embeddingState = .failed(String(describing: error))
-        }
-    }
-
-    /// Whisper se načítá až při prvním diktování a po chvíli se uvolní (šetří paměť).
+    /// Whisper se načítá až při prvním diktování a po chvíli se uvolní (šetří paměť pro vypravěče).
     func transcriber(for m: InstalledModel?) async throws -> WhisperTranscriber {
         guard let m else { throw SpeechError.noModel }
         scheduleWhisperRelease()
@@ -84,11 +68,10 @@ final class AIService: ObservableObject {
         }
     }
 
-    /// Whisper (~0,5–1 GB) se uvolní po 2 minutách bez diktování – šetří paměť pro jazykový model.
     private func scheduleWhisperRelease() {
         whisperReleaseTask?.cancel()
         whisperReleaseTask = Task { [weak self] in
-            try? await Task.sleep(nanoseconds: 120_000_000_000)
+            try? await Task.sleep(nanoseconds: 90_000_000_000)
             guard !Task.isCancelled else { return }
             self?.releaseSpeech()
         }
@@ -102,37 +85,20 @@ final class AIService: ObservableObject {
         speechState = .none
     }
 
-    /// Při zamčení: z paměti modelu zmizí kontext konverzace (KV cache).
-    func clearSensitiveState() {
-        llm?.resetCache()
-        releaseSpeech()
-    }
+    /// Nová hra = nový kontext; starý příběh nemá v paměti modelu co dělat.
+    func resetContext() { llm?.resetCache() }
 
-    func unloadAll() {
-        llm = nil; embedder = nil; whisper = nil; whisperModelId = nil
-        llmState = .none; embeddingState = .none; speechState = .none
-    }
-
-    /// Při nedostatku paměti uvolníme nejdřív řeč a vektory.
-    func handleMemoryWarning() {
-        releaseSpeech()
-        embedder = nil
-        embeddingState = .none
-    }
+    func handleMemoryWarning() { releaseSpeech() }
 }
 
 enum SpeechError: LocalizedError {
-    case noModel
-    case micDenied
-    case tooShort
-    case busy
+    case noModel, micDenied, tooShort
 
     var errorDescription: String? {
         switch self {
-        case .noModel: return "Není nahraný model pro rozpoznávání řeči (Nastavení → Modely)."
-        case .micDenied: return "Aplikace nemá přístup k mikrofonu (Nastavení iOS → Osobní agent)."
+        case .noModel: return "Není nahraný model pro rozpoznávání řeči (Modely)."
+        case .micDenied: return "Aplikace nemá přístup k mikrofonu (Nastavení iOS → Pocket Realm)."
         case .tooShort: return "Nahrávka je příliš krátká."
-        case .busy: return "Právě běží nahrávání přednášky – diktování teď nejde. Napiš to prosím."
         }
     }
 }

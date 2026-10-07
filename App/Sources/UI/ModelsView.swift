@@ -1,6 +1,6 @@
 import SwiftUI
 import UniformTypeIdentifiers
-import AgentCore
+import RealmCore
 
 struct ModelsView: View {
     @EnvironmentObject var app: AppModel
@@ -13,7 +13,7 @@ struct ModelsView: View {
     @State private var confirmedHash = false
     @State private var message: String?
     @State private var working = false
-    @State private var contextLength = 3072
+    @State private var contextLength = 4096
 
     var body: some View {
         List {
@@ -47,7 +47,7 @@ struct ModelsView: View {
                     }
                 }
             } header: { Text("Nahrát model") } footer: {
-                Text("Aplikace nic nestahuje z internetu. Model si stáhni do Souborů (např. v Safari nebo přes počítač) a vyber ho zde. Kontrolní součet SHA-256 najdeš na stránce souboru na Hugging Face – vlož ho a aplikace soubor ověří. Soubor s nesouhlasným součtem se odmítne.")
+                Text("Hra nic nestahuje z internetu. Model (soubor .gguf) si stáhni do Souborů – v Safari nebo přes počítač – a vyber ho zde. Kontrolní součet SHA-256 najdeš na stránce souboru na Hugging Face; vlož ho a hra soubor ověří. Soubor s nesouhlasným součtem se odmítne.")
             }
 
             Section("Doporučené modely") {
@@ -55,7 +55,7 @@ struct ModelsView: View {
                     VStack(alignment: .leading, spacing: 4) {
                         HStack {
                             Text(c.name).font(.subheadline.weight(.semibold))
-                            if c.recommended { Text("doporučeno").font(.caption2).padding(.horizontal, 6).padding(.vertical, 2).background(Theme.accent.opacity(0.2), in: Capsule()) }
+                            if c.recommended { Text("doporučeno").font(.caption2).padding(.horizontal, 6).padding(.vertical, 2).background(Theme.ember.opacity(0.25), in: Capsule()) }
                         }
                         Text("\(c.kind.czechName) · ~\(c.approxSizeMB) MB").font(.caption).foregroundStyle(.secondary)
                         Text("Soubor: \(c.fileName)").font(.caption2.monospaced()).foregroundStyle(.secondary)
@@ -68,15 +68,17 @@ struct ModelsView: View {
 
             Section {
                 Picker("Délka kontextu", selection: $contextLength) {
-                    Text("2048 tokenů (méně paměti)").tag(2048)
-                    Text("3072 tokenů (doporučeno)").tag(3072)
-                    Text("4096 tokenů").tag(4096)
+                    Text("3072 tokenů (méně paměti)").tag(3072)
+                    Text("4096 tokenů (doporučeno)").tag(4096)
+                    Text("6144 tokenů (delší paměť příběhu)").tag(6144)
                 }
                 Button("Znovu načíst modely") { Task { await reloadModels() } }
             } header: { Text("Výkon") } footer: {
-                Text("iPhone 14 Pro má 6 GB RAM. Pro modely ~4B (Q4) doporučujeme kontext 3072. Při pádech kvůli paměti zvol menší kontext nebo menší model.")
+                Text("iPhone 14 Pro má 6 GB RAM. Pro Gemma 3 4B (Q4) doporučujeme kontext 4096 – vypravěč si pamatuje posledních pár tahů a kroniku. Kdyby aplikace padala kvůli paměti, zvol 3072.")
             }
         }
+        .scrollContentBackground(.hidden)
+        .background(Theme.bg0)
         .navigationTitle("Modely")
         .onAppear { contextLength = ai.contextLength }
         .onChange(of: contextLength) { _, v in ai.contextLength = v }
@@ -120,7 +122,7 @@ struct ModelsView: View {
     }
 
     @ViewBuilder private func stateRow(_ kind: ModelKind) -> some View {
-        let state: AIService.State = kind == .llm ? ai.llmState : kind == .embedding ? ai.embeddingState : ai.speechState
+        let state: AIService.State = kind == .llm ? ai.llmState : ai.speechState
         switch state {
         case .loading(let n): HStack { ProgressView(); Text("Načítám \(n)…").font(.caption) }
         case .failed(let e): Text(e).font(.caption).foregroundStyle(.red)
@@ -150,7 +152,6 @@ struct ModelsView: View {
     /// Uvolní starý model (kvůli paměti) a načte aktivní.
     private func reloadModels() async {
         await ai.loadLLM(nil)
-        await ai.loadEmbedder(nil)
         await app.loadModels()
     }
 
