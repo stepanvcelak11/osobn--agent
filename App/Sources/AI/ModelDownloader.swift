@@ -49,6 +49,11 @@ final class ModelDownloader: NSObject, ObservableObject {
     /// Stáhne, co chybí: nejdřív vypravěče, pak hlasové ovládání.
     func startIfNeeded(models: ModelManager) {
         self.models = models
+        #if SHOTS
+        // Snímky obrazovky: nic se nestahuje, jen ukázka stavu.
+        phase = .downloading(name: "Gemma 3 4B", received: 1_180_000_000, total: 2_489_758_112)
+        return
+        #endif
         guard !isWorking, !starting else { return }
         starting = true
         var q: [DownloadSource] = []
