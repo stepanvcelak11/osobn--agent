@@ -259,18 +259,18 @@ public enum World {
     /// Kolik zkušeností potřebuje úroveň `level` (celkem). Úroveň 1 = 0.
     public static func xpForLevel(_ level: Int) -> Int {
         guard level > 1 else { return 0 }
-        return (2...level).reduce(0) { $0 + 60 + ($1 - 2) * 40 }
+        return (2...level).reduce(0) { $0 + 100 + ($1 - 2) * 60 }
     }
 
     public static let maxAttribute = 6
 
     static func xp(for outcome: Outcome) -> Int {
         switch outcome {
-        case .critSuccess: return 25
-        case .success: return 15
-        case .partial: return 8
-        case .fail, .critFail: return 5
-        case .auto: return 2
+        case .critSuccess: return 15
+        case .success: return 10
+        case .partial: return 5
+        case .fail, .critFail: return 3
+        case .auto: return 0
         case .impossible: return 0
         }
     }

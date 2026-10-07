@@ -57,9 +57,16 @@ public enum Fallback {
         case .combat: difficulty = .normal
         default: difficulty = state.phase == 3 ? .hard : .normal
         }
-        let risk: Risk = category == .combat ? .medium : (risky.contains(category) || category == .explore || category == .travel ? .low : .none)
+        var risk: Risk = category == .combat ? .medium : (risky.contains(category) || category == .explore || category == .travel ? .low : .none)
+        var diff = difficulty
+        // Bezhlavost se nevyplácí: holé ruce, přesila, skok do neznáma.
+        let reckless = ["holyma ruk", "na vsechn", "sam proti", "bez rozmysl", "skocim do", "naslepo", "vsechny zabij", "bez zbrane"]
+        if reckless.contains(where: { f.contains($0) }) {
+            diff = category == .combat ? .extreme : .hard
+            risk = .high
+        }
         return ActionIntent(summary: String(text.prefix(80)), category: category, stat: category.defaultStat,
-                            difficulty: difficulty, risk: risk, itemsUsed: used, build: build)
+                            difficulty: diff, risk: risk, itemsUsed: used, build: build)
     }
 
     static let lines: [Outcome: [String]] = [
@@ -100,6 +107,14 @@ public enum Fallback {
             if out.itemsGained[0].0 == "Zrezivělý klíč" { out.itemsGained[0].1 = .key }
         }
         if let a = r.arrival { out.location = a.stop.name; out.scene = a.stop.scene }
+        // Obrana osady: výcvik, opevnění, hlídky – při úspěchu posílí obranu a může odvrátit hrozbu.
+        let f = CzechText.fold(r.intent.summary)
+        if state.mode.hasSettlement, [.success, .critSuccess].contains(r.roll.outcome),
+           ["obran", "domobran", "hradb", "opevn", "hlidk", "straz", "hrozb", "najezd", "lapk"].contains(where: { f.contains($0) }) {
+            out.proposed.defense += r.roll.outcome == .critSuccess ? 8 : 5
+            out.resolveThreat = !state.threats.isEmpty
+            if !state.threats.isEmpty { out.narration = out.narration.replacingOccurrences(of: " Co uděláš teď?", with: "") + " Osada je na hrozbu připravenější. Co uděláš teď?" }
+        }
         if r.intent.category == .social && [.success, .critSuccess, .partial].contains(r.roll.outcome) && state.chance(60) {
             let p = state.pick(people)
             out.npc = (p.0, p.1, r.roll.outcome == .partial ? .neutral : .friend)

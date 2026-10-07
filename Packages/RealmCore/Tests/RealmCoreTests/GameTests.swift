@@ -346,9 +346,10 @@ final class GameTests: XCTestCase {
         var s = newState(.realm)
         s.settlement.food = 0
         s.settlement.buildings = [:]
-        s.settlement.population = 3
+        s.settlement.population = 40
         Simulation.advance(&s, to: t0.addingTimeInterval(10 * 24 * 3600))
-        XCTAssertTrue(s.isOver || s.settlement.population < 3)
+        XCTAssertTrue(s.isOver || s.settlement.population < 30, "hlad musí kosit lidi")
+        XCTAssertTrue(s.log.contains { $0.text.contains("Hladomor") })
     }
 
     func testNotifications() {

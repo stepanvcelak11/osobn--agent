@@ -171,7 +171,7 @@ struct SettlementSheet: View {
                 let prod = Int((Double(8 + st.count(.farma) * 15 + st.population / 4) * state.season.harvest).rounded())
                 let eat = Int((Double(st.population) * state.weather.foodFactor).rounded())
                 row("🌾", "Bilance jídla / den (\(state.season.czechName.lowercased()))", signed(prod - eat))
-                row("💰", "Příjem zlata / den", signed(5 + st.count(.trziste) * 12 + st.population / 10))
+                row("💰", "Příjem zlata / den", signed(8 + st.count(.trziste) * 15 + st.population / 5))
                 row("🕰️", "Herní čas", "Den \(state.day), \(clock(state.worldTime))")
             }
         }

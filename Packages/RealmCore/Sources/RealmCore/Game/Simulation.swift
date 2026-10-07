@@ -152,7 +152,7 @@ public enum Simulation {
         switch t.kind {
         case .plague: power = st.count(.ranhojicstvi) * 15 + st.morale / 5 + roll
         case .storm: power = st.count(.sypka) * 10 + 10 + roll
-        default: power = st.defense + st.count(.kasarna) * 5 + roll
+        default: power = st.defense + st.count(.kasarna) * 5 + st.population / 5 + roll
         }
         var d = StatDelta()
         let text: String
@@ -222,7 +222,7 @@ public enum Simulation {
         let production = Int((Double(8 + st.count(.farma) * 15 + st.population / 4) * season.harvest).rounded())
         let consumption = Int((Double(st.population) * s.weather.foodFactor).rounded())
         d.food = production - consumption
-        d.gold = 5 + st.count(.trziste) * 12 + st.population / 10
+        d.gold = 8 + st.count(.trziste) * 15 + st.population / 5
         let foodAfter = st.food + d.food
         if foodAfter <= 0 {
             let lost = max(1, st.population / 15)
@@ -235,9 +235,9 @@ public enum Simulation {
         // Morálka tíhne k rovnováze
         let target = 50 + st.count(.kaple) * 10 + (st.foodPercent >= 60 ? 5 : 0)
         let diff = target - (st.morale + d.morale)
-        d.morale += diff > 0 ? min(3, diff) : max(-3, diff)
+        d.morale += diff > 0 ? min(4, diff) : max(-3, diff)
         // Růst
-        if foodAfter > 0 && Double(foodAfter) / Double(max(1, foodCapacity(st))) >= 0.5 && st.morale >= 50 {
+        if foodAfter > 0 && Double(foodAfter) / Double(max(1, foodCapacity(st))) >= 0.5 && st.morale >= 40 {
             let born = max(1, st.population / 10)
             d.pop += born
             notes.append("přibylo \(born) obyvatel")
@@ -263,7 +263,7 @@ public enum Simulation {
         // Nová hrozba
         if dayN >= 2 && s.threats.count < 3 && s.chance(min(55, 25 + dayN)) {
             let kind = s.pick(ThreatKind.allCases)
-            let strength = 10 + dayN * 2 + s.random(0...8)
+            let strength = 8 + dayN * 3 / 2 + s.random(0...8)
             let hours = Double(s.random(24...48) + s.settlement.count(.straznaVez) * 6)
             let t = Threat(kind: kind, title: s.pick(threatTitles[kind]!), strength: strength,
                            deadline: dawn.addingTimeInterval(hours * 3600))

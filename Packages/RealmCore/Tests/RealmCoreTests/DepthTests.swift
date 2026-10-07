@@ -52,8 +52,8 @@ final class DepthTests: XCTestCase {
         XCTAssertEqual(r.state.hero.hp, 70)
         XCTAssertTrue(r.state.log.contains { $0.text.hasPrefix("⭐ Úroveň 2") })
         XCTAssertEqual(World.xpForLevel(1), 0)
-        XCTAssertEqual(World.xpForLevel(2), 60)
-        XCTAssertEqual(World.xpForLevel(3), 160)
+        XCTAssertEqual(World.xpForLevel(2), 100)
+        XCTAssertEqual(World.xpForLevel(3), 260)
     }
 
     func testBleedingWeakensUntilTreated() {

@@ -193,7 +193,7 @@ public enum BuildingKind: String, Codable, CaseIterable, Sendable {
         case .farma: return "+15 jídla denně"
         case .sypka: return "+150 kapacita zásob"
         case .palisada: return "+15 obrana"
-        case .trziste: return "+12 zlata denně"
+        case .trziste: return "+15 zlata denně"
         case .kaple: return "+10 morálka, rychlejší úleva od stresu"
         case .kasarna: return "+10 obrana, hrozby slábnou"
         case .ranhojicstvi: return "léčení hrdiny, odolnost vůči nemocem"
