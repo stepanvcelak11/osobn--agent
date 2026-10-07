@@ -24,9 +24,12 @@ struct DashboardView: View {
         HStack(spacing: 8) {
             Text("🏰")
             VStack(alignment: .leading, spacing: 0) {
-                Text(state.mode.hasSettlement ? "\(Catalog.settlementRank(population: state.settlement.population)) \(state.settlement.name)" : state.settlement.name)
+                Text(state.settlement.name)
                     .font(.system(.headline, design: .serif)).foregroundStyle(Theme.parchment).lineLimit(1)
-                Text("\(state.mode.title) · \(state.location)")
+                    .minimumScaleFactor(0.8)
+                Text(state.mode.hasSettlement
+                     ? "\(Catalog.settlementRank(population: state.settlement.population)) · \(state.mode.title)"
+                     : "\(state.mode.title) · \(state.location)")
                     .font(.caption2).foregroundStyle(Theme.dimText).lineLimit(1)
             }
             Spacer(minLength: 4)
