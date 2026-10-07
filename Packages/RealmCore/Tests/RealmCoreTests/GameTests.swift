@@ -213,7 +213,7 @@ final class GameTests: XCTestCase {
         s.quest?.progress = 2
         var hits = 0
         for _ in 0..<40 {
-            let r = Rules.resolve(state: &s, intent: ActionIntent(summary: "x", category: .combat, difficulty: .easy))
+            let r = Rules.resolve(state: &s, intent: ActionIntent(summary: "x", category: .combat, difficulty: .normal))
             if r.roll.outcome == .success || r.roll.outcome == .critSuccess { XCTAssertTrue(r.completesQuest); hits += 1 }
             if r.roll.outcome == .fail { XCTAssertFalse(r.completesQuest) }
         }

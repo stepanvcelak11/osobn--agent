@@ -6,7 +6,7 @@ on:
       scenarios:
         description: "Scénáře oddělené čárkou (quest,campaign,realm,endless); prázdné = všechny"
         required: false
-        default: ""
+        default: "quest,campaign"
 
 permissions:
   contents: write
@@ -14,7 +14,7 @@ permissions:
 jobs:
   play:
     runs-on: macos-15
-    timeout-minutes: 90
+    timeout-minutes: 150
     steps:
       - uses: actions/checkout@v4
       - name: Xcode
@@ -38,16 +38,11 @@ jobs:
       - name: Sestavení
         working-directory: tools/playtest
         run: swift build -c release 2>&1 | tail -30
-      - name: Hra (Metal, při pádu CPU)
+      - name: Hra (CPU – Metal ve virtuálním Macu je velmi pomalý)
         run: |
-          BIN=tools/playtest/.build/release/playtest
           mkdir -p out
           sysctl -n hw.ncpu hw.memsize
-          if ! $BIN model/m.gguf out/playtest.md 99 "${{ inputs.scenarios }}"; then
-            echo "::warning::Metal selhal nebo hra hlásí chyby – zkouším CPU"
-            cp out/playtest.md out/playtest-metal.md 2>/dev/null || true
-            $BIN model/m.gguf out/playtest.md 0 "${{ inputs.scenarios }}" || echo "::warning::selhání i na CPU"
-          fi
+          tools/playtest/.build/release/playtest model/m.gguf out/playtest.md 0 "${{ inputs.scenarios }}" || echo "::warning::hra hlásí chyby"
       - uses: actions/upload-artifact@v4
         if: always()
         with:

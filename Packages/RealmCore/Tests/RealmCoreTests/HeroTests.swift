@@ -113,3 +113,24 @@ final class HeroTests: XCTestCase {
         XCTAssertTrue(back.hero.traits.isEmpty)
     }
 }
+
+final class NarrationQualityTests: XCTestCase {
+    func testStatNumbersAreScrubbed() {
+        let t = "Najdeš klíč. Tvá únava se projevuje, stres stoupá o 2. Zásoby se snížily o 10 %, což je rána. Za dveřmi něco zaškrábe."
+        let c = GameEngine.clean(t)
+        XCTAssertEqual(c, "Najdeš klíč. Za dveřmi něco zaškrábe.")
+        XCTAssertEqual(GameEngine.clean("Seber tři zlaté mince a jdi."), "Seber tři zlaté mince a jdi.")
+        XCTAssertEqual(GameEngine.clean("[Vítej v kraji.`]"), "Vítej v kraji.")
+        XCTAssertEqual(GameEngine.clean(". Píseň o hrdince zní dál."), "Píseň o hrdince zní dál.")
+    }
+
+    func testEasyStepsDoNotAdvanceQuest() {
+        var s = GameEngine.newGame(NewGameSetup(mode: .quest, heroName: "A", cityName: "", backgroundId: "lovec", seed: 3)).state
+        for _ in 0..<30 {
+            let r = Rules.resolve(state: &s, intent: ActionIntent(summary: "rozhlédnu se", category: .explore, difficulty: .easy))
+            XCTAssertEqual(r.questGain, 0)
+            let h = Rules.resolve(state: &s, intent: ActionIntent(summary: "útok", category: .combat, difficulty: .hard))
+            XCTAssertLessThanOrEqual(h.questGain, 1)
+        }
+    }
+}

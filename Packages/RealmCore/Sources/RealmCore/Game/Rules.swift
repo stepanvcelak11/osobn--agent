@@ -426,12 +426,10 @@ public enum Rules {
         }
 
         // Rychlá výprava: postup k cíli
+        // Krok k cíli jen za skutečně odvážný čin (aspoň běžná obtížnost); i skvělý úspěch je jeden krok.
         if state.mode == .quest, let q = state.quest, questCategories.contains(intent.category) {
-            switch roll.outcome {
-            case .critSuccess: res.questGain = 2
-            case .success: res.questGain = 1
-            default: break
-            }
+            let bold = ![.trivial, .easy].contains(intent.difficulty)
+            if bold && [.success, .critSuccess].contains(roll.outcome) { res.questGain = 1 }
             res.completesQuest = res.questGain > 0 && q.progress + res.questGain >= q.steps
             switch roll.outcome {
             case .critFail: res.questSetback = 2

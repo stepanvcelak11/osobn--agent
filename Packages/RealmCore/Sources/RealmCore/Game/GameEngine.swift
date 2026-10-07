@@ -153,7 +153,27 @@ public final class GameEngine: @unchecked Sendable {
     }
 
     static func clean(_ t: String) -> String {
-        CzechText.collapseSpaces(PromptSanitizer.clean(t)).trimmingCharacters(in: .whitespacesAndNewlines)
+        let junk = CharacterSet.whitespacesAndNewlines.union(CharacterSet(charactersIn: "[]`*#\"{}"))
+        var s = CzechText.collapseSpaces(PromptSanitizer.clean(t)).trimmingCharacters(in: junk)
+        while let f = s.first, ".,;:–-".contains(f) { s = String(s.dropFirst()).trimmingCharacters(in: junk) }
+        return scrubStats(s)
+    }
+
+    /// Vypravěč nemá jmenovat čísla statistik („stres stoupá o 2“) – ty ukazuje panel. Takové věty vypustíme.
+    static func scrubStats(_ text: String) -> String {
+        let stat = "(stres|zdrav|zásob|zasob|morál|moral|životy|hp)"
+        let pattern = "(?i)" + stat + "[^.!?]{0,40}\\d|\\d+\\s?%|\\d[^.!?]{0,12}" + stat
+        guard let re = try? NSRegularExpression(pattern: pattern) else { return text }
+        var sentences: [String] = []
+        var cur = ""
+        for ch in text {
+            cur.append(ch)
+            if ".!?…".contains(ch) { sentences.append(cur); cur = "" }
+        }
+        if !cur.isEmpty { sentences.append(cur) }
+        let kept = sentences.filter { s in re.firstMatch(in: s, range: NSRange(s.startIndex..., in: s)) == nil }
+        guard !kept.isEmpty, kept.count < sentences.count else { return text }
+        return kept.joined().trimmingCharacters(in: .whitespaces)
     }
 
     // MARK: Prompt s historií
@@ -266,7 +286,7 @@ public final class GameEngine: @unchecked Sendable {
             }
             let prompt = model.template.render(m)
             let streamer = FieldStreamer(field: "narration") { onEvent(.narrating($0)) }
-            var no = GenerationOptions(maxTokens: 540, temperature: 0.8, topP: 0.95, grammar: Grammars.narrator(mode: s.mode))
+            var no = GenerationOptions(maxTokens: 560, temperature: 0.72, topP: 0.92, grammar: Grammars.narrator(mode: s.mode))
             no.seed = seed
             if let out = try? await model.generate(prompt: prompt, options: no,
                                                    onToken: { streamer.feed($0); return !Task.isCancelled }) {

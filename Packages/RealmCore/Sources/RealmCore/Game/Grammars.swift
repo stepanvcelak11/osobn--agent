@@ -7,6 +7,7 @@ public enum Grammars {
     char ::= [^"\\\\\\x7F\\x00-\\x1F] | "\\\\" (["\\\\/bfnrt] | "u" [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F])
     text ::= "\\"" char+ "\\""
     short ::= "\\"" char{1,90} "\\""
+    line ::= "\\"" char{1,160} "\\""
     name ::= "\\"" char{2,40} "\\""
     int ::= "-"? [0-9] [0-9]? [0-9]?
     bool ::= "true" | "false"
@@ -41,7 +42,7 @@ public enum Grammars {
         if mode != .quest {
             root += #" "," ws "\"food\":" ws int "," ws "\"pop\":" ws int "," ws "\"defense\":" ws int "," ws "\"morale\":" ws int"#
         }
-        root += #" "," ws "\"items_gained\":" ws gained "," ws "\"items_lost\":" ws names "," ws "\"location\":" ws short "," ws "\"scene\":" ws scene "," ws "\"chronicle\":" ws short "," ws "\"npc\":" ws npc"#
+        root += #" "," ws "\"items_gained\":" ws gained "," ws "\"items_lost\":" ws names "," ws "\"location\":" ws name "," ws "\"scene\":" ws scene "," ws "\"chronicle\":" ws line "," ws "\"npc\":" ws npc"#
         if mode != .quest { root += #" "," ws "\"contract_done\":" ws bool"# }
         if mode.hasSettlement { root += #" "," ws "\"resolve_threat\":" ws bool"# }
         root += #" ws "}""#
