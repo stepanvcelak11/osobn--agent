@@ -92,11 +92,14 @@ final class GameSession: ObservableObject, Identifiable {
             streamingText = ""
             save()
             if let text = s.log.last?.text { onNarration?(text) }
-            if s.mode.hasSettlement {
-                await RealmNotifications.requestPermission()
-                await RealmNotifications.reschedule(for: s)
-            }
             task = nil
+            // Dotaz na oznámení nesmí blokovat hru (hráč může psát, i když na něj ještě neodpověděl).
+            if s.mode.hasSettlement {
+                Task {
+                    await RealmNotifications.requestPermission()
+                    await RealmNotifications.reschedule(for: s)
+                }
+            }
         }
     }
 

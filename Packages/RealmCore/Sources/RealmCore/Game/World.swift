@@ -214,6 +214,9 @@ public struct Contract: Codable, Equatable, Identifiable, Sendable {
 public enum World {
     public static let seasonDays = 20
 
+    /// Herní čas v celých sekundách – uložení a načtení pak dá přesně stejný stav.
+    public static func whole(_ d: Date) -> Date { Date(timeIntervalSince1970: d.timeIntervalSince1970.rounded()) }
+
     public static func season(day: Int) -> Season {
         Season(rawValue: ((max(1, day) - 1) / seasonDays) % 4) ?? .jaro
     }

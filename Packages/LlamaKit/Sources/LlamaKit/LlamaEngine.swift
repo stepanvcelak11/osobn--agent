@@ -98,6 +98,9 @@ public final class LlamaEngine: LanguageModel, @unchecked Sendable {
                     let r = try self.generateSync(prompt: prompt, options: options, onToken: onToken)
                     cont.resume(returning: r)
                 } catch {
+                    // Po chybě nemusí KV cache odpovídat zapamatovaným tokenům – raději začít načisto.
+                    llama_memory_clear(llama_get_memory(self.ctx), true)
+                    self.cachedTokens = []
                     cont.resume(throwing: error)
                 }
             }

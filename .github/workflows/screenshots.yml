@@ -70,7 +70,19 @@ jobs:
           shot 11-world game-realm world
           shot 12-memory game-campaign memory
           ls -la shots
+      - name: Samotest aplikace (všechny módy, Znovu/Vrátit, uložení a načtení)
+        env:
+          UDID: ${{ steps.sim.outputs.udid }}
+        run: |
+          t() { perl -e 'alarm shift; exec @ARGV' "$@"; }
+          SIMCTL_CHILD_PR_DEMO=selftest t 60 xcrun simctl launch "$UDID" cz.pocketrealm.app || true
+          DATA=$(xcrun simctl get_app_container "$UDID" cz.pocketrealm.app data)
+          for i in $(seq 1 90); do [ -f "$DATA/Documents/selftest.txt" ] && break; sleep 4; done
+          cat "$DATA/Documents/selftest.txt" || { echo "::error::samotest nedoběhl"; exit 1; }
+          cp "$DATA/Documents/selftest.txt" shots/selftest.txt
+          grep -q "SELFTEST OK" "$DATA/Documents/selftest.txt"
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: screenshots
           path: shots/
@@ -83,7 +95,8 @@ jobs:
           git rm -rfq .
           rm -rf build PocketRealm.xcodeproj
           cp /tmp/shots/*.png .
+          cp /tmp/shots/selftest.txt . 2>/dev/null || true
           for f in *.png; do sips -Z 1100 "$f" >/dev/null; done
-          git add *.png
+          git add *.png selftest.txt 2>/dev/null || git add *.png
           git commit -qm "Snímky obrazovky ${GITHUB_SHA::7}"
           git push -f origin snimky

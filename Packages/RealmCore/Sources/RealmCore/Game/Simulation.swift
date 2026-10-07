@@ -72,7 +72,7 @@ public enum Simulation {
         guard elapsed > 60 else { return SimulationReport() }
         // Kdo byl dlouho pryč, ten se mezitím vyspal.
         if elapsed >= 6 * 3600 { s.hero.awakeHours = 0 }
-        s.worldTime = s.worldTime.addingTimeInterval(min(elapsed, maxRealCatchUp))
+        s.worldTime = World.whole(s.worldTime.addingTimeInterval(min(elapsed, maxRealCatchUp)))
         return advance(&s, to: s.worldTime)
     }
 
@@ -102,6 +102,8 @@ public enum Simulation {
         s.log.append(contentsOf: report.entries)
         World.updateWeather(&s)
         s.hero.conditions.removeAll { $0.until <= now }
+        let fixed = s.repair()
+        if !fixed.isEmpty { s.stats["repairs", default: 0] += 1; s.stats["repair_" + (fixed.first ?? "?").prefix(20), default: 0] += 1 }
         _ = Achievements.evaluate(&s)
         return report
     }

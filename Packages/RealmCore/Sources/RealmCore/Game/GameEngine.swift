@@ -74,6 +74,15 @@ public enum GameError: Error, CustomStringConvertible {
 /// Herní engine: pravidla jsou deterministická, jazykový model jen posuzuje záměr a vypráví.
 public final class GameEngine: @unchecked Sendable {
     public let model: LanguageModel?
+    /// Pojistka proti zaseknutí: nejdelší doba generování (bez zpracování promptu). Pak se použije, co je hotové,
+    /// nebo záložní vypravěč.
+    public var interpretLimit: TimeInterval = 35
+    public var narrateLimit: TimeInterval = 100
+
+    /// Vrací false (= přestat), když tah zrušil hráč nebo vypršel čas.
+    static func keepGoing(since start: Date, limit: TimeInterval) -> Bool {
+        !Task.isCancelled && Date().timeIntervalSince(start) < limit
+    }
 
     public init(model: LanguageModel?) { self.model = model }
 
@@ -94,7 +103,8 @@ public final class GameEngine: @unchecked Sendable {
         let settlement = Catalog.startSettlement(mode: setup.mode, name: String(city.prefix(30)), bonusGold: bg.bonusGold)
         var s = GameState(mode: setup.mode, hero: hero, settlement: settlement, location: settlement.name, scene: .town,
                           rngState: setup.seed)
-        s.createdAt = now; s.updatedAt = now; s.lastTickAt = now; s.worldTime = now; s.lastRealTime = now
+        let start = World.whole(now)
+        s.createdAt = start; s.updatedAt = now; s.lastTickAt = start; s.worldTime = start; s.lastRealTime = now
         var hook: String?
         switch setup.mode {
         case .quest:
@@ -127,7 +137,7 @@ public final class GameEngine: @unchecked Sendable {
             let streamer = FieldStreamer(field: "narration", onText: onText)
             if let out = try? await model.generate(prompt: prompt,
                                                    options: GenerationOptions(maxTokens: 420, temperature: 0.85, topP: 0.95, grammar: Grammars.story),
-                                                   onToken: { streamer.feed($0); return !Task.isCancelled }) {
+                                                   onToken: { [limit = narrateLimit, started = Date()] in streamer.feed($0); return Self.keepGoing(since: started, limit: limit) }) {
                 text = Self.narration(from: out.text)
             }
         }
@@ -248,8 +258,9 @@ public final class GameEngine: @unchecked Sendable {
             let prompt = model.template.render(interpMessages)
             var io = GenerationOptions(maxTokens: 140, temperature: 0.2, topP: 0.9, grammar: Grammars.interpreter(mode: s.mode))
             io.seed = seed
+            let started = Date(), limit = interpretLimit
             if let out = try? await model.generate(prompt: prompt, options: io,
-                                                   onToken: { _ in !Task.isCancelled }),
+                                                   onToken: { _ in Self.keepGoing(since: started, limit: limit) }),
                let v = JSONTools.parseObject(out.text) {
                 intent = ActionIntent.parse(v, fallbackText: action)
                 interpRaw = JSONTools.firstObject(out.text) ?? out.text
@@ -288,8 +299,9 @@ public final class GameEngine: @unchecked Sendable {
             let streamer = FieldStreamer(field: "narration") { onEvent(.narrating($0)) }
             var no = GenerationOptions(maxTokens: 560, temperature: 0.72, topP: 0.92, grammar: Grammars.narrator(mode: s.mode))
             no.seed = seed
+            let started = Date(), limit = narrateLimit
             if let out = try? await model.generate(prompt: prompt, options: no,
-                                                   onToken: { streamer.feed($0); return !Task.isCancelled }) {
+                                                   onToken: { streamer.feed($0); return Self.keepGoing(since: started, limit: limit) }) {
                 if let v = JSONTools.parseObject(out.text), let o = NarratorOutput.parse(v, mandatory: res.mandatory) {
                     output = o
                 } else if let t = Self.narration(from: out.text) {
@@ -515,7 +527,7 @@ public final class GameEngine: @unchecked Sendable {
         s.log.append(contentsOf: extra)
 
         // Čin zabere herní čas (minuty až dny); v osadě mezitím běží život
-        s.worldTime = s.worldTime.addingTimeInterval(r.hours * 3600)
+        s.worldTime = World.whole(s.worldTime.addingTimeInterval(r.hours * 3600))
         s.phase = Simulation.phase(for: s.worldTime)
         s.day = max(1, Simulation.daysBetween(s.createdAt, s.worldTime) + 1)
         World.updateWeather(&s)
@@ -538,6 +550,8 @@ public final class GameEngine: @unchecked Sendable {
         }
         if s.log.count > 500 { s.log.removeFirst(s.log.count - 500) }
 
+        let fixed = s.repair()
+        if !fixed.isEmpty { s.stats["repairs", default: 0] += 1; s.stats["repair_" + (fixed.first ?? "?").prefix(20), default: 0] += 1 }
         let newAch = Achievements.evaluate(&s)
         s.updatedAt = now
         return TurnResult(state: s, roll: r.roll, delta: d, itemsAdded: added, itemsRemoved: removed,
@@ -556,7 +570,7 @@ public final class GameEngine: @unchecked Sendable {
             let streamer = FieldStreamer(field: "narration", onText: onText)
             if let out = try? await model.generate(prompt: prompt,
                                                    options: GenerationOptions(maxTokens: 360, temperature: 0.85, topP: 0.95, grammar: Grammars.story),
-                                                   onToken: { streamer.feed($0); return !Task.isCancelled }) {
+                                                   onToken: { [limit = narrateLimit, started = Date()] in streamer.feed($0); return Self.keepGoing(since: started, limit: limit) }) {
                 text = Self.narration(from: out.text)
             }
         }

@@ -31,6 +31,7 @@ struct PocketRealmApp: App {
                     app.models.cleanupPartial()
                     app.refreshSaves()
                     #if DEBUG
+                    if SelfTest.requested { await SelfTest.run(app); return }
                     if let d = Demo.mode { app.openDemo(d) }
                     #endif
                     await app.loadModels()
