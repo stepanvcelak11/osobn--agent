@@ -1,8 +1,24 @@
 import Foundation
 import SwiftUI
 import RealmCore
+#if !SHOTS
 import LlamaKit
 import WhisperBridge
+#else
+/// Cíl pro snímky v simulátoru: llama.cpp ani whisper.cpp nemají simulátorovou knihovnu.
+final class LlamaEngine: LanguageModel, @unchecked Sendable {
+    var displayName: String { "" }
+    var template: ChatTemplate { .chatml }
+    var contextLength: Int { 0 }
+    func generate(prompt: String, options: GenerationOptions, onToken: @escaping @Sendable (String) -> Bool) async throws -> (text: String, stats: GenerationStats) { ("", GenerationStats()) }
+    func countTokens(_ text: String) -> Int { 0 }
+    func resetCache() {}
+}
+struct LlamaLoadOptions { var contextLength = 0 }
+final class WhisperTranscriber {
+    func transcribe(samples: [Float], language: String, initialPrompt: String?) async throws -> String { "" }
+}
+#endif
 
 /// Drží načtené lokální modely (vypravěč a volitelně rozpoznávání řeči).
 @MainActor
@@ -39,9 +55,15 @@ final class AIService: ObservableObject {
         opts.contextLength = contextLength
         let options = opts
         do {
+            #if SHOTS
+            let engine = LlamaEngine()
+            _ = (path, name, options)
+            if engine.contextLength == 0 { throw SpeechError.noModel }
+            #else
             let engine = try await Task.detached(priority: .userInitiated) {
                 try LlamaEngine(path: path, name: name, options: options)
             }.value
+            #endif
             llm = engine
             llmState = .ready(name)
         } catch {
@@ -57,7 +79,12 @@ final class AIService: ObservableObject {
         speechState = .loading(m.displayName)
         let path = m.url.path
         do {
+            #if SHOTS
+            _ = path
+            let w = WhisperTranscriber()
+            #else
             let w = try await Task.detached(priority: .userInitiated) { try WhisperTranscriber(modelPath: path) }.value
+            #endif
             whisper = w
             whisperModelId = m.id
             speechState = .ready(m.displayName)

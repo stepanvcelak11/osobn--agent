@@ -35,15 +35,15 @@ jobs:
       - name: Sestavení pro simulátor
         run: |
           set -o pipefail
-          xcodebuild build -project PocketRealm.xcodeproj -scheme PocketRealm -configuration Debug \
+          xcodebuild build -project PocketRealm.xcodeproj -scheme PocketRealmShots -configuration Debug \
             -destination "id=${{ steps.sim.outputs.udid }}" -derivedDataPath build/dd \
             CODE_SIGNING_ALLOWED=NO | tee build.log | grep -E "error:|\*\* BUILD" || true
-          test -d build/dd/Build/Products/Debug-iphonesimulator/PocketRealm.app
+          test -d build/dd/Build/Products/Debug-iphonesimulator/PocketRealmShots.app
       - name: Snímky
         env:
           UDID: ${{ steps.sim.outputs.udid }}
         run: |
-          APP=build/dd/Build/Products/Debug-iphonesimulator/PocketRealm.app
+          APP=build/dd/Build/Products/Debug-iphonesimulator/PocketRealmShots.app
           xcrun simctl install "$UDID" "$APP"
           mkdir -p shots
           shot() {
