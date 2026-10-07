@@ -27,7 +27,7 @@ struct TitleView: View {
             .padding(.horizontal, 24)
             .padding(.bottom, 12)
         }
-        .background { SceneBackdrop(scene: .castle, phase: 3) }
+        .background { SceneBackdrop(scene: .castle, phase: 3, weather: .mlha) }
         .onAppear {
             app.refreshSaves()
             #if DEBUG
