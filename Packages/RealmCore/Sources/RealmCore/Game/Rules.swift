@@ -67,6 +67,20 @@ public enum Risk: String, CaseIterable, Codable, Sendable {
     }
 }
 
+/// Jak dlouho čin trvá v herním světě.
+public enum ActionDuration: String, CaseIterable, Codable, Sendable {
+    case moment, hour, hours, day, days
+    public var hours: Double {
+        switch self {
+        case .moment: return 0.25
+        case .hour: return 1
+        case .hours: return 4
+        case .day: return 24
+        case .days: return 72
+        }
+    }
+}
+
 public struct ActionIntent: Equatable, Sendable {
     public var summary: String
     public var category: ActionCategory
@@ -75,11 +89,12 @@ public struct ActionIntent: Equatable, Sendable {
     public var risk: Risk
     public var itemsUsed: [String]
     public var build: BuildingKind?
+    public var duration: ActionDuration?
 
     public init(summary: String, category: ActionCategory, stat: Attribute? = nil, difficulty: Difficulty = .normal,
-                risk: Risk = .low, itemsUsed: [String] = [], build: BuildingKind? = nil) {
+                risk: Risk = .low, itemsUsed: [String] = [], build: BuildingKind? = nil, duration: ActionDuration? = nil) {
         self.summary = summary; self.category = category; self.stat = stat ?? category.defaultStat
-        self.difficulty = difficulty; self.risk = risk; self.itemsUsed = itemsUsed; self.build = build
+        self.difficulty = difficulty; self.risk = risk; self.itemsUsed = itemsUsed; self.build = build; self.duration = duration
     }
 
     /// Z JSON výstupu modelu (tolerantní k chybějícím polím).
@@ -92,8 +107,9 @@ public struct ActionIntent: Equatable, Sendable {
         let items = (v["items_used"]?.arrayValue ?? []).compactMap { $0.stringValue }.filter { !$0.isEmpty }
         let build = v["build"]?.stringValue.flatMap(BuildingKind.init(rawValue:))
         let summary = v.nonEmptyString("intent") ?? String(fallbackText.prefix(80))
+        let duration = v["duration"]?.stringValue.flatMap(ActionDuration.init(rawValue:))
         var i = ActionIntent(summary: summary, category: build != nil ? .build : cat, stat: stat, difficulty: diff,
-                             risk: risk, itemsUsed: Array(items.prefix(3)), build: build)
+                             risk: risk, itemsUsed: Array(items.prefix(3)), build: build, duration: duration)
         if statRaw == "none" && i.category != .build { i.stat = cat.defaultStat }
         return i
     }
@@ -125,16 +141,30 @@ public struct Resolution: Equatable, Sendable {
     public var notes: [String]
     public var build: BuildOrder?
     public var arrival: ArrivalEvent?
-    public var exhausted = false
+    /// Rychlá výprava: o kolik se tah přiblížil k cíli a zda ho dokončí.
+    public var questGain = 0
+    public var completesQuest = false
+    /// Herní hodiny, které čin zabere.
+    public var hours: Double = 1
 }
 
 public enum Rules {
     public static let maxItems = 12
 
-    /// Živý simulátor: co stojí jednu denní akci.
-    public static func costsActionPoint(_ intent: ActionIntent) -> Bool {
-        intent.difficulty != .trivial || intent.category == .rest || intent.category == .build || intent.build != nil
+    /// Kolik herních hodin čin zabere. Odhad vypravěče, s rozumnými mezemi podle druhu činu.
+    public static func hours(for intent: ActionIntent, mode: GameMode) -> Double {
+        var h = intent.duration?.hours ?? (intent.difficulty == .trivial ? 0.25 : 1)
+        switch intent.category {
+        case .rest: h = max(h, 6)
+        case .travel: h = max(h, 12)
+        case .build: h = max(h, 1)
+        default: break
+        }
+        if mode == .quest { h = min(h, 24) }
+        return min(h, 24 * 7)
     }
+
+    static let questCategories: Set<ActionCategory> = [.combat, .explore, .stealth, .social, .magic, .craft]
 
     /// Modifikátor hodu: atribut + předmět + stav hrdiny + noc.
     static func modifier(state: GameState, intent: ActionIntent, used: [Item], notes: inout [String]) -> Int {
@@ -199,15 +229,6 @@ public enum Rules {
         var res = Resolution(intent: intent, roll: RollInfo(die: 0, modifier: 0, dc: 0, stat: intent.stat, outcome: .auto),
                              usedItems: used, missingItems: missing, mandatory: mandatory, notes: [])
 
-        // Živý simulátor: denní akce
-        if state.mode == .realm && costsActionPoint(intent) {
-            if state.actionPoints <= 0 {
-                res.exhausted = true
-                res.notes = ["Hrdina je vyčerpaný – žádné akce do úsvitu."]
-                return res
-            }
-        }
-
         // Spotřební předměty
         for it in used where it.kind == .consumable {
             if it.heals {
@@ -221,7 +242,7 @@ public enum Rules {
         }
 
         // Stavba (Živý simulátor)
-        if state.mode == .realm, let kind = intent.build {
+        if state.mode.hasSettlement, let kind = intent.build {
             intent.category = .build
             let busy = state.settlement.construction.reduce(0) { $0 + $1.kind.workers }
             if state.settlement.construction.count >= 2 {
@@ -283,21 +304,22 @@ public enum Rules {
             switch state.mode {
             case .quest: mandatory.hp += 5; mandatory.stress -= 8
             case .campaign: mandatory.hp += 8; mandatory.stress -= 10; mandatory.food -= max(1, state.settlement.population / 8)
-            case .realm: mandatory.hp += 10; mandatory.stress -= 12
+            case .realm, .endless: mandatory.hp += 10; mandatory.stress -= 12
             }
         }
 
-        // Cesta světem: spotřeba a přesun
+        // Čas činu
+        var hours = hours(for: intent, mode: state.mode)
+
+        // Cesta světem: přesun a spotřeba podle uplynulého času
         if state.mode == .campaign {
-            mandatory.food -= max(1, (state.settlement.population + 7) / 8)
             if intent.category == .travel, let journey = state.journey, !journey.isFinished {
                 switch roll.outcome {
                 case .fail, .critFail:
-                    mandatory.food -= max(2, state.settlement.population / 8)
+                    hours = max(hours / 2, 8)
                     notes.append("Karavana zabloudila a ztratila čas – zásoby ubývají.")
                 case .impossible: break
                 default:
-                    mandatory.food -= max(2, state.settlement.population / 4)
                     let arrival = rollArrival(state: &state, to: journey.stops[journey.index + 1],
                                               isDestination: journey.index + 1 == journey.stops.count - 1)
                     mandatory = mandatory + arrival.delta
@@ -305,7 +327,10 @@ public enum Rules {
                     notes.append("Karavana dorazí do: \(arrival.stop.name) (\(arrival.stop.scene.czechName)). \(arrival.text)")
                 }
             }
+            // Karavana sní za den zhruba 0,4 jídla na člověka
+            mandatory.food -= Int((Double(state.settlement.population) * 0.4 * hours / 24).rounded())
         }
+        res.hours = hours
 
         // Hlad v karavaně
         if state.mode == .campaign && state.settlement.food + mandatory.food <= 0 {
@@ -313,6 +338,16 @@ public enum Rules {
             mandatory.morale -= 8
             mandatory.stress += 6
             notes.append("HLAD: zásoby došly, lidé umírají a utíkají. Popiš zoufalství karavany.")
+        }
+
+        // Rychlá výprava: postup k cíli
+        if state.mode == .quest, let q = state.quest, questCategories.contains(intent.category) {
+            switch roll.outcome {
+            case .critSuccess: res.questGain = 2
+            case .success: res.questGain = 1
+            default: break
+            }
+            res.completesQuest = res.questGain > 0 && q.progress + res.questGain >= q.steps
         }
 
         res.intent = intent

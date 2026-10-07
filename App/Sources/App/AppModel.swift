@@ -11,6 +11,14 @@ final class AppModel: ObservableObject {
     let models = ModelManager()
     let ai = AIService()
     let speaker = Speaker()
+    let downloader = ModelDownloader()
+
+    init() {
+        downloader.onInstalled = { [weak self] kind in
+            guard let self, kind == .llm else { return }
+            Task { await self.loadModels() }
+        }
+    }
 
     var latestUnfinished: SaveSummary? { saves.first { $0.end == nil } }
 

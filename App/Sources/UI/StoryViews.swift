@@ -25,6 +25,9 @@ struct LogEntryView: View {
                 .foregroundStyle(paranoid ? Color(red: 0.95, green: 0.8, blue: 0.78) : Theme.parchment)
                 .textSelection(.enabled)
             if let d = entry.delta, !d.isZero { DeltaChips(delta: d) }
+            if let h = entry.hours, h >= 0.25 {
+                Label(Prompts.timeText(h), systemImage: "hourglass").font(.caption2).foregroundStyle(Theme.dimText)
+            }
             if !entry.itemsAdded.isEmpty || !entry.itemsRemoved.isEmpty {
                 ItemChangeChips(added: entry.itemsAdded, removed: entry.itemsRemoved)
             }

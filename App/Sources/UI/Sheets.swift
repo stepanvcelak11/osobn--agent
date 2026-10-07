@@ -98,11 +98,12 @@ struct SettlementSheet: View {
     var onOrder: (String) -> Void
 
     var body: some View {
-        SheetContainer(title: state.mode == .realm ? "🏰 \(state.settlement.name)" : "🐎 Karavana") {
+        SheetContainer(title: state.mode.hasSettlement ? "🏰 \(state.settlement.name)" : "🐎 Karavana") {
             VStack(alignment: .leading, spacing: 16) {
                 overview
                 if state.mode == .campaign, let j = state.journey { journey(j) }
-                if state.mode == .realm {
+                if state.mode == .realm { goal }
+                if state.mode.hasSettlement {
                     threats
                     construction
                     buildings
@@ -119,14 +120,35 @@ struct SettlementSheet: View {
             row("🍞", "Zásoby", "\(st.food) / \(st.foodCapacity) (\(st.foodPercent) %)")
             row("🛡️", "Obrana", "\(st.defense)")
             row("✊", "Morálka", "\(st.morale)")
-            if state.mode == .realm {
+            if state.mode.hasSettlement {
                 let prod = 8 + st.count(.farma) * 15 + st.population / 4
                 row("🌾", "Bilance jídla / den", signed(prod - st.population))
                 row("💰", "Příjem zlata / den", signed(5 + st.count(.trziste) * 12 + st.population / 10))
-                row("⚡️", "Akce dnes", "\(state.actionPoints) / \(Simulation.actionPointsPerDay)")
+                row("🕰️", "Herní čas", "Den \(state.day), \(state.worldTime.formatted(.dateTime.hour().minute()))")
             }
         }
         .padding(14).panel()
+    }
+
+    private var goal: some View {
+        let st = state.settlement
+        return VStack(alignment: .leading, spacing: 8) {
+            Text("🎯 Cíl: z osady město").font(.system(.headline, design: .serif)).foregroundStyle(Theme.gold)
+            check("\(Catalog.realmGoalPopulation) obyvatel (\(st.population))", st.population >= Catalog.realmGoalPopulation)
+            ForEach(Catalog.realmGoalBuildings, id: \.self) { b in check(b.czechName, st.count(b) > 0) }
+        }
+        .padding(14).panel()
+    }
+
+    private func check(_ text: String, _ ok: Bool) -> some View {
+        Label(text, systemImage: ok ? "checkmark.circle.fill" : "circle")
+            .font(.subheadline)
+            .foregroundStyle(ok ? Theme.gold : Theme.parchment)
+    }
+
+    private func timeLeft(_ d: Date) -> String {
+        let h = d.timeIntervalSince(state.worldTime) / 3600
+        return h <= 0 ? "teď" : "za " + Prompts.timeText(h).replacingOccurrences(of: "hodinu", with: "hodinu")
     }
 
     private func row(_ icon: String, _ label: String, _ value: String) -> some View {
@@ -166,15 +188,15 @@ struct SettlementSheet: View {
                         Image(systemName: t.kind.icon).foregroundStyle(Theme.blood).frame(width: 26)
                         VStack(alignment: .leading, spacing: 2) {
                             Text(t.title).font(.subheadline.weight(.semibold)).foregroundStyle(Theme.parchment)
-                            Text("\(t.kind.czechName) · síla \(t.strength) · ") .font(.caption).foregroundStyle(Theme.dimText)
-                            + Text(t.deadline, style: .relative).font(.caption).foregroundStyle(Theme.ember)
+                            Text("\(t.kind.czechName) · síla \(t.strength) · ").font(.caption).foregroundStyle(Theme.dimText)
+                            + Text("udeří \(timeLeft(t.deadline))").font(.caption).foregroundStyle(Theme.ember)
                         }
                         Spacer()
                         Button("Jednat") { onOrder("Připravím osadu na hrozbu „\(t.title)“: ") }
                             .font(.caption.weight(.semibold))
                     }
                 }
-                Text("Když hrozba udeří, osada se brání obranou (u nákazy ranhojičstvím, u bouře sýpkami). Můžeš ji i odvrátit úspěšným činem.")
+                Text("Když hrozba udeří, osada se brání obranou (u nákazy ranhojičstvím, u bouře sýpkami). Můžeš ji i odvrátit odvážným činem.")
                     .font(.caption).foregroundStyle(Theme.dimText)
             }
             .padding(14).panel()
@@ -187,12 +209,12 @@ struct SettlementSheet: View {
                 Text("🔨 Rozestavěno").font(.system(.headline, design: .serif)).foregroundStyle(Theme.parchment)
                 ForEach(state.settlement.construction) { c in
                     let total = c.kind.buildHours * 3600
-                    let left = max(0, c.finishAt.timeIntervalSinceNow)
+                    let left = max(0, c.finishAt.timeIntervalSince(state.worldTime))
                     VStack(alignment: .leading, spacing: 4) {
                         HStack {
                             Label(c.kind.czechName, systemImage: c.kind.icon).foregroundStyle(Theme.parchment)
                             Spacer()
-                            Text(c.finishAt, style: .relative).font(.caption).foregroundStyle(Theme.ember)
+                            Text("hotovo \(timeLeft(c.finishAt))").font(.caption).foregroundStyle(Theme.ember)
                         }
                         .font(.subheadline)
                         ProgressView(value: max(0, min(1, 1 - left / total))).tint(Theme.ember)
@@ -256,14 +278,16 @@ struct HelpView: View {
     var body: some View {
         SheetContainer(title: "Jak hrát") {
             VStack(alignment: .leading, spacing: 14) {
-                section("Absolutní svoboda", "Žádná tlačítka s volbami. Napiš, co tvůj hrdina udělá – „plížím se kolem stráže“, „nabídnu lapkům polovinu zlata“, „zapálím stodolu jako návnadu“. Vypravěč posoudí, jak je to těžké.")
+                section("Absolutní svoboda", "Žádná tlačítka s volbami. Napiš (nebo řekni), co tvůj hrdina udělá – „plížím se kolem stráže“, „nabídnu lapkům polovinu zlata“, „pojedu na koni do sousední vesnice“. Hraješ, jak dlouho chceš – žádné limity tahů.")
+                section("Čas běží podle činů", "Každý čin trvá tolik, kolik by trval ve skutečnosti: rozhlédnutí pár minut, prohledání domu hodinu, jízda do další vesnice celý den, výprava do hor i několik dní. Podle toho se střídá den a noc, karavana jí zásoby a osada mezitím sklízí, staví a čelí hrozbám.")
                 section("Kostky rozhodují", "Riskantní činy se házejí kostkou k20 + schopnost hrdiny (Síla, Obratnost, Důvtip, Charisma) + vhodný předmět. Výsledek je katastrofa, neúspěch, částečný úspěch, úspěch nebo skvělý úspěch. Vypravěč ho nesmí změnit – ani když prosíš.")
                 section("❤️ Zdraví a 🧠 stres", "Zdraví na nule = konec hry. Boje a hrůzy zvedají stres; nad 70 se vypravěč stane paranoidním a tvé hody jsou horší. Odpočinek, kořalka nebo kaple pomáhají.")
-                section("🎒 Předměty", "Vypravěč ví, co neseš. Předměty z inventáře dávají bonus k hodu, léčivé byliny léčí. Co nemáš, použít nemůžeš. Nové věci najdeš jako kořist – a často se hodí později.")
-                section("Rychlá výprava", "12 tahů na splnění cíle. Žádná správa města, jen ty a nebezpečí.")
-                section("Cesta světem", "Vedeš karavanu. Každý tah ubírá zásoby 🍞. „Vyrazíme dál“ posune karavanu na další zastávku – kde může čekat přepadení, nemoc nebo poklad. Cíl: Údolí Úsvitu.")
-                section("Živý simulátor", "Osada žije v reálném čase. Každý den v 6:00 přijde úsvit: sklizeň, daně, růst, ale i hrozby s termínem. Stavby se staví hodiny. Máš 6 akcí denně. Vracej se během dne – telefon ti dá vědět, když něco hrozí.")
-                section("Soukromí", "Vše běží offline v telefonu. Hra nemá síťový kód, nic neodesílá a nic nestahuje.")
+                section("🎒 Předměty", "Vypravěč ví, co neseš. Předměty dávají bonus k hodu, léčivé byliny léčí. Co nemáš, použít nemůžeš. Nové věci najdeš jako kořist – a často se hodí později.")
+                section("Rychlá výprava", "Krátká hra: jedno místo, jeden snadný cíl. Tři zdařilé činy (🚩🚩🚩) a cíl je splněn.")
+                section("Cesta světem", "Delší hra: vedeš karavanu přes 6 zastávek do Údolí Úsvitu. „Vyrazíme dál“ = den cesty a den zásob 🍞. Na zastávkách čekají přepady, nemoci i poklady.")
+                section("Vláda nad osadou", "Dlouhá hra: z osady vybuduj město – 100 obyvatel, hradby, tržiště, kaple a kasárna. Každé ráno sklizeň, daně, růst i nové hrozby.")
+                section("Nekonečná říše", "Bez konce: stav, rozšiřuj, objevuj okolí a hraj, kolik chceš. Osada žije i když nehraješ (skutečný čas se započítá, nejvýš 3 dny).")
+                section("Soukromí", "Vypravěč se jednou automaticky stáhne (z Hugging Face, ověřený kontrolním součtem) a pak vše běží offline v telefonu. Žádné účty, žádná analytika, nic se neodesílá.")
             }
         }
     }

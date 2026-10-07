@@ -147,7 +147,7 @@ struct GameView: View {
 
     @ViewBuilder private var menuButtons: some View {
         Button("🎒 Inventář") { sheet = .inventory }
-        if state.mode != .quest { Button(state.mode == .realm ? "🏰 Osada a stavby" : "🐎 Karavana a cesta") { sheet = .settlement } }
+        if state.mode != .quest { Button(state.mode.hasSettlement ? "🏰 Osada a stavby" : "🐎 Karavana a cesta") { sheet = .settlement } }
         Button("📜 Kronika") { sheet = .chronicle }
         Button("🏆 Úspěchy") { sheet = .achievements }
         Button("❓ Jak hrát") { sheet = .help }
@@ -215,7 +215,7 @@ struct InputBar: View {
     private var placeholder: String {
         if recorder.isRecording { return "Poslouchám… (klepni znovu pro konec)" }
         if transcribing { return "Přepisuji řeč…" }
-        return session.state.mode == .realm && session.state.actionPoints == 0 ? "Síly došly – ráno je nový den…" : "Co uděláš?"
+        return "Co uděláš?"
     }
 
     private var itemChips: some View {

@@ -21,7 +21,7 @@ public enum Fallback {
         let f = CzechText.fold(text)
         var category: ActionCategory = .other
         for (cat, words) in keywords where words.contains(where: { f.contains(CzechText.fold($0)) }) {
-            if cat == .build && state.mode != .realm { continue }
+            if cat == .build && !state.mode.hasSettlement { continue }
             if cat == .travel && state.mode != .campaign { continue }
             category = cat
             break
@@ -89,13 +89,9 @@ public enum Fallback {
             if out.itemsGained[0].0 == "Zrezivělý klíč" { out.itemsGained[0].1 = .key }
         }
         if let a = r.arrival { out.location = a.stop.name; out.scene = a.stop.scene }
-        // Bez modelu nelze posoudit splnění cíle – rozhodne štěstí po několika úspěšných tazích.
-        if state.mode == .quest && [.success, .critSuccess].contains(r.roll.outcome) && state.turn >= 4
-            && [.combat, .explore, .stealth, .social, .magic].contains(r.intent.category) && state.chance(40) {
-            out.objectiveDone = true
-            out.narration = out.narration.replacingOccurrences(of: " Co uděláš teď?", with: "") + " Cíl výpravy je na dosah – a tentokrát se ti podaří ho dokončit."
+        if r.completesQuest {
+            out.narration = out.narration.replacingOccurrences(of: " Co uděláš teď?", with: "") + " Poslední překážka padá – cíl výpravy je splněn."
         }
-        out.chronicle = "\(r.intent.summary) – \(r.roll.outcome.czechName.lowercased())."
         return out
     }
 
@@ -106,7 +102,7 @@ public enum Fallback {
             return "Vítej v kraji, kde slunce vychází neochotně a noc nikdy úplně neodchází, \(h.name). \(hook ?? "") Stojíš na prahu místa zvaného \(state.location). Tvůj cíl: \(state.quest?.objective ?? "přežít"). Vzduch páchne rzí a mokrou hlínou. Co uděláš?"
         case .campaign:
             return "Město \(state.settlement.name) hoří za vašimi zády, \(h.name). Čtyřiadvacet přeživších, pár vozů a slib, že někde za horami leží Údolí Úsvitu. Zásoby nevydrží věčně a v lesích už někdo sleduje vaše stopy. Co uděláš?"
-        case .realm:
+        case .realm, .endless:
             return "Vítej v osadě \(state.settlement.name), \(h.name). Pár desítek duší, jedna farma, rozpadlá palisáda a divočina, která se každou noc přibližuje. Lidé k tobě vzhlížejí – a čekají, jestli je dovedeš přes zimu. Co uděláš?"
         }
     }

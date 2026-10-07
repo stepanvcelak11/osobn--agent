@@ -80,7 +80,7 @@ final class GameSession: ObservableObject, Identifiable {
             streamingText = ""
             save()
             if let text = s.log.last?.text { onNarration?(text) }
-            if s.mode == .realm {
+            if s.mode.hasSettlement {
                 await RealmNotifications.requestPermission()
                 await RealmNotifications.reschedule(for: s)
             }
@@ -148,7 +148,7 @@ final class GameSession: ObservableObject, Identifiable {
         if let n = r.state.log.last(where: { $0.kind == .narration }), r.state.log.count > before.log.count {
             onNarration?(n.text)
         }
-        if r.state.mode == .realm { Task { await RealmNotifications.reschedule(for: r.state) } }
+        if r.state.mode.hasSettlement { Task { await RealmNotifications.reschedule(for: r.state) } }
         if r.state.isOver { generateEpilogue() }
     }
 
@@ -160,9 +160,9 @@ final class GameSession: ObservableObject, Identifiable {
 
     /// Dožene čas (při otevření, návratu do aplikace a každou minutu).
     func refreshSimulation() {
-        guard state.mode == .realm, !state.isOver, task == nil else { return }
+        guard state.mode.hasSettlement, !state.isOver, task == nil else { return }
         var s = state
-        let report = Simulation.advance(&s, to: Date())
+        let report = Simulation.syncRealTime(&s, now: Date())
         guard s != state else { return }
         let hadEvents = !report.isEmpty
         state = s

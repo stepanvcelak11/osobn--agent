@@ -12,6 +12,9 @@ struct SettingsView: View {
     @AppStorage("fx.embers") private var embers = true
     @AppStorage("notify.realm") private var notify = true
     @AppStorage("text.scale") private var textScale = 1.0
+    @AppStorage("voice.autoDownload") private var voiceDownload = true
+    @EnvironmentObject var downloader: ModelDownloader
+    @EnvironmentObject var models: ModelManager
     @State private var confirmDelete = false
 
     var body: some View {
@@ -46,9 +49,16 @@ struct SettingsView: View {
             }
 
             Section {
-                Toggle("Oznámení v Živém simulátoru", isOn: $notify)
+                Toggle("Hlasové ovládání (stáhnout ~550 MB)", isOn: $voiceDownload)
+                    .onChange(of: voiceDownload) { _, on in if on { downloader.startIfNeeded(models: models) } }
             } footer: {
-                Text("Hrozba 2 hodiny před útokem, dokončená stavba a nový den. Oznámení vznikají jen v telefonu.")
+                Text("Tahy pak můžeš říkat nahlas – řeč se přepisuje přímo v telefonu.")
+            }
+
+            Section {
+                Toggle("Oznámení z osady", isOn: $notify)
+            } footer: {
+                Text("Hrozba 2 hodiny před útokem, dokončená stavba a nový den (Vláda nad osadou a Nekonečná říše). Oznámení vznikají jen v telefonu.")
             }
 
             Section {
@@ -57,7 +67,7 @@ struct SettingsView: View {
 
             Section("O hře") {
                 LabeledContent("Verze", value: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "–")
-                Text("Pocket Realm běží 100 % offline. Nemá síťový kód, žádnou analytiku ani reklamy. Hry se ukládají jen v telefonu a nezálohují se do iCloudu.")
+                Text("Pocket Realm se k internetu připojí jen jednou – ke stažení vypravěče (a hlasového ovládání) z Hugging Face; soubory se ověří kontrolním součtem SHA-256. Pak běží 100 % offline. Žádné účty, analytika ani reklamy. Hry se ukládají jen v telefonu a nezálohují se do iCloudu.")
                     .font(.caption).foregroundStyle(.secondary)
             }
         }

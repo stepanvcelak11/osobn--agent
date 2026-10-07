@@ -46,8 +46,8 @@ struct ModelsView: View {
                         ProgressView(value: p)
                     }
                 }
-            } header: { Text("Nahrát model") } footer: {
-                Text("Hra nic nestahuje z internetu. Model (soubor .gguf) si stáhni do Souborů – v Safari nebo přes počítač – a vyber ho zde. Kontrolní součet SHA-256 najdeš na stránce souboru na Hugging Face; vlož ho a hra soubor ověří. Soubor s nesouhlasným součtem se odmítne.")
+            } header: { Text("Vlastní model (pro pokročilé)") } footer: {
+                Text("Vypravěč se stahuje automaticky. Sem sahej jen pokud chceš jiný model: soubor .gguf si ulož do Souborů a vyber ho zde. Hra ověří kontrolní součet SHA-256; soubor s nesouhlasným součtem odmítne.")
             }
 
             Section("Doporučené modely") {

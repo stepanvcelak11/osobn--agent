@@ -13,7 +13,7 @@ struct DashboardView: View {
             if state.mode == .quest { questRow } else { settlementRow }
             heroRow
             if state.mode == .campaign, let j = state.journey { JourneyBar(journey: j) }
-            if state.mode == .realm { realmRow }
+            if state.mode.hasSettlement { realmRow }
         }
         .padding(12)
         .panel(20)
@@ -24,7 +24,7 @@ struct DashboardView: View {
         HStack(spacing: 8) {
             Text("🏰")
             VStack(alignment: .leading, spacing: 0) {
-                Text(state.mode == .realm ? "\(Catalog.settlementRank(population: state.settlement.population)) \(state.settlement.name)" : state.settlement.name)
+                Text(state.mode.hasSettlement ? "\(Catalog.settlementRank(population: state.settlement.population)) \(state.settlement.name)" : state.settlement.name)
                     .font(.system(.headline, design: .serif)).foregroundStyle(Theme.parchment).lineLimit(1)
                 Text("\(state.mode.title) · \(state.location)")
                     .font(.caption2).foregroundStyle(Theme.dimText).lineLimit(1)
@@ -32,7 +32,8 @@ struct DashboardView: View {
             Spacer(minLength: 4)
             HStack(spacing: 4) {
                 Image(systemName: Theme.phaseIcon(state.phase))
-                Text("Den \(state.day)")
+                Text("Den \(state.day) · \(state.worldTime.formatted(.dateTime.hour().minute()))")
+                    .monospacedDigit()
             }
             .font(.caption.weight(.semibold))
             .foregroundStyle(state.phase == 3 ? Color(red: 0.7, green: 0.75, blue: 1) : Theme.gold)
@@ -48,15 +49,22 @@ struct DashboardView: View {
     }
 
     private var questRow: some View {
-        let left = (state.quest?.turnLimit ?? 0) - state.turn
+        let q = state.quest
         return HStack(spacing: 8) {
             Text("🎯").font(.callout)
-            Text(state.quest?.objective ?? "").font(.caption).foregroundStyle(Theme.parchment).lineLimit(3)
+            Text(q?.objective ?? "").font(.caption).foregroundStyle(Theme.parchment).lineLimit(3)
                 .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity, alignment: .leading)
-            VStack(spacing: 4) {
+            VStack(alignment: .trailing, spacing: 5) {
+                HStack(spacing: 3) {
+                    ForEach(0..<(q?.steps ?? 3), id: \.self) { i in
+                        Image(systemName: i < (q?.progress ?? 0) ? "flag.fill" : "flag")
+                            .font(.system(size: 11))
+                            .foregroundStyle(i < (q?.progress ?? 0) ? Theme.gold : Color.white.opacity(0.25))
+                    }
+                }
+                .accessibilityLabel("Postup k cíli \(q?.progress ?? 0) z \(q?.steps ?? 3)")
                 StatPill(icon: "🪙", value: "\(state.settlement.gold)", color: Theme.gold, expand: false)
-                StatPill(icon: "⏳", value: "\(max(0, left))", color: left <= 3 ? Theme.blood : Theme.parchment, expand: false)
             }
         }
     }
@@ -83,11 +91,15 @@ struct DashboardView: View {
 
     private var realmRow: some View {
         HStack(spacing: 10) {
-            HStack(spacing: 3) {
-                Text("⚡️").font(.caption)
-                ForEach(0..<Simulation.actionPointsPerDay, id: \.self) { i in
-                    Circle().fill(i < state.actionPoints ? Theme.gold : Color.white.opacity(0.12)).frame(width: 7, height: 7)
+            if state.mode == .realm {
+                let p = min(1, Double(state.settlement.population) / Double(Catalog.realmGoalPopulation))
+                HStack(spacing: 6) {
+                    Text("🎯").font(.caption)
+                    ProgressView(value: p).tint(Theme.gold).frame(width: 70)
+                    Text("\(state.settlement.population)/\(Catalog.realmGoalPopulation)").font(.caption2).foregroundStyle(Theme.dimText)
                 }
+            } else {
+                Label("\(state.settlement.buildings.values.reduce(0, +)) staveb", systemImage: "infinity").font(.caption).foregroundStyle(Theme.dimText)
             }
             Spacer()
             if !state.settlement.construction.isEmpty {
@@ -95,7 +107,7 @@ struct DashboardView: View {
             }
             if !state.threats.isEmpty {
                 Button(action: onSettlement) {
-                    Label("\(state.threats.count) hrozby", systemImage: "exclamationmark.triangle.fill")
+                    Label("\(state.threats.count) \(state.threats.count == 1 ? "hrozba" : "hrozby")", systemImage: "exclamationmark.triangle.fill")
                         .font(.caption.weight(.semibold)).foregroundStyle(Theme.blood)
                 }
             }

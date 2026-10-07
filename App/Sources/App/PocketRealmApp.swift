@@ -2,8 +2,18 @@ import SwiftUI
 import UIKit
 import RealmCore
 
+/// Systém aplikaci probudí, když doběhne stahování na pozadí.
+final class AppDelegate: NSObject, UIApplicationDelegate {
+    static var backgroundCompletion: (() -> Void)?
+    func application(_ application: UIApplication, handleEventsForBackgroundURLSession identifier: String,
+                     completionHandler: @escaping () -> Void) {
+        AppDelegate.backgroundCompletion = completionHandler
+    }
+}
+
 @main
 struct PocketRealmApp: App {
+    @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @StateObject private var app = AppModel()
     @Environment(\.scenePhase) private var scenePhase
 
@@ -14,6 +24,7 @@ struct PocketRealmApp: App {
                 .environmentObject(app.models)
                 .environmentObject(app.ai)
                 .environmentObject(app.speaker)
+                .environmentObject(app.downloader)
                 .preferredColorScheme(.dark)
                 .tint(Theme.ember)
                 .task {
@@ -23,6 +34,7 @@ struct PocketRealmApp: App {
                     if let d = Demo.mode { app.openDemo(d) }
                     #endif
                     await app.loadModels()
+                    app.downloader.startIfNeeded(models: app.models)
                 }
                 .onReceive(NotificationCenter.default.publisher(for: UIApplication.didReceiveMemoryWarningNotification)) { _ in
                     app.ai.handleMemoryWarning()
@@ -35,6 +47,7 @@ struct PocketRealmApp: App {
                 if let s = app.session?.state { Task { await RealmNotifications.reschedule(for: s) } }
             case .active:
                 app.session?.refreshSimulation()
+                app.downloader.startIfNeeded(models: app.models)
             default: break
             }
         }

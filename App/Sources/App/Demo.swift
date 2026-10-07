@@ -17,13 +17,14 @@ enum Demo {
                 LogEntry(kind: .player, text: "Potichu se proplížím ke vchodu a poslouchám"),
                 LogEntry(kind: .narration, text: "Kroky tlumíš o mech mezi kameny. U vchodu se zastavíš – škrábání utichne a místo něj uslyšíš dech. Pomalý, chrčivý, jako by patřil něčemu velkému, co spí. Na schodu se zaleskne rezavý klíč.",
                          roll: RollInfo(die: 14, modifier: 3, dc: 12, stat: .obratnost, outcome: .success),
-                         delta: StatDelta(stress: 3), itemsAdded: ["Rezavý klíč"]),
+                         delta: StatDelta(stress: 3), itemsAdded: ["Rezavý klíč"], hours: 0.25),
                 LogEntry(kind: .player, text: "Seberu klíč a hodím kouřovou bombu dolů do tmy"),
                 LogEntry(kind: .narration, text: "Bomba se rozprskne o schody a kobku zaplní štiplavý dým. Něco dole zařve a vyrazí proti tobě – drápy tě zasáhnou do ramene dřív, než stihneš uskočit. Bolest je ostrá, ale stvůra v dýmu tápe.",
                          roll: RollInfo(die: 6, modifier: 4, dc: 12, stat: .obratnost, outcome: .partial),
-                         delta: StatDelta(hp: -9, stress: 7), itemsRemoved: ["Kouřová bomba"]),
+                         delta: StatDelta(hp: -9, stress: 7), itemsRemoved: ["Kouřová bomba"], hours: 0.25),
             ]
             s.turn = 2
+            s.quest?.progress = 1
             s.hero.hp = 91; s.hero.stress = 20
             s.hero.items.append(Item(name: "Rezavý klíč", kind: .key))
             s.location = "Vstup do kobky"
@@ -32,6 +33,7 @@ enum Demo {
             if name == "gameover" {
                 s.end = .victory
                 s.turn = 7
+                s.quest?.progress = 3
                 s.achievements = ["vitez_vyprava", "osud", "prvni_krev"]
                 s.epilogue = "Říká se, že Ráchel ze slumů Vranova sestoupila do kobky, odkud se nikdo nevrátil, a vynesla Srdce mlhy v holých dlaních. Mlha od té doby nad klášterem nestoupá – a děti si hrají na stínochodku, která se nebála tmy."
             }
@@ -47,10 +49,9 @@ enum Demo {
                 LogEntry(kind: .event, text: "🔨 Stavba zahájena: Hradby – hotovo za 10 h."),
             ]
             s.settlement.population = 34; s.settlement.gold = 41; s.settlement.food = 64
-            s.settlement.construction = [Construction(kind: .palisada, finishAt: now.addingTimeInterval(6 * 3600))]
-            s.threats = [Threat(kind: .bandits, title: "Lapkové z Vlčího lesa", strength: 24, deadline: now.addingTimeInterval(31 * 3600))]
+            s.settlement.construction = [Construction(kind: .palisada, finishAt: s.worldTime.addingTimeInterval(6 * 3600))]
+            s.threats = [Threat(kind: .bandits, title: "Lapkové z Vlčího lesa", strength: 24, deadline: s.worldTime.addingTimeInterval(31 * 3600))]
             s.hero.stress = 78; s.hero.hp = 64
-            s.actionPoints = 3
             s.day = 2; s.turn = 4
             s.scene = .town
             return s
@@ -63,7 +64,7 @@ enum Demo {
                 LogEntry(kind: .player, text: "Vyrazíme dál"),
                 LogEntry(kind: .narration, text: "Vozy vrzají v blátě a koně funí. Když dorazíte k \(s.location), z křoví vyletí šípy. Lapkové! Tví žoldáci je zaženou, ale dva lidé zůstanou ležet v trávě a kus nákladu je pryč.",
                          roll: RollInfo(die: 11, modifier: 1, dc: 12, stat: .obratnost, outcome: .partial),
-                         delta: StatDelta(pop: -2, gold: -10, food: -19, morale: -8, stress: 10)),
+                         delta: StatDelta(pop: -2, gold: -10, food: -19, morale: -8, stress: 10), hours: 24),
             ]
             s.settlement.population = 22; s.settlement.food = 38; s.settlement.morale = 48
             s.turn = 9; s.day = 2; s.phase = 2

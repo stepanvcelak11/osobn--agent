@@ -1,11 +1,12 @@
 ## Pocket Realm 2.0
 
-Temné offline RPG s AI vypravěčem, který běží celý v iPhonu.
+Temné RPG s AI vypravěčem, který běží celý v iPhonu.
 
-- Tři módy: **Rychlá výprava** (5–10 min), **Cesta světem** (1–2 h, karavana), **Živý simulátor** (osada v reálném čase).
+- **Vypravěč se stáhne sám** při prvním spuštění (Gemma 3 4B, ~2,5 GB, ověřeno SHA-256), pak vše offline.
+- **Čtyři módy bez limitů tahů:** Rychlá výprava (krátká), Cesta světem (delší), Vláda nad osadou (dlouhá), Nekonečná říše (bez konce).
+- **Čas běží podle činů** – rozhlédnutí pár minut, jízda do další vesnice den, výprava do hor několik dní.
 - Volný text místo tlačítek, hod k20, férová pravidla, která model nemůže obejít.
 - Dashboard 🏰 👥 🪙 🍞 🛡️ ❤️ 🧠 🎒, paranoidní vypravěč při vysokém stresu, kronika, úspěchy, epilog.
-- Vypravěč nahlas a diktování tahů – vše offline.
-- Bez modelu hraje jednoduchý záložní vypravěč; doporučený model: **Gemma 3 4B Instruct Q4_K_M**.
+- Vypravěč nahlas a diktování tahů – vše v telefonu.
 
 Instalace: stáhni `PocketRealm-unsigned.ipa` a nainstaluj přes Sideloadly / AltStore. Podrobnosti v README.

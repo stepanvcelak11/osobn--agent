@@ -15,7 +15,7 @@ final class PlaythroughTests: XCTestCase {
         for i in 0..<turns where !s.isOver {
             let a = actions[(i * 7 + Int(seed % 5)) % actions.count]
             s = try await engine.playTurn(s, input: a, now: now).state
-            if mode == .realm { now = now.addingTimeInterval(3 * 3600) }
+            now = now.addingTimeInterval(600)
         }
         return s
     }
@@ -24,12 +24,12 @@ final class PlaythroughTests: XCTestCase {
         var ends: [String: Int] = [:]
         for mode in GameMode.allCases {
             for seed in UInt64(1)...UInt64(30) {
-                let s = try await play(mode, seed: seed, turns: mode == .quest ? 20 : 60)
+                let s = try await play(mode, seed: seed, turns: mode == .quest ? 40 : 80)
                 ends["\(mode.rawValue):\(s.end?.rawValue ?? "running")", default: 0] += 1
                 XCTAssertTrue((0...100).contains(s.hero.hp))
                 XCTAssertGreaterThanOrEqual(s.settlement.gold, 0)
                 XCTAssertGreaterThanOrEqual(s.settlement.food, 0)
-                if mode == .quest { XCTAssertTrue(s.isOver) }
+                if mode == .quest { XCTAssertTrue(s.isOver, "výprava by měla jít dokončit") }
                 if seed <= 3 { print("STAV", mode.rawValue, "tah", s.turn, "den", s.day, "hp", s.hero.hp, "stres", s.hero.stress, "lidi", s.settlement.population, "jídlo", s.settlement.foodPercent, "zlato", s.settlement.gold, "stavby", s.settlement.buildings.mapValues { $0 }, "j", s.journey?.index ?? -1) }
             }
         }

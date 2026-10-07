@@ -15,7 +15,7 @@ enum RealmNotifications {
         let pending = await center.pendingNotificationRequests()
         let prefix = "realm.\(state.id)."
         center.removePendingNotificationRequests(withIdentifiers: pending.map(\.identifier).filter { $0.hasPrefix(prefix) })
-        guard enabled, state.mode == .realm, !state.isOver else { return }
+        guard enabled, state.mode.hasSettlement, !state.isOver else { return }
         for n in Simulation.plannedNotifications(state, now: Date()).prefix(40) {
             let content = UNMutableNotificationContent()
             content.title = n.title

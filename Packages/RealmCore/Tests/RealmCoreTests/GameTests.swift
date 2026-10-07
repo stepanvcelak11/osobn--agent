@@ -43,7 +43,8 @@ final class GameTests: XCTestCase {
         XCTAssertEqual(c.settlement.population, 24)
         let r = newState(.realm)
         XCTAssertEqual(r.settlement.count(.farma), 1)
-        XCTAssertEqual(r.actionPoints, Simulation.actionPointsPerDay)
+        XCTAssertEqual(r.worldTime, t0)
+        XCTAssertEqual(newState(.endless).settlement.population, 30)
         // determinismus
         XCTAssertEqual(newState(.quest, seed: 99).quest, newState(.quest, seed: 99).quest)
         XCTAssertEqual(GameEngine.newGame(NewGameSetup(mode: .realm, heroName: "  ", cityName: "", backgroundId: "x")).state.hero.name, "Bezejmenný")
@@ -115,7 +116,8 @@ final class GameTests: XCTestCase {
         // druhý prompt navazuje na první (prefix pro KV cache)
         XCTAssertTrue(model.prompts[1].hasPrefix(String(model.prompts[0].dropLast("<|im_start|>assistant\n".count))))
         XCTAssertTrue(model.grammars[0]!.contains("items_used"))
-        XCTAssertTrue(model.grammars[1]!.contains("objective_done"))
+        XCTAssertTrue(model.grammars[0]!.contains("duration"))
+        XCTAssertFalse(model.grammars[1]!.contains("objective_done"))
     }
 
     func testFailGivesNoLoot() {
@@ -151,29 +153,87 @@ final class GameTests: XCTestCase {
         XCTAssertEqual(r2.state.hero.hp, 90)
     }
 
-    func testQuestVictoryAndTimeout() {
+    func testQuestVictoryWithoutTurnLimit() {
         var s = newState(.quest)
-        s.turn = 3
+        s.quest?.progress = 2
         var res = Rules.resolve(state: &s, intent: ActionIntent(summary: "x", category: .combat))
         res.roll.outcome = .success
+        res.questGain = 1
+        res.completesQuest = true
         res.mandatory = StatDelta()
-        var o = NarratorOutput(narration: "Vlčice padá.", proposed: StatDelta())
-        o.objectiveDone = true
-        let r = GameEngine.apply(state: s, action: "x", resolution: res, output: o, now: t0)
+        let r = GameEngine.apply(state: s, action: "x", resolution: res, output: NarratorOutput(narration: "Vlčice padá.", proposed: StatDelta()), now: t0)
         XCTAssertEqual(r.state.end, .victory)
+        XCTAssertEqual(r.state.quest?.progress, 3)
         XCTAssertTrue(r.state.achievements.contains("vitez_vyprava"))
         XCTAssertTrue(r.state.achievements.contains("prvni_krev"))
 
-        // cíl označený při neúspěchu neplatí; na konci limitu = konec
+        // žádný limit tahů
         var s2 = newState(.quest)
-        s2.turn = Catalog.questTurnLimit - 1
+        s2.turn = 200
         var res2 = Rules.resolve(state: &s2, intent: ActionIntent(summary: "x", category: .explore))
         res2.roll.outcome = .fail
         res2.mandatory = StatDelta()
-        var o2 = NarratorOutput(narration: "…", proposed: StatDelta())
-        o2.objectiveDone = true
-        let r2 = GameEngine.apply(state: s2, action: "x", resolution: res2, output: o2, now: t0)
-        XCTAssertEqual(r2.state.end, .abandoned)
+        let r2 = GameEngine.apply(state: s2, action: "x", resolution: res2, output: NarratorOutput(narration: "…", proposed: StatDelta()), now: t0)
+        XCTAssertNil(r2.state.end)
+    }
+
+    func testQuestProgressFromRolls() {
+        var s = newState(.quest)
+        s.quest?.progress = 2
+        var hits = 0
+        for _ in 0..<40 {
+            let r = Rules.resolve(state: &s, intent: ActionIntent(summary: "x", category: .combat, difficulty: .easy))
+            if r.roll.outcome == .success || r.roll.outcome == .critSuccess { XCTAssertTrue(r.completesQuest); hits += 1 }
+            if r.roll.outcome == .fail { XCTAssertFalse(r.completesQuest) }
+        }
+        XCTAssertGreaterThan(hits, 10)
+        let rest = Rules.resolve(state: &s, intent: ActionIntent(summary: "spím", category: .rest, difficulty: .trivial))
+        XCTAssertFalse(rest.completesQuest)
+    }
+
+    func testActionDurationMovesClock() async throws {
+        let s = newState(.quest)
+        let interp = #"{"intent":"Jede do vesnice","category":"explore","stat":"none","difficulty":"trivial","risk":"none","items_used":[],"duration":"day"}"#
+        let narr = #"{"narration":"Celý den v sedle.","hp":0,"stress":0,"gold":0,"items_gained":[],"items_lost":[],"location":"Lhota","scene":"town","chronicle":"Dojel do Lhoty."}"#
+        let r = try await GameEngine(model: ScriptedModel([interp, narr])).playTurn(s, input: "Pojedu na koni do sousední vesnice", now: t0)
+        XCTAssertEqual(r.state.worldTime.timeIntervalSince(s.worldTime), 24 * 3600, accuracy: 1)
+        XCTAssertEqual(r.state.day, 2)
+        XCTAssertEqual(r.state.log.last(where: { $0.kind == .narration })?.hours, 24)
+        XCTAssertEqual(Prompts.timeText(24), "1 den")
+        XCTAssertEqual(Prompts.timeText(3), "3 hodiny")
+        XCTAssertEqual(Prompts.timeText(0.25), "15 minut")
+        // krátký čin = krátký čas
+        let interp2 = #"{"intent":"Rozhlédne se","category":"explore","stat":"none","difficulty":"trivial","risk":"none","items_used":[],"duration":"moment"}"#
+        let r2 = try await GameEngine(model: ScriptedModel([interp2, narr])).playTurn(s, input: "rozhlédnu se", now: t0)
+        XCTAssertEqual(r2.state.worldTime.timeIntervalSince(s.worldTime), 900, accuracy: 1)
+    }
+
+    func testCampaignTravelTakesDayAndFood() {
+        var s = newState(.campaign)
+        let food = s.settlement.food
+        let res = Rules.resolve(state: &s, intent: ActionIntent(summary: "jedeme", category: .travel, difficulty: .trivial, duration: .hour))
+        XCTAssertGreaterThanOrEqual(res.hours, 12)
+        XCTAssertNotNil(res.arrival)
+        XCTAssertLessThan(res.mandatory.food, -3)
+        _ = food
+    }
+
+    func testEndlessNeverWinsButRealmDoes() {
+        var e = newState(.endless)
+        e.settlement.population = 150
+        for b in BuildingKind.allCases { e.settlement.buildings[b] = 1 }
+        var res = Rules.resolve(state: &e, intent: ActionIntent(summary: "x", category: .other, difficulty: .trivial))
+        res.mandatory = StatDelta()
+        let r = GameEngine.apply(state: e, action: "x", resolution: res, output: NarratorOutput(narration: "…", proposed: StatDelta()), now: t0)
+        XCTAssertNil(r.state.end)
+        var g = newState(.realm)
+        g.settlement.population = 150
+        for b in BuildingKind.allCases { g.settlement.buildings[b] = 1 }
+        var res2 = Rules.resolve(state: &g, intent: ActionIntent(summary: "x", category: .other, difficulty: .trivial))
+        res2.mandatory = StatDelta()
+        let r2 = GameEngine.apply(state: g, action: "x", resolution: res2, output: NarratorOutput(narration: "…", proposed: StatDelta()), now: t0)
+        XCTAssertEqual(r2.state.end, .victory)
+        XCTAssertTrue(r2.state.achievements.contains("mesto_povstalo"))
     }
 
     func testCampaignTravel() async throws {
@@ -209,26 +269,25 @@ final class GameTests: XCTestCase {
         let r = try await engine.playTurn(s, input: "Postavím novou farmu", now: t0)
         XCTAssertEqual(r.state.settlement.construction.count, 1)
         XCTAssertEqual(r.state.settlement.gold, s.settlement.gold - BuildingKind.farma.goldCost)
-        XCTAssertEqual(r.state.actionPoints, s.actionPoints - 1)
+        XCTAssertGreaterThan(r.state.worldTime, s.worldTime)
         var st = r.state
-        Simulation.advance(&st, to: t0.addingTimeInterval(7 * 3600))
+        Simulation.advance(&st, to: s.worldTime.addingTimeInterval(7 * 3600))
         XCTAssertEqual(st.settlement.count(.farma), 2)
         XCTAssertTrue(st.settlement.construction.isEmpty)
         let before = st.stats["days"] ?? 0
-        Simulation.advance(&st, to: t0.addingTimeInterval(3 * 24 * 3600))
+        Simulation.advance(&st, to: s.worldTime.addingTimeInterval(3 * 24 * 3600))
         XCTAssertEqual((st.stats["days"] ?? 0) - before, 3)
-        XCTAssertEqual(st.actionPoints, Simulation.actionPointsPerDay)
         XCTAssertTrue(st.log.contains { $0.text.contains("Úsvit") })
     }
 
-    func testRealmExhaustion() async throws {
-        var s = newState(.realm)
-        s.actionPoints = 0
-        s.lastTickAt = t0
-        s.actionPointsDay = Simulation.dayKey(t0)
-        let r = try await GameEngine(model: nil).playTurn(s, input: "Zaútočím na vlky v lese", now: t0)
-        XCTAssertEqual(r.state.log.last?.kind, .system)
-        XCTAssertEqual(r.state.turn, s.turn)
+    func testRealTimeCatchUpCapped() {
+        var s = newState(.endless)
+        Simulation.syncRealTime(&s, now: t0.addingTimeInterval(30 * 24 * 3600))
+        XCTAssertEqual(s.worldTime.timeIntervalSince(t0), Simulation.maxRealCatchUp, accuracy: 1)
+        XCTAssertLessThanOrEqual(s.stats["days"] ?? 0, 3)
+        var q = newState(.quest)
+        Simulation.syncRealTime(&q, now: t0.addingTimeInterval(3600 * 5))
+        XCTAssertEqual(q.worldTime, t0)
     }
 
     func testThreatResolution() {
@@ -249,7 +308,7 @@ final class GameTests: XCTestCase {
         s.settlement.buildings[.farma] = 4
         Simulation.advance(&s, to: t0.addingTimeInterval(40 * 24 * 3600))
         XCTAssertLessThanOrEqual(s.stats["days"] ?? 0, Simulation.maxCatchUpDays)
-        XCTAssertTrue(s.log.contains { $0.text.contains("pryč dlouho") })
+        XCTAssertTrue(s.log.contains { $0.text.contains("Uplynulo mnoho času") })
     }
 
     func testStarvationRuins() {

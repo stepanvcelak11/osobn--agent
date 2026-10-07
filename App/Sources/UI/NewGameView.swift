@@ -64,7 +64,7 @@ struct NewGameView: View {
     private var modeStep: some View {
         ScrollView {
             VStack(spacing: 14) {
-                stepTitle("Vyber svůj osud", "Svět je temný a nemilosrdný. Jak dlouho v něm chceš přežít?")
+                stepTitle("Vyber svůj osud", "Svět je temný a nemilosrdný. Jak dlouhý příběh chceš prožít?")
                 ForEach(GameMode.allCases, id: \.self) { m in modeCard(m) }
             }
             .padding(.horizontal, 20).padding(.bottom, 20)
@@ -73,9 +73,10 @@ struct NewGameView: View {
 
     private func modeDetails(_ m: GameMode) -> [String] {
         switch m {
-        case .quest: return ["Jedno nebezpečné místo a jasný cíl", "12 tahů, rychlé souboje", "Žádná správa města"]
-        case .campaign: return ["Vedeš karavanu přeživších přes 8 zastávek", "Zásoby, přepady, nemoci", "Každý tah stojí jídlo"]
-        case .realm: return ["Osada žije podle hodin v telefonu", "Stavby trvají hodiny, hrozby mají termín", "6 akcí denně, nový den za úsvitu v 6:00"]
+        case .quest: return ["Jedno nebezpečné místo a jeden snadný cíl", "Stačí pár odvážných činů", "Bez správy města"]
+        case .campaign: return ["Vedeš karavanu přeživších přes 6 zastávek", "Den cesty = den zásob", "Přepady, nemoci, uprchlíci"]
+        case .realm: return ["Stavby, hrozby, obchod, den a noc", "Cíl: 100 obyvatel, hradby, tržiště, kaple a kasárna", "Osada žije, i když zrovna nehraješ"]
+        case .endless: return ["Žádný konec – stav, rozšiřuj, objevuj", "Z vesnice město, z města říše", "Hraj, kolik chceš"]
         }
     }
 
@@ -89,7 +90,7 @@ struct NewGameView: View {
                     .background(Color.white.opacity(selected ? 0.12 : 0.05), in: RoundedRectangle(cornerRadius: 12))
                 VStack(alignment: .leading, spacing: 4) {
                     Text(m.title).font(.system(.title3, design: .serif).weight(.bold)).foregroundStyle(Theme.parchment)
-                    Text(m.subtitle).font(.caption).foregroundStyle(Theme.ember)
+                    Text(m.length).font(.caption.weight(.semibold)).foregroundStyle(Theme.ember)
                     ForEach(modeDetails(m), id: \.self) { d in
                         Label(d, systemImage: "smallcircle.filled.circle").font(.caption).foregroundStyle(Theme.dimText)
                             .labelStyle(TightLabel())
@@ -169,7 +170,7 @@ struct NewGameView: View {
         switch mode {
         case .quest: return "Odkud pocházíš?"
         case .campaign: return "Které město padlo?"
-        case .realm: return "Pojmenuj svou osadu"
+        case .realm, .endless: return "Pojmenuj svou osadu"
         }
     }
 
@@ -177,7 +178,7 @@ struct NewGameView: View {
         switch mode {
         case .quest: return "Město, za které dnes riskuješ život."
         case .campaign: return "Z jeho trosek vyráží tvá karavana."
-        case .realm: return "Pár chatrčí na okraji divočiny. Zatím."
+        case .realm, .endless: return "Pár chatrčí na okraji divočiny. Zatím."
         }
     }
 
@@ -222,9 +223,10 @@ struct NewGameView: View {
 
     private var modeHint: String {
         switch mode {
-        case .quest: return "Máš 12 tahů. Piš volně, co hrdina dělá – vypravěč a kostky rozhodnou o výsledku."
-        case .campaign: return "Každý tah sní kus zásob. Napiš třeba „vyrazíme dál“, když chceš pokračovat k další zastávce."
-        case .realm: return "Stavěj („postav farmu“), hlídej hrozby a vracej se během dne. Osada žije, i když jsi pryč."
+        case .quest: return "Piš volně, co hrdina dělá – vypravěč a kostky rozhodnou o výsledku. Tři zdařilé činy a cíl je tvůj."
+        case .campaign: return "Napiš třeba „vyrazíme dál“ – cesta k další zastávce trvá den a sní den zásob."
+        case .realm: return "Stavěj („postav farmu“), hlídej hrozby, obchoduj. Každý čin zabere tolik času, kolik by trval ve skutečnosti."
+        case .endless: return "Nekonečná hra: stav, rozšiřuj a objevuj okolí. Každý čin zabere tolik času, kolik by trval ve skutečnosti."
         }
     }
 

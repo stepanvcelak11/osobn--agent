@@ -3,25 +3,37 @@ import Foundation
 // MARK: - Módy
 
 public enum GameMode: String, Codable, CaseIterable, Sendable {
-    /// A: Rychlá výprava (5–10 min) – jedna lokace, jasný cíl, omezený počet tahů.
+    /// Krátká hra: jedno místo, jeden snadný cíl.
     case quest
-    /// B: Cesta světem (1–2 h) – karavana, zastávky na mapě, zásoby.
+    /// Delší hra: karavana putuje do nového domova.
     case campaign
-    /// C: Živý simulátor (týdny–měsíce) – osada v reálném čase, stavby, hrozby, denní akce.
+    /// Dlouhá hra: vybudovat z osady město.
     case realm
+    /// Nekonečná hra: stavět a rozšiřovat bez konce.
+    case endless
 
     public var title: String {
         switch self {
         case .quest: return "Rychlá výprava"
         case .campaign: return "Cesta světem"
-        case .realm: return "Živý simulátor"
+        case .realm: return "Vláda nad osadou"
+        case .endless: return "Nekonečná říše"
+        }
+    }
+    public var length: String {
+        switch self {
+        case .quest: return "Krátká hra"
+        case .campaign: return "Delší hra"
+        case .realm: return "Dlouhá hra"
+        case .endless: return "Bez konce"
         }
     }
     public var subtitle: String {
         switch self {
-        case .quest: return "5–10 minut · jedno nebezpečné místo, jasný cíl"
-        case .campaign: return "1–2 hodiny · karavana, cesta přes 8 zastávek"
-        case .realm: return "týdny až měsíce · osada žije v reálném čase"
+        case .quest: return "Krátká hra · jeden snadný cíl"
+        case .campaign: return "Delší hra · doveď karavanu do nového domova"
+        case .realm: return "Dlouhá hra · vybuduj z osady město"
+        case .endless: return "Bez konce · stav, rozšiřuj, přežij"
         }
     }
     public var icon: String {
@@ -29,8 +41,11 @@ public enum GameMode: String, Codable, CaseIterable, Sendable {
         case .quest: return "flame"
         case .campaign: return "map"
         case .realm: return "building.columns"
+        case .endless: return "infinity"
         }
     }
+    /// Módy se správou osady (stavby, hrozby, čas).
+    public var hasSettlement: Bool { self == .realm || self == .endless }
 }
 
 // MARK: - Hrdina
@@ -278,7 +293,9 @@ public struct Journey: Codable, Equatable, Sendable {
 
 public struct QuestInfo: Codable, Equatable, Sendable {
     public var objective: String
-    public var turnLimit: Int
+    /// Kolik zdařilých kroků je potřeba ke splnění cíle.
+    public var steps: Int
+    public var progress: Int = 0
 }
 
 // MARK: - Hrozby (C)
@@ -381,11 +398,13 @@ public struct LogEntry: Codable, Equatable, Identifiable, Sendable {
     public var delta: StatDelta?
     public var itemsAdded: [String] = []
     public var itemsRemoved: [String] = []
+    /// Kolik herního času čin zabral.
+    public var hours: Double?
 
     public init(kind: Kind, text: String, date: Date = Date(), roll: RollInfo? = nil, delta: StatDelta? = nil,
-                itemsAdded: [String] = [], itemsRemoved: [String] = []) {
+                itemsAdded: [String] = [], itemsRemoved: [String] = [], hours: Double? = nil) {
         self.kind = kind; self.text = text; self.date = date; self.roll = roll; self.delta = delta
-        self.itemsAdded = itemsAdded; self.itemsRemoved = itemsRemoved
+        self.itemsAdded = itemsAdded; self.itemsRemoved = itemsRemoved; self.hours = hours
     }
 }
 
@@ -416,11 +435,13 @@ public struct GameState: Codable, Equatable, Identifiable, Sendable {
     public var scene: SceneKind
     public var turn = 0
     public var day = 1
-    /// 0 ráno, 1 poledne, 2 večer, 3 noc (A/B); u C podle reálného času
+    /// 0 ráno, 1 den, 2 večer, 3 noc
     public var phase = 0
-    /// Denní akce (C)
-    public var actionPoints = 5
-    public var actionPointsDay: String = ""
+    /// Herní čas osady: plyne s tahy (3 h za akci) i ve skutečnosti, když hráč nehraje.
+    public var worldTime: Date = Date()
+    /// Kdy hráč naposledy hrál (pro dohnání skutečného času).
+    public var lastRealTime: Date = Date()
+    /// Do kdy je simulace osady spočítaná (herní čas).
     public var lastTickAt: Date = Date()
     public var rngState: UInt64
     public var log: [LogEntry] = []
@@ -439,7 +460,7 @@ public struct GameState: Codable, Equatable, Identifiable, Sendable {
         switch mode {
         case .quest: return quest?.objective ?? "Výprava"
         case .campaign: return "Karavana \(settlement.name)"
-        case .realm: return settlement.name
+        case .realm, .endless: return settlement.name
         }
     }
 }

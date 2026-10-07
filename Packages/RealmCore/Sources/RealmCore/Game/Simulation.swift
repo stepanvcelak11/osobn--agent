@@ -18,8 +18,9 @@ public struct SimulationReport: Sendable {
 /// Živý simulátor: osada žije v reálném čase. Každý úsvit (6:00 místního času) = nový den.
 public enum Simulation {
     public static let dawnHour = 6
-    public static let actionPointsPerDay = 6
     public static let maxCatchUpDays = 14
+    /// Kolik skutečného času se nejvýš započítá, když hráč nehraje.
+    public static let maxRealCatchUp: TimeInterval = 3 * 24 * 3600
 
     static var calendar: Calendar {
         var c = Calendar(identifier: .gregorian)
@@ -62,16 +63,27 @@ public enum Simulation {
 
     public static func foodCapacity(_ s: Settlement) -> Int { 200 + s.count(.sypka) * 150 }
 
-    /// Dožene čas od poslední návštěvy: stavby, hrozby, denní hospodaření, události.
+    /// Osada žije i když hráč nehraje: skutečně uplynulý čas (nejvýš 3 dny) se přičte k hernímu.
+    @discardableResult
+    public static func syncRealTime(_ s: inout GameState, now: Date) -> SimulationReport {
+        guard s.mode.hasSettlement, !s.isOver else { return SimulationReport() }
+        let elapsed = now.timeIntervalSince(s.lastRealTime)
+        s.lastRealTime = now
+        guard elapsed > 60 else { return SimulationReport() }
+        s.worldTime = s.worldTime.addingTimeInterval(min(elapsed, maxRealCatchUp))
+        return advance(&s, to: s.worldTime)
+    }
+
+    /// Dožene herní čas: stavby, hrozby, denní hospodaření, události.
     @discardableResult
     public static func advance(_ s: inout GameState, to now: Date) -> SimulationReport {
         var report = SimulationReport()
-        guard s.mode == .realm, !s.isOver, now > s.lastTickAt else { return report }
+        guard s.mode.hasSettlement, !s.isOver, now > s.lastTickAt else { return report }
         var all = dawns(after: s.lastTickAt, upTo: now)
         if all.count > maxCatchUpDays {
             report.skippedDays = all.count - maxCatchUpDays
             all = Array(all.suffix(maxCatchUpDays))
-            report.entries.append(LogEntry(kind: .event, text: "Byl(a) jsi pryč dlouho. Osada mezitím \(report.skippedDays) dní živořila bez tvé ruky – kroniky o tom mlčí.", date: now))
+            report.entries.append(LogEntry(kind: .event, text: "Uplynulo mnoho času. Osada \(report.skippedDays) dní živořila bez tvé ruky – kroniky o tom mlčí.", date: now))
         }
         for dawn in all {
             processUntil(&s, dawn, &report)
@@ -84,18 +96,13 @@ public enum Simulation {
 
         s.phase = phase(for: now)
         s.day = max(1, daysBetween(s.createdAt, now) + 1)
-        let key = dayKey(now)
-        if key != s.actionPointsDay {
-            s.actionPointsDay = key
-            s.actionPoints = actionPointsPerDay
-        }
         s.lastTickAt = now
         s.log.append(contentsOf: report.entries)
         _ = Achievements.evaluate(&s)
         return report
     }
 
-    static func daysBetween(_ a: Date, _ b: Date) -> Int {
+    public static func daysBetween(_ a: Date, _ b: Date) -> Int {
         let ka = a.addingTimeInterval(-Double(dawnHour) * 3600), kb = b.addingTimeInterval(-Double(dawnHour) * 3600)
         return calendar.dateComponents([.day], from: calendar.startOfDay(for: ka), to: calendar.startOfDay(for: kb)).day ?? 0
     }
@@ -213,7 +220,7 @@ public enum Simulation {
         d.morale += diff > 0 ? min(3, diff) : max(-3, diff)
         // Růst
         if foodAfter > 0 && Double(foodAfter) / Double(max(1, foodCapacity(st))) >= 0.5 && st.morale >= 50 {
-            let born = max(1, st.population / 15)
+            let born = max(1, st.population / 10)
             d.pop += born
             notes.append("přibylo \(born) obyvatel")
         }
@@ -264,21 +271,23 @@ public enum Simulation {
 
     /// Oznámení k naplánování (hrozby 2 h předem, dokončené stavby, nový den).
     public static func plannedNotifications(_ s: GameState, now: Date = Date(), includeDawn: Bool = true) -> [PlannedNotification] {
-        guard s.mode == .realm, !s.isOver else { return [] }
+        guard s.mode.hasSettlement, !s.isOver else { return [] }
+        // Herní čas běží dál skutečným tempem, když hráč nehraje.
+        func real(_ world: Date) -> Date { now.addingTimeInterval(world.timeIntervalSince(s.worldTime)) }
         var out: [PlannedNotification] = []
         for t in s.threats {
-            let at = t.deadline.addingTimeInterval(-2 * 3600)
+            let at = real(t.deadline).addingTimeInterval(-2 * 3600)
             if at > now {
                 out.append(PlannedNotification(id: "threat-\(t.id)", date: at, title: "⚠️ \(s.settlement.name) v ohrožení",
                                                body: "\(t.title) udeří za 2 hodiny."))
             }
         }
-        for c in s.settlement.construction where c.finishAt > now {
-            out.append(PlannedNotification(id: "build-\(c.id)", date: c.finishAt, title: "🔨 \(s.settlement.name)",
+        for c in s.settlement.construction where real(c.finishAt) > now {
+            out.append(PlannedNotification(id: "build-\(c.id)", date: real(c.finishAt), title: "🔨 \(s.settlement.name)",
                                            body: "Stavba dokončena: \(c.kind.czechName)."))
         }
-        if includeDawn, let dawn = dawns(after: now, upTo: now.addingTimeInterval(26 * 3600)).first {
-            out.append(PlannedNotification(id: "dawn-\(s.id)", date: dawn, title: "🌅 Nový den v \(s.settlement.name)",
+        if includeDawn, let dawn = dawns(after: s.worldTime, upTo: s.worldTime.addingTimeInterval(26 * 3600)).first {
+            out.append(PlannedNotification(id: "dawn-\(s.id)", date: real(dawn), title: "🌅 Nový den v \(s.settlement.name)",
                                            body: "Hrdina nabral síly. Osada čeká na tvé rozkazy."))
         }
         return out

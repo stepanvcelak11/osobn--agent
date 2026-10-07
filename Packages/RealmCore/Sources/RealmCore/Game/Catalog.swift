@@ -94,7 +94,17 @@ public enum Catalog {
                       hook: "Kdo nosí prsten, toho rada poslechne. Za úsvitu dorazí žoldáci, kteří ho chtějí také."),
     ]
 
-    public static let questTurnLimit = 12
+    /// Kolik zdařilých kroků vede ke splnění cíle Rychlé výpravy.
+    public static let questSteps = 3
+
+    // MARK: Vláda nad osadou (C) – cíl
+
+    public static let realmGoalPopulation = 100
+    public static let realmGoalBuildings: [BuildingKind] = [.palisada, .trziste, .kaple, .kasarna]
+
+    public static func realmGoalMet(_ s: Settlement) -> Bool {
+        s.population >= realmGoalPopulation && realmGoalBuildings.allSatisfy { s.count($0) > 0 }
+    }
 
     // MARK: Cesta světem (B)
 
@@ -113,7 +123,7 @@ public enum Catalog {
         Stop(name: "Trh v Lipnici", scene: .town),
     ]
     public static let campaignDestination = Stop(name: "Údolí Úsvitu", scene: .castle)
-    public static let campaignMiddleStops = 6
+    public static let campaignMiddleStops = 4
 
     // MARK: Výchozí hodnoty
 
@@ -125,7 +135,7 @@ public enum Catalog {
         case .campaign:
             return Settlement(name: name, population: 24, gold: 60 + bonusGold, food: 120, foodCapacity: 200,
                               defense: 12, morale: 60, buildings: [:], construction: [])
-        case .realm:
+        case .realm, .endless:
             return Settlement(name: name, population: 30, gold: 80 + bonusGold, food: 120, foodCapacity: 200,
                               defense: 10, morale: 55, buildings: [.farma: 1], construction: [])
         }
@@ -135,7 +145,7 @@ public enum Catalog {
         switch mode {
         case .quest: return 10
         case .campaign: return 15
-        case .realm: return 20
+        case .realm, .endless: return 20
         }
     }
 

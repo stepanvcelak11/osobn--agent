@@ -129,6 +129,12 @@ final class ModelManager: ObservableObject {
         }
     }
 
+    /// Automaticky stažený a ověřený model (ModelDownloader).
+    func installDownloaded(file: URL, source: DownloadSource, digest: FileDigest) throws -> InstalledModel {
+        let p = PendingImport(id: UUID().uuidString, kind: source.kind, fileName: source.fileName, tempURL: file, digest: digest)
+        return try finalize(p, verifiedBy: "SHA-256 (automatické stažení)")
+    }
+
     /// Uživatel výslovně potvrdil hash (porovnal ho se zdrojem).
     func confirm(_ p: PendingImport) throws -> InstalledModel {
         try finalize(p, verifiedBy: "potvrzeno uživatelem")
@@ -167,7 +173,7 @@ final class ModelManager: ObservableObject {
     /// Smaže nedokončené importy.
     func cleanupPartial() {
         let dir = AppPaths.modelsDirectory
-        for f in (try? FileManager.default.contentsOfDirectory(atPath: dir.path)) ?? [] where f.hasSuffix(".part") {
+        for f in (try? FileManager.default.contentsOfDirectory(atPath: dir.path)) ?? [] where f.hasSuffix(".part") && f.hasPrefix("import-") {
             try? FileManager.default.removeItem(at: dir.appendingPathComponent(f))
         }
     }

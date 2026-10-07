@@ -5,6 +5,7 @@ struct TitleView: View {
     @EnvironmentObject var app: AppModel
     @EnvironmentObject var ai: AIService
     @EnvironmentObject var models: ModelManager
+    @EnvironmentObject var downloader: ModelDownloader
     @State private var showNewGame = false
     @State private var showSaves = false
     @State private var showModels = false
@@ -84,14 +85,23 @@ struct TitleView: View {
 
     @ViewBuilder private var modelStatus: some View {
         Button { showModels = true } label: {
-            HStack(spacing: 10) {
-                statusIcon
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(statusTitle).font(.footnote.weight(.semibold)).foregroundStyle(Theme.parchment)
-                    Text(statusDetail).font(.caption2).foregroundStyle(Theme.dimText).multilineTextAlignment(.leading)
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 10) {
+                    statusIcon
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(statusTitle).font(.footnote.weight(.semibold)).foregroundStyle(Theme.parchment)
+                        Text(statusDetail).font(.caption2).foregroundStyle(Theme.dimText).multilineTextAlignment(.leading)
+                    }
+                    Spacer()
+                    Image(systemName: "chevron.right").font(.caption).foregroundStyle(Theme.dimText)
                 }
-                Spacer()
-                Image(systemName: "chevron.right").font(.caption).foregroundStyle(Theme.dimText)
+                if let p = downloadProgress {
+                    ProgressView(value: p).tint(Theme.ember)
+                }
+                if case .failed = downloader.phase, !ai.isLLMReady {
+                    Button("Zkusit znovu") { downloader.retry(models: models) }
+                        .font(.caption.weight(.semibold)).foregroundStyle(Theme.ember)
+                }
             }
             .padding(12)
             .panel(14)
@@ -99,30 +109,57 @@ struct TitleView: View {
         .buttonStyle(.plain)
     }
 
+    private var downloadProgress: Double? {
+        switch downloader.phase {
+        case .downloading(_, let r, let t): return t > 0 ? min(1, Double(r) / Double(t)) : 0
+        case .verifying(_, let p): return p
+        default: return nil
+        }
+    }
+
     @ViewBuilder private var statusIcon: some View {
         switch ai.llmState {
         case .ready: Image(systemName: "sparkles").foregroundStyle(Theme.gold)
         case .loading: ProgressView().tint(Theme.ember)
-        case .failed: Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(Theme.blood)
-        case .none: Image(systemName: "moon.zzz.fill").foregroundStyle(Theme.dimText)
+        default:
+            if case .failed = downloader.phase { Image(systemName: "exclamationmark.triangle.fill").foregroundStyle(Theme.blood) }
+            else { Image(systemName: "arrow.down.circle.fill").foregroundStyle(Theme.ember) }
         }
     }
 
+    private func gb(_ b: Int64) -> String { ByteCountFormatter.string(fromByteCount: b, countStyle: .file) }
+
     private var statusTitle: String {
         switch ai.llmState {
-        case .ready(let n): return "Vypravěč: \(n)"
-        case .loading(let n): return "Probouzím vypravěče: \(n)…"
-        case .failed: return "Vypravěče se nepodařilo načíst"
-        case .none: return "Bez AI vypravěče"
+        case .ready(let n): return "Vypravěč připraven: \(n)"
+        case .loading: return "Probouzím vypravěče…"
+        default: break
+        }
+        switch downloader.phase {
+        case .downloading(let n, let r, let t): return "Stahuji vypravěče (\(n)) – \(Int(Double(r) / Double(max(t, 1)) * 100)) %"
+        case .verifying: return "Ověřuji staženého vypravěče…"
+        case .waiting: return "Stahování čeká na připojení"
+        case .failed: return "Stažení vypravěče se nepovedlo"
+        default: return "Připravuji vypravěče…"
         }
     }
 
     private var statusDetail: String {
         switch ai.llmState {
-        case .ready: return "Běží 100 % offline v telefonu."
+        case .ready:
+            if case .downloading(let n, let r, let t) = downloader.phase {
+                return "Běží offline v telefonu. Na pozadí se stahuje \(n.lowercased()) (\(Int(Double(r) / Double(max(t, 1)) * 100)) %)."
+            }
+            return "Běží 100 % offline v telefonu."
         case .loading: return "První načtení může trvat i 20 sekund."
-        case .failed(let e): return e
-        case .none: return "Hraje jednoduchý záložní vypravěč. Pro plný zážitek nahraj jazykový model (doporučeno Gemma 3 4B)."
+        default: break
+        }
+        switch downloader.phase {
+        case .downloading(_, let r, let t): return "\(gb(r)) z \(gb(t)) · jednorázově, pak vše offline. Stahuje se i na pozadí – mezitím můžeš začít hrát."
+        case .verifying: return "Kontroluji, že soubor dorazil celý a nepoškozený."
+        case .waiting(let m): return m
+        case .failed(let m): return m
+        default: return "Vypravěč (jazykový model, asi 2,5 GB) se stáhne automaticky. Ideálně na Wi-Fi."
         }
     }
 

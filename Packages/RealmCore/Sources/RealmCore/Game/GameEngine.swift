@@ -83,21 +83,19 @@ public final class GameEngine: @unchecked Sendable {
         let settlement = Catalog.startSettlement(mode: setup.mode, name: String(city.prefix(30)), bonusGold: bg.bonusGold)
         var s = GameState(mode: setup.mode, hero: hero, settlement: settlement, location: settlement.name, scene: .town,
                           rngState: setup.seed)
-        s.createdAt = now; s.updatedAt = now; s.lastTickAt = now
+        s.createdAt = now; s.updatedAt = now; s.lastTickAt = now; s.worldTime = now; s.lastRealTime = now
         var hook: String?
         switch setup.mode {
         case .quest:
             let q = s.pick(Catalog.quests)
-            s.quest = QuestInfo(objective: q.objective, turnLimit: Catalog.questTurnLimit)
+            s.quest = QuestInfo(objective: q.objective, steps: Catalog.questSteps)
             s.location = q.location; s.scene = q.scene; hook = q.hook
         case .campaign:
             let middle = Array(s.shuffled(Catalog.campaignWaypoints).prefix(Catalog.campaignMiddleStops))
             s.journey = Journey(stops: [Stop(name: "Trosky města \(settlement.name)", scene: .ruins)] + middle + [Catalog.campaignDestination], index: 0)
             s.location = s.journey!.current.name; s.scene = .ruins
-        case .realm:
+        case .realm, .endless:
             s.scene = .town
-            s.actionPoints = Simulation.actionPointsPerDay
-            s.actionPointsDay = Simulation.dayKey(now)
             s.phase = Simulation.phase(for: now)
         }
         s.stats["start_pop"] = settlement.population
@@ -125,7 +123,7 @@ public final class GameEngine: @unchecked Sendable {
         s.log.append(LogEntry(kind: .narration, text: final))
         if let q = s.quest { s.chronicle.append("Výprava začala: \(q.objective).") }
         else if s.mode == .campaign { s.chronicle.append("Karavana opustila trosky města \(s.settlement.name).") }
-        else { s.chronicle.append("\(s.hero.name) se ujal(a) vlády nad osadou \(s.settlement.name).") }
+        else { s.chronicle.append("\(s.hero.name) \(s.hero.feminine ? "se ujala" : "se ujal") vlády nad osadou \(s.settlement.name).") }
         return s
     }
 
@@ -191,9 +189,8 @@ public final class GameEngine: @unchecked Sendable {
 
         var s = state
         var events: [LogEntry] = []
-        if s.mode == .realm {
-            let report = Simulation.advance(&s, to: now)
-            events = report.entries
+        if s.mode.hasSettlement {
+            events = Simulation.syncRealTime(&s, now: now).entries
         }
         // 1) Posouzení
         onEvent(.interpreting)
@@ -223,15 +220,6 @@ public final class GameEngine: @unchecked Sendable {
 
         // 2) Pravidla
         let res = Rules.resolve(state: &s, intent: finalIntent, now: now)
-        if res.exhausted {
-            s.log.append(contentsOf: events)
-            s.log.append(LogEntry(kind: .player, text: action))
-            let msg = "Jsi vyčerpaný(á). Dnešní síly došly – nové přinese úsvit v \(Simulation.dawnHour):00. Zatím můžeš osadu jen pozorovat a mluvit s lidmi."
-            s.log.append(LogEntry(kind: .system, text: msg))
-            s.updatedAt = now
-            return TurnResult(state: s, roll: res.roll, delta: StatDelta(), itemsAdded: [], itemsRemoved: [],
-                              newAchievements: [], usedModel: usedModel, stats: genStats)
-        }
         onEvent(.rolled(res.roll, res.intent))
 
         // 3) Vyprávění
@@ -335,7 +323,7 @@ public final class GameEngine: @unchecked Sendable {
 
         // Stavba
         if let b = r.build, b.started {
-            st.construction.append(Construction(kind: b.kind, finishAt: now.addingTimeInterval(b.kind.buildHours * 3600)))
+            st.construction.append(Construction(kind: b.kind, finishAt: s.worldTime.addingTimeInterval(b.kind.buildHours * 3600)))
             extra.append(LogEntry(kind: .event, text: "🔨 Stavba zahájena: \(b.kind.czechName) – hotovo za \(Int(b.kind.buildHours)) h."))
         }
         s.settlement = st
@@ -352,7 +340,7 @@ public final class GameEngine: @unchecked Sendable {
         }
 
         // Hrozby (C)
-        if s.mode == .realm, o.resolveThreat, !s.threats.isEmpty {
+        if s.mode.hasSettlement, o.resolveThreat, !s.threats.isEmpty {
             s.threats.sort { $0.deadline < $1.deadline }
             if outcome == .success || outcome == .critSuccess {
                 let t = s.threats.removeFirst()
@@ -372,11 +360,8 @@ public final class GameEngine: @unchecked Sendable {
 
         // Čas
         s.turn += 1
-        if s.mode != .realm {
-            s.phase = (s.turn / 2) % 4
-            s.day = s.turn / 8 + 1
-        } else if Rules.costsActionPoint(r.intent) {
-            s.actionPoints = max(0, s.actionPoints - 1)
+        if let q = s.quest, r.questGain > 0 {
+            s.quest?.progress = min(q.steps, q.progress + r.questGain)
         }
 
         // Počítadla
@@ -392,13 +377,8 @@ public final class GameEngine: @unchecked Sendable {
             s.end = .death
         } else if s.mode != .quest && s.settlement.population <= 0 {
             s.end = .ruin
-        } else if s.mode == .quest {
-            if o.objectiveDone && [.partial, .success, .critSuccess, .auto].contains(outcome) && s.turn >= 2 {
-                s.end = .victory
-            } else if let q = s.quest, s.turn >= q.turnLimit {
-                s.end = .abandoned
-                extra.append(LogEntry(kind: .system, text: "Čas vypršel. Výprava se nepodařila včas."))
-            }
+        } else if s.mode == .quest && r.completesQuest {
+            s.end = .victory
         } else if s.mode == .campaign, r.arrival?.isDestination == true {
             s.end = .victory
         }
@@ -406,8 +386,20 @@ public final class GameEngine: @unchecked Sendable {
         // Deník
         s.log.append(LogEntry(kind: .player, text: action))
         s.log.append(LogEntry(kind: .narration, text: o.narration, roll: r.roll.outcome == .auto ? nil : r.roll,
-                              delta: d.isZero ? nil : d, itemsAdded: added, itemsRemoved: removed))
+                              delta: d.isZero ? nil : d, itemsAdded: added, itemsRemoved: removed, hours: r.hours))
         s.log.append(contentsOf: extra)
+
+        // Čin zabere herní čas (minuty až dny); v osadě mezitím běží život
+        s.worldTime = s.worldTime.addingTimeInterval(r.hours * 3600)
+        s.phase = Simulation.phase(for: s.worldTime)
+        s.day = max(1, Simulation.daysBetween(s.createdAt, s.worldTime) + 1)
+        if s.mode.hasSettlement && s.end == nil {
+            Simulation.advance(&s, to: s.worldTime)
+            if s.mode == .realm && s.end == nil && Catalog.realmGoalMet(s.settlement) {
+                s.end = .victory
+                s.log.append(LogEntry(kind: .event, text: "🏰 \(s.settlement.name) se stala městem! Cíl vlády je splněn."))
+            }
+        }
         if s.log.count > 500 { s.log.removeFirst(s.log.count - 500) }
 
         let newAch = Achievements.evaluate(&s)

@@ -19,18 +19,19 @@ public enum Grammars {
 
     /// Krok 1: posouzení akce hráče.
     public static func interpreter(mode: GameMode) -> String {
-        var root = #"root ::= "{" ws "\"intent\":" ws short "," ws "\"category\":" ws category "," ws "\"stat\":" ws stat "," ws "\"difficulty\":" ws difficulty "," ws "\"risk\":" ws risk "," ws "\"items_used\":" ws names"#
-        if mode == .realm { root += #" "," ws "\"build\":" ws build"# }
+        var root = #"root ::= "{" ws "\"intent\":" ws short "," ws "\"category\":" ws category "," ws "\"stat\":" ws stat "," ws "\"difficulty\":" ws difficulty "," ws "\"risk\":" ws risk "," ws "\"items_used\":" ws names "," ws "\"duration\":" ws duration"#
+        if mode.hasSettlement { root += #" "," ws "\"build\":" ws build"# }
         root += #" ws "}""#
         var cats = ActionCategory.allCases.map(\.rawValue)
-        if mode != .realm { cats.removeAll { $0 == "build" } }
+        if !mode.hasSettlement { cats.removeAll { $0 == "build" } }
         if mode != .campaign { cats.removeAll { $0 == "travel" } }
         var rules = [root, common,
                      enumRule("category", cats),
                      enumRule("stat", Attribute.allCases.map(\.rawValue) + ["none"]),
                      enumRule("difficulty", Difficulty.allCases.map(\.rawValue)),
-                     enumRule("risk", Risk.allCases.map(\.rawValue))]
-        if mode == .realm { rules.append(enumRule("build", ["none"] + BuildingKind.allCases.map(\.rawValue))) }
+                     enumRule("risk", Risk.allCases.map(\.rawValue)),
+                     enumRule("duration", ActionDuration.allCases.map(\.rawValue))]
+        if mode.hasSettlement { rules.append(enumRule("build", ["none"] + BuildingKind.allCases.map(\.rawValue))) }
         return rules.joined(separator: "\n") + "\n"
     }
 
@@ -41,8 +42,7 @@ public enum Grammars {
             root += #" "," ws "\"food\":" ws int "," ws "\"pop\":" ws int "," ws "\"defense\":" ws int "," ws "\"morale\":" ws int"#
         }
         root += #" "," ws "\"items_gained\":" ws gained "," ws "\"items_lost\":" ws names "," ws "\"location\":" ws short "," ws "\"scene\":" ws scene "," ws "\"chronicle\":" ws short"#
-        if mode == .quest { root += #" "," ws "\"objective_done\":" ws bool"# }
-        if mode == .realm { root += #" "," ws "\"resolve_threat\":" ws bool"# }
+        if mode.hasSettlement { root += #" "," ws "\"resolve_threat\":" ws bool"# }
         root += #" ws "}""#
         return [root, common,
                 #"gained ::= "[" ws ( gitem ( "," ws gitem )? )? ws "]""#,
