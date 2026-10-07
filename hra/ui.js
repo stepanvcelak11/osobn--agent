@@ -64,15 +64,14 @@ function gameScreen() {
       <span></span>
     </div>
     <header class="meters">${METERS.map((m) => `
-      <div class="meter" aria-label="${m.name}">${meterIcon(m.id)}<span class="dot" data-d="${m.id}"></span></div>`).join('')}
+      <button class="meter" data-m="${m.id}" aria-label="${m.name}">${meterIcon(m.id)}<span class="dot" data-d="${m.id}"></span></button>`).join('')}
     </header>
     <div class="question" id="q"><p></p></div>
     <section class="stage">
       ${['up', 'left', 'right', 'down'].map((d) => `<button class="chev ${d}" data-dir="${d}" aria-label="Volba ${d}">${{ up: '▲', down: '▼', left: '◀', right: '▶' }[d]}</button>`).join('')}
       <div class="deck"><div class="card" id="card"></div></div>
     </section>
-    <div class="name"><b id="person"></b></div>
-    <div class="tip" id="tip"></div>`;
+    <div class="name"><b id="person"></b></div>`;
   ui = {
     card: $('#card'),
     q: $('#q'),
@@ -81,9 +80,9 @@ function gameScreen() {
     levels: Object.fromEntries(METERS.map((m) => [m.id, $(`.lvl[data-l="${m.id}"]`)])),
     dots: Object.fromEntries(METERS.map((m) => [m.id, $(`.dot[data-d="${m.id}"]`)])),
     chev: Object.fromEntries([...app.querySelectorAll('.chev')].map((b) => [b.dataset.dir, b])),
-    tip: $('#tip'),
   };
   $('#menu').onclick = menu;
+  for (const b of app.querySelectorAll('.meter')) b.onclick = () => meterInfo(b.dataset.m);
   for (const b of Object.values(ui.chev)) b.onclick = () => tapDir(b.dataset.dir);
   setupDrag(ui.card);
   render(true);
@@ -114,7 +113,27 @@ function render(enter) {
   fitText(ui.q);
   current = null;
   highlight(null, 0);
-  ui.tip.textContent = state.total < 3 ? 'Táhni kartu doleva, doprava, nahoru, nebo dolů' : '';
+}
+
+let flashTimer = 0;
+/** Po rozhodnutí se dotčené ukazatele na chvíli obarví: nahoru modře (nebe), dolů zeleně (tráva). */
+function flash(before) {
+  clearFlash();
+  for (const m of METERS) {
+    const d = state.meters[m.id] - before[m.id];
+    if (!d) continue;
+    ui.icons[m.id].classList.add(d > 0 ? 'rise' : 'fall');
+    ui.dots[m.id].className = `dot ${d > 0 ? 'rise' : 'fall'}${Math.abs(d) >= 12 ? ' much' : ''}`;
+  }
+  flashTimer = setTimeout(clearFlash, 1700);
+}
+function clearFlash() {
+  clearTimeout(flashTimer);
+  if (!ui) return;
+  for (const m of METERS) {
+    ui.icons[m.id].classList.remove('rise', 'fall');
+    if (!current) ui.dots[m.id].className = 'dot';
+  }
 }
 
 /** Text se nikdy neposouvá: písmo se zmenší, dokud se celý nevejde. */
@@ -133,6 +152,7 @@ let current = null; // směr, který je právě zvýrazněný
 /** Zvýrazní volbu: štítek na kartě (průhlednost podle vzdálenosti), šipka a tečky u dotčených ukazatelů. */
 function highlight(dir, strength) {
   if (dir !== current) {
+    if (dir) clearFlash();
     if (current && ui.opts[current]) ui.opts[current].style.opacity = 0;
     for (const [d, b] of Object.entries(ui.chev)) b.classList.toggle('on', d === dir);
     ui.card.classList.toggle('choosing', !!dir);
@@ -148,7 +168,6 @@ function tapDir(dir) {
   if (selected === dir) { selected = null; commit(dir); return; }
   selected = dir;
   highlight(dir, 1);
-  ui.tip.textContent = 'Klepni na šipku znovu pro potvrzení';
 }
 
 function commit(dir) {
@@ -159,11 +178,12 @@ function commit(dir) {
   card.style.transform = far;
   card.style.opacity = '0';
   selected = null;
+  const before = { ...state.meters };
   setTimeout(() => {
     const dead = choose(state, dir);
     save();
     busy = false;
-    if (dead) deathScreen(); else render(true);
+    if (dead) deathScreen(); else { render(true); flash(before); }
   }, 220);
 }
 
@@ -173,10 +193,10 @@ function setupDrag(card) {
   // Překreslení jen jednou za snímek obrazovky – tažení je plynulé.
   const paint = () => {
     frame = 0;
-    const horiz = Math.abs(dx) > Math.abs(dy);
-    // Svisle karta jede jen kousek (s odporem), aby nezakryla ukazatele a tečky nahoře.
-    const vy = dy < 0 ? -Math.min(45, -dy * 0.35) : Math.min(90, dy * 0.5);
-    card.style.transform = horiz ? `translate3d(${dx}px, ${dy * 0.1}px, 0) rotate(${dx / 24}deg)` : `translate3d(${dx * 0.1}px, ${vy}px, 0)`;
+    // Jedna plynulá funkce pro všechny směry – při změně směru karta neskáče.
+    // Svisle jede jen kousek (s měkkým odporem), aby nezakryla ukazatele a tečky nahoře.
+    const vy = dy < 0 ? -45 * (1 - Math.exp(dy / 120)) : 90 * (1 - Math.exp(-dy / 170));
+    card.style.transform = `translate3d(${dx.toFixed(1)}px, ${vy.toFixed(1)}px, 0) rotate(${(dx / 24).toFixed(2)}deg)`;
     const dist = Math.max(Math.abs(dx), Math.abs(dy));
     highlight(dist > 18 ? dirOf() : null, (dist - 18) / 50);
   };
@@ -209,8 +229,30 @@ function setupDrag(card) {
 
 document.addEventListener('keydown', (e) => {
   const dir = { ArrowLeft: 'left', ArrowRight: 'right', ArrowUp: 'up', ArrowDown: 'down' }[e.key];
-  if (dir && ui && document.contains(ui.card) && state && !state.dead && !document.querySelector('.menu')) { e.preventDefault(); tapDir(dir); }
+  if (dir && ui && document.contains(ui.card) && state && !state.dead && !document.querySelector('.menu, .pop')) { e.preventDefault(); tapDir(dir); }
 });
+
+// ── Ukazatel: stav, význam a co ho ovlivňuje ─────────
+function meterInfo(id) {
+  if (busy || document.querySelector('.pop')) return;
+  const m = METERS.find((x) => x.id === id), v = state.meters[id], d = danger(v);
+  const side = v < 50 ? m.low : m.high;
+  const status = d < 0.45 ? ['ok', 'V rovnováze'] : d < 0.7 ? ['warn', `Pozor – blíží se ${side.toLowerCase()}`] : ['bad', `Nebezpečí – hrozí ${side.toLowerCase()}`];
+  const p = document.createElement('div');
+  p.className = 'pop';
+  p.innerHTML = `
+    <div class="pane" role="dialog" aria-label="${m.name}">
+      <div class="pane-head">${meterIcon(id).replace(/clip-/g, 'pclip-')}<div><b>${m.name}</b><span class="${status[0]}">${status[1]}</span></div><em>${v} %</em></div>
+      <div class="scale"><i style="left:${v}%"></i></div>
+      <div class="ends"><span>0 % · ${m.low}</span><span>ideál</span><span>${m.high} · 100 %</span></div>
+      <p>${m.about}</p>
+      <dl><dt>Zvyšuje</dt><dd>${m.up}</dd><dt>Snižuje</dt><dd>${m.down}</dd></dl>
+      <button class="primary">Zpět do hry</button>
+    </div>`;
+  p.querySelector('.lvl').style.transform = `translateY(${((100 - v) * 0.24).toFixed(2)}px)`;
+  p.onclick = (e) => { if (e.target === p || e.target.tagName === 'BUTTON') p.remove(); };
+  document.body.appendChild(p);
+}
 
 // ── Nabídka (tři čárky) ──────────────────────────────
 function menu() {
@@ -294,6 +336,9 @@ function helpScreen(back) {
         <li>Nahoře je <b>sedm ukazatelů</b>: ${METERS.map((m) => `${m.icon} ${m.name}`).join(', ')}.</li>
         <li><b>Ideál je uprostřed</b> (světlejší pásmo). Když ukazatel klesne na nulu, nebo vystoupá na maximum, vláda skončí katastrofou.</li>
         <li>Při tažení se pod ukazateli objeví <b>tečky</b> – čeho se rozhodnutí dotkne (větší = víc). Jestli nahoru, nebo dolů, musíš odhadnout.</li>
+        <li>Po rozhodnutí se dotčené ukazatele na chvíli obarví: <b style="color:var(--sky)">modře, když stouply</b> (nebe nahoře),
+          <b style="color:var(--grass)">zeleně, když klesly</b> (tráva dole).</li>
+        <li>Klepnutím na ukazatel zjistíš jeho stav, co znamená a co ho zvyšuje nebo snižuje.</li>
         <li>Rozhodnutí mají následky – některá se ti vrátí za pár měsíců. Když padneš, úřad převezme nástupce, ale svět si pamatuje, co se stalo.</li>
         <li>Sbírej všech <b>14 konců</b> a překonej svou nejdelší vládu.</li>
         <li>Hra běží i offline. V Safari dej <b>Sdílet → Přidat na plochu</b> a hraj jako aplikaci.</li>
