@@ -1,0 +1,36 @@
+name: Hra – testy a nasazení na web
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  deploy:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Testy a simulace vyváženosti
+        working-directory: hra
+        run: node --test test/game.test.mjs
+      - name: Sestavení (verze mezipaměti = commit)
+        run: |
+          rm -rf site && mkdir site
+          cp -R hra/index.html hra/style.css hra/ui.js hra/game.js hra/cards.js hra/manifest.webmanifest hra/sw.js hra/icons site/
+          sed -i "s/__VERSION__/${GITHUB_SHA::7}/" site/sw.js
+          touch site/.nojekyll
+      - name: Nasazení do větve gh-pages
+        run: |
+          cd site
+          git init -q -b gh-pages
+          git config user.name "github-actions"
+          git config user.email "github-actions@users.noreply.github.com"
+          git add -A
+          git commit -qm "Hra ${GITHUB_SHA::7}"
+          git push -qf "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" gh-pages
