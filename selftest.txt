@@ -1,0 +1,5 @@
+SELFTEST OK
+quest: 6 tahů OK
+campaign: 6 tahů OK
+realm: 6 tahů OK
+endless: 6 tahů OK
