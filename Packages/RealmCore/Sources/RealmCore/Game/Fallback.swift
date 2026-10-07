@@ -76,6 +76,12 @@ public enum Fallback {
 
     public static func narrate(state: inout GameState, resolution r: Resolution) -> NarratorOutput {
         var text = state.pick(lines[r.roll.outcome] ?? lines[.auto]!)
+        if r.input == .story {
+            let t = r.intent.summary.trimmingCharacters(in: CharacterSet(charactersIn: " .!?"))
+            text = CzechText.capitalizeFirst(t) + ". " + state.pick(storyAfter)
+        } else if r.input == .proceed {
+            text = state.pick(proceedLines[state.scene] ?? []) + " " + state.pick(storyAfter)
+        }
         if let b = r.build { text = (b.started ? "Dáš pokyn ke stavbě: \(b.kind.czechName). " : "Stavba \(b.kind.czechName.lowercased()) nezačne – \(b.reason) ") + text }
         if let a = r.arrival { text = "Karavana dorazí do místa \(a.stop.name). \(a.text) " + text }
         if r.mandatory.hp < 0 { text += " Rána pálí a krev ti stéká po paži." }
@@ -109,6 +115,25 @@ public enum Fallback {
         }
         return out
     }
+
+    static let storyAfter = [
+        "Svět to vezme na vědomí po svém – tiše, ale ne lhostejně.",
+        "Chvíli je ticho. Pak se kraj znovu nadechne.",
+        "Někde v dálce zaštěká pes, jako by o tom věděl.",
+    ]
+
+    static let genericProceed = [
+        "Čas plyne. Z dálky se ozve vytí a ztichne dřív, než bys poznal(a), odkud přišlo.",
+        "Vítr se otočí a přinese pach kouře. Někde nedaleko hoří oheň – a u ohně bývají lidé.",
+        "Na cestě se objeví postava v kápi. Zastaví se, jako by tě poznávala, a pak pomalu kyne rukou.",
+        "Krkavec usedne na kámen vedle tebe a hledí ti do tváře. V zobáku drží cosi lesklého.",
+    ]
+    static let proceedLines: [SceneKind: [String]] = Dictionary(uniqueKeysWithValues: SceneKind.allCases.map { ($0, genericProceed) })
+        .merging([
+            .dungeon: ["Ze tmy se ozve kapání vody a pak – kroky. Pomalé, šouravé, blíží se.", "Pochodeň zaprská. V jejím světle se na zdi objeví vyškrábaný znak, který tu předtím nebyl."],
+            .town: ["Na návsi se strhne hádka. Dva muži se drží pod krkem a kolem se srocují lidé.", "K tobě přiběhne udýchané dítě: „Pane, u studny je cizinec a ptá se po vás!“"],
+            .forest: ["Mezi stromy zapraská větev. Něco velkého tě sleduje – a neskrývá se příliš.", "Les ztichne. Ptáci umlknou všichni najednou, jako na povel."],
+        ]) { _, new in new }
 
     static let weatherLine: [Weather: String] = [
         .dest: "Déšť ti stéká za límec a bláto čvachtá pod nohama.",

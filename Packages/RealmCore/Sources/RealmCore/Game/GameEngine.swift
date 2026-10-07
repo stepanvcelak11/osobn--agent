@@ -107,6 +107,8 @@ public final class GameEngine: @unchecked Sendable {
         }
         s.stats["start_pop"] = settlement.population
         s.stats["min_hp"] = 100
+        s.premise = String(CzechText.collapseSpaces(PromptSanitizer.clean(setup.premise)).trimmingCharacters(in: .whitespacesAndNewlines).prefix(400))
+        World.updateWeather(&s)
         return (s, hook)
     }
 
@@ -127,7 +129,9 @@ public final class GameEngine: @unchecked Sendable {
         }
         let final = text ?? Fallback.intro(state: s, hook: hook)
         onText(final)
-        s.log.append(LogEntry(kind: .narration, text: final))
+        var first = LogEntry(kind: .narration, text: final)
+        first.day = s.day
+        s.log.append(first)
         if let q = s.quest { s.chronicle.append("Výprava začala: \(q.objective).") }
         else if s.mode == .campaign { s.chronicle.append("Karavana opustila trosky města \(s.settlement.name).") }
         else { s.chronicle.append("\(s.hero.name) \(s.hero.feminine ? "se ujala" : "se ujal") vlády nad osadou \(s.settlement.name).") }
@@ -156,7 +160,7 @@ public final class GameEngine: @unchecked Sendable {
         var pendingUser: String? = "Začni hru."
         for e in s.log {
             switch e.kind {
-            case .player: pendingUser = e.text
+            case .player: pendingUser = Prompts.playerLine(e.text, e.input ?? .act)
             case .narration:
                 if let u = pendingUser {
                     pairs.append((String(u.prefix(300)), String(e.text.prefix(600))))
@@ -187,12 +191,19 @@ public final class GameEngine: @unchecked Sendable {
 
     // MARK: Tah
 
-    public func playTurn(_ state: GameState, input: String, now: Date = Date(),
+    /// - Parameters:
+    ///   - mode: čin, řeč, příběh nebo „pokračuj“ (jako v AI Dungeon).
+    ///   - variation: jiná hodnota = jiné vyprávění téhož tahu („Znovu“); hod kostkou zůstává stejný.
+    public func playTurn(_ state: GameState, input: String, mode inputMode: InputMode = .act, variation: UInt32 = 0,
+                         now: Date = Date(),
                          onEvent: @escaping @Sendable (TurnEvent) -> Void = { _ in }) async throws -> TurnResult {
         guard !state.isOver else { throw GameError.gameOver }
-        let action = String(CzechText.collapseSpaces(input.replacingOccurrences(of: "\n", with: " "))
+        var action = String(CzechText.collapseSpaces(input.replacingOccurrences(of: "\n", with: " "))
             .trimmingCharacters(in: .whitespaces).prefix(400))
+        if inputMode == .proceed { action = "Pokračuj" }
         guard !action.isEmpty else { throw GameError.emptyInput }
+        let seed = 42 &+ variation &* 7919
+        let direct = inputMode == .story || inputMode == .proceed
 
         var s = state
         var events: [LogEntry] = []
@@ -205,15 +216,15 @@ public final class GameEngine: @unchecked Sendable {
         var intent: ActionIntent?
         var genStats: GenerationStats?
         let ctx = model?.contextLength ?? 4096
-        let interpTask = Prompts.interpreterTask(state: s, action: action, now: now)
+        let interpTask = Prompts.interpreterTask(state: s, action: Prompts.playerLine(action, inputMode), now: now)
         var interpMessages: [PromptMessage] = []
         var interpRaw = ""
-        if let model {
+        if let model, !direct {
             interpMessages = messages(s, current: interpTask, budget: ctx - 1000)
             let prompt = model.template.render(interpMessages)
-            if let out = try? await model.generate(prompt: prompt,
-                                                   options: GenerationOptions(maxTokens: 140, temperature: 0.2, topP: 0.9,
-                                                                              grammar: Grammars.interpreter(mode: s.mode)),
+            var io = GenerationOptions(maxTokens: 140, temperature: 0.2, topP: 0.9, grammar: Grammars.interpreter(mode: s.mode))
+            io.seed = seed
+            if let out = try? await model.generate(prompt: prompt, options: io,
                                                    onToken: { _ in !Task.isCancelled }),
                let v = JSONTools.parseObject(out.text) {
                 intent = ActionIntent.parse(v, fallbackText: action)
@@ -223,24 +234,37 @@ public final class GameEngine: @unchecked Sendable {
             }
         }
         try Task.checkCancellation()
-        let finalIntent = intent ?? Fallback.interpret(action, state: s)
+        var finalIntent = intent ?? Fallback.interpret(action, state: s)
+        if direct {
+            // Příběh a „pokračuj“: bez posouzení a bez hodu, jen plyne čas.
+            finalIntent = ActionIntent(summary: String(action.prefix(80)), category: .other, stat: nil, difficulty: .trivial,
+                                       risk: .none, duration: inputMode == .proceed ? .hour : .moment)
+        } else if inputMode == .say && intent == nil {
+            finalIntent.category = .social; finalIntent.stat = .charisma
+        }
 
         // 2) Pravidla
-        let res = Rules.resolve(state: &s, intent: finalIntent, now: now)
+        var res = Rules.resolve(state: &s, intent: finalIntent, now: now)
+        res.input = inputMode
         onEvent(.rolled(res.roll, res.intent))
 
         // 3) Vyprávění
         var output: NarratorOutput?
         if let model {
             let narrTask = Prompts.narratorTask(state: s, resolution: res)
-            var m = interpMessages.isEmpty ? messages(s, current: interpTask, budget: ctx - 900) : interpMessages
-            m.append(.init(.assistant, interpRaw.isEmpty ? "{}" : interpRaw))
-            m.append(.init(.user, narrTask))
+            var m: [PromptMessage]
+            if direct {
+                m = messages(s, current: Prompts.directTask(state: s, action: action, mode: inputMode, now: now) + "\n\n" + narrTask, budget: ctx - 700)
+            } else {
+                m = interpMessages.isEmpty ? messages(s, current: interpTask, budget: ctx - 900) : interpMessages
+                m.append(.init(.assistant, interpRaw.isEmpty ? "{}" : interpRaw))
+                m.append(.init(.user, narrTask))
+            }
             let prompt = model.template.render(m)
             let streamer = FieldStreamer(field: "narration") { onEvent(.narrating($0)) }
-            if let out = try? await model.generate(prompt: prompt,
-                                                   options: GenerationOptions(maxTokens: 540, temperature: 0.8, topP: 0.95,
-                                                                              grammar: Grammars.narrator(mode: s.mode)),
+            var no = GenerationOptions(maxTokens: 540, temperature: 0.8, topP: 0.95, grammar: Grammars.narrator(mode: s.mode))
+            no.seed = seed
+            if let out = try? await model.generate(prompt: prompt, options: no,
                                                    onToken: { streamer.feed($0); return !Task.isCancelled }) {
                 if let v = JSONTools.parseObject(out.text), let o = NarratorOutput.parse(v, mandatory: res.mandatory) {
                     output = o
@@ -277,6 +301,15 @@ public final class GameEngine: @unchecked Sendable {
         var s = state
         let outcome = r.roll.outcome
         var d = Rules.finalDelta(mode: s.mode, outcome: outcome, mandatory: r.mandatory, proposed: o.proposed, settlement: s.settlement)
+        var o = o
+        if r.input == .story || r.input == .proceed {
+            // Hráč může psát příběh, ale ne si přidělovat odměny.
+            d.gold = min(d.gold, 0); d.food = min(d.food, 0); d.pop = min(d.pop, 0)
+            d.defense = min(d.defense, 0); d.morale = min(d.morale, 0); d.hp = min(d.hp, r.mandatory.hp)
+            o.itemsGained = []
+            o.contractDone = false
+            o.resolveThreat = false
+        }
 
         // Předměty: spotřebované
         var removed: [String] = []
@@ -443,9 +476,14 @@ public final class GameEngine: @unchecked Sendable {
         }
 
         // Deník
-        s.log.append(LogEntry(kind: .player, text: action))
-        s.log.append(LogEntry(kind: .narration, text: o.narration, roll: r.roll.outcome == .auto ? nil : r.roll,
-                              delta: d.isZero ? nil : d, itemsAdded: added, itemsRemoved: removed, hours: r.hours))
+        var playerEntry = LogEntry(kind: .player, text: action)
+        playerEntry.day = s.day
+        playerEntry.input = r.input == .act ? nil : r.input
+        var narrEntry = LogEntry(kind: .narration, text: o.narration, roll: r.roll.outcome == .auto ? nil : r.roll,
+                                 delta: d.isZero ? nil : d, itemsAdded: added, itemsRemoved: removed, hours: r.hours)
+        narrEntry.day = s.day
+        s.log.append(playerEntry)
+        s.log.append(narrEntry)
         s.log.append(contentsOf: extra)
 
         // Čin zabere herní čas (minuty až dny); v osadě mezitím běží život

@@ -429,6 +429,10 @@ public struct LogEntry: Codable, Equatable, Identifiable, Sendable {
     public var itemsRemoved: [String] = []
     /// Kolik herního času čin zabral.
     public var hours: Double?
+    /// Herní den, kdy čin začal (pro oddělovače dní v deníku).
+    public var day: Int?
+    /// Jak hráč tah zadal (čin, řeč, příběh, pokračuj).
+    public var input: InputMode?
 
     public init(kind: Kind, text: String, date: Date = Date(), roll: RollInfo? = nil, delta: StatDelta? = nil,
                 itemsAdded: [String] = [], itemsRemoved: [String] = [], hours: Double? = nil) {
@@ -446,6 +450,44 @@ public enum GameEnd: String, Codable, Sendable {
         case .ruin: return "Zánik osady"
         case .defeat: return "Porážka"
         case .abandoned: return "Konec výpravy"
+        }
+    }
+}
+
+// MARK: - Způsob zadání tahu (jako v AI Dungeon)
+
+public enum InputMode: String, Codable, CaseIterable, Sendable {
+    /// Čin: co hrdina udělá (posoudí se a případně hodí kostkou).
+    case act
+    /// Řeč: co hrdina řekne nahlas.
+    case say
+    /// Příběh: hráč sám napíše, co se v příběhu stane; vypravěč naváže (bez hodu a bez odměn).
+    case story
+    /// Pokračuj: vypravěč vypráví dál bez zásahu hráče.
+    case proceed
+
+    public var czechName: String {
+        switch self {
+        case .act: return "Čin"
+        case .say: return "Řeč"
+        case .story: return "Příběh"
+        case .proceed: return "Pokračuj"
+        }
+    }
+    public var icon: String {
+        switch self {
+        case .act: return "figure.walk"
+        case .say: return "quote.bubble"
+        case .story: return "book"
+        case .proceed: return "forward"
+        }
+    }
+    public var placeholder: String {
+        switch self {
+        case .act: return "Co uděláš?"
+        case .say: return "Co řekneš?"
+        case .story: return "Co se v příběhu stane?"
+        case .proceed: return ""
         }
     }
 }
@@ -491,6 +533,12 @@ public struct GameState: Codable, Equatable, Identifiable, Sendable {
     /// Aktivní zakázka (vedlejší úkol) a nedávno zadané (aby se neopakovaly).
     public var contract: Contract?
     public var recentContracts: [String] = []
+    /// Vlastní zápletka, kterou hráč zadal při založení hry.
+    public var premise = ""
+    /// „Paměť vypravěče“: co hráč chce, aby vypravěč nikdy nezapomněl.
+    public var memory = ""
+    /// „Poznámka k vyprávění“: přání ke stylu a náladě (nemění pravidla).
+    public var authorsNote = ""
 
     public var season: Season { World.season(day: day) }
 
@@ -512,10 +560,11 @@ public struct NewGameSetup: Sendable {
     public var backgroundId: String
     public var feminine: Bool
     public var seed: UInt64
+    public var premise: String
 
     public init(mode: GameMode, heroName: String, cityName: String, backgroundId: String, feminine: Bool = false,
-                seed: UInt64 = UInt64.random(in: 1...UInt64.max)) {
+                seed: UInt64 = UInt64.random(in: 1...UInt64.max), premise: String = "") {
         self.mode = mode; self.heroName = heroName; self.cityName = cityName; self.backgroundId = backgroundId
-        self.feminine = feminine; self.seed = seed
+        self.feminine = feminine; self.seed = seed; self.premise = premise
     }
 }

@@ -154,6 +154,8 @@ public struct Resolution: Equatable, Sendable {
     public var cures: [ConditionKind] = []
     /// Tah může splnit aktivní zakázku (pokud to vypravěč potvrdí).
     public var contractEligible = false
+    /// Jak hráč tah zadal.
+    public var input: InputMode = .act
 }
 
 public enum Rules {

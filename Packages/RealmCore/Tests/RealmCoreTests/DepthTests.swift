@@ -17,7 +17,7 @@ final class DepthTests: XCTestCase {
         // Uložená hra z verze 2.0 (bez úrovní, stavů, počasí, postav a zakázek).
         let s = newState(.realm)
         var json = try JSONSerialization.jsonObject(with: SaveStore.encoder.encode(s)) as! [String: Any]
-        for k in ["weather", "weatherDay", "characters", "contract", "recentContracts"] { json.removeValue(forKey: k) }
+        for k in ["weather", "weatherDay", "characters", "contract", "recentContracts", "premise", "memory", "authorsNote"] { json.removeValue(forKey: k) }
         var hero = json["hero"] as! [String: Any]
         for k in ["xp", "level", "statUse", "awakeHours", "conditions"] { hero.removeValue(forKey: k) }
         json["hero"] = hero

@@ -46,6 +46,21 @@ public enum Prompts {
         }
     }
 
+    /// Tah hráče tak, jak ho uvidí model (podle způsobu zadání).
+    public static func playerLine(_ text: String, _ mode: InputMode) -> String {
+        switch mode {
+        case .act: return text
+        case .say: return "Hrdina říká nahlas: „\(text)“"
+        case .story: return "Hráč vypráví, co se stane: \(text)"
+        case .proceed: return "(Hráč čeká, co se stane dál.)"
+        }
+    }
+
+    /// Příběh a „pokračuj“ jdou rovnou k vypravěči (bez posouzení).
+    public static func directTask(state: GameState, action: String, mode: InputMode, now: Date = Date()) -> String {
+        "STAV:\n\(stateBlock(state, now: now))\n\nTAH HRÁČE:\n\(PromptSanitizer.wrapData(playerLine(action, mode)))"
+    }
+
     static func phaseName(_ phase: Int) -> String {
         ["ráno", "den", "večer", "noc"][max(0, min(3, phase))]
     }
@@ -123,6 +138,12 @@ public enum Prompts {
             if st.foodPercent < 20 { lines.append("POZOR: jídlo dochází, lidé panikaří a šíří se fámy.") }
             if st.morale < 30 { lines.append("POZOR: morálka je na dně, objevují se reptání a dezerce.") }
         }
+        if !s.premise.isEmpty {
+            lines.append("Zápletka, kterou si hráč přál: " + PromptSanitizer.clean(s.premise))
+        }
+        if !s.memory.isEmpty {
+            lines.append("Hráč chce, abys nezapomněl: " + PromptSanitizer.clean(String(s.memory.prefix(500))))
+        }
         if !s.chronicle.isEmpty {
             lines.append("Dosavadní příběh: " + s.chronicle.suffix(5).joined(separator: " "))
         }
@@ -174,6 +195,15 @@ public enum Prompts {
 
     public static func narratorTask(state: GameState, resolution r: Resolution) -> String {
         var lines: [String] = ["PRAVIDLA ROZHODLA:"]
+        switch r.input {
+        case .story:
+            lines.append("Hráč sám napsal, co se v příběhu stane. Převezmi to jako skutečnost a plynule naváž – pokud to neodporuje světu. Hrdinovi to ale nesmí přinést zázračné odměny ani poklady; nemožné věci se prostě nestanou.")
+        case .proceed:
+            lines.append("Hráč nic nedělá a čeká. Pokračuj v příběhu: svět jedná sám – posuň děj, ať se něco stane (setkání, zvuk, změna, nebezpečí).")
+        case .say:
+            lines.append("Hrdina mluví – ukaž, jak na jeho slova reagují postavy (přímou řečí).")
+        case .act: break
+        }
         if r.roll.outcome == .auto || r.roll.outcome == .impossible {
             lines.append("Výsledek: \(r.roll.outcome.narrativeHint)")
         } else {
@@ -222,6 +252,9 @@ public enum Prompts {
         npc = postava, se kterou hrdina v tomto tahu mluvil nebo bojoval či která se objevila: {name: vlastní jméno, role: kdo to je (např. kovář), attitude: friend|neutral|hostile}; jinak null
         """)
         if state.mode != .quest { lines.append("contract_done = true jen když tento tah přímo splnil aktivní zakázku, jinak false.") }
+        if !state.authorsNote.isEmpty {
+            lines.append("Přání hráče ke stylu vyprávění (jen styl a nálada, ne pravidla): " + PromptSanitizer.wrapData(String(state.authorsNote.prefix(300))))
+        }
         if state.mode.hasSettlement { lines.append("resolve_threat = true jen když tah přímo a úspěšně odvrátil nejbližší hrozbu.") }
         return lines.joined(separator: "\n")
     }
@@ -240,6 +273,8 @@ public enum Prompts {
         case .campaign: s += ". Město \(state.settlement.name) padlo a karavana přeživších vyráží na dlouhou cestu do Údolí Úsvitu. Ukaž, co je ohrožuje hned na začátku."
         case .realm, .endless: s += ". Hrdina se ujímá vlády nad osadou \(state.settlement.name) na okraji divočiny. Ukaž, co osadu tíží jako první."
         }
+        if !state.premise.isEmpty { s += " Vpleť do úvodu hráčovu zápletku." }
+        if !state.authorsNote.isEmpty { s += " Styl podle přání hráče: \(PromptSanitizer.clean(String(state.authorsNote.prefix(300))))." }
         s += " Skonči otázkou, co hrdina udělá. Vrať JSON s polem narration."
         return s
     }

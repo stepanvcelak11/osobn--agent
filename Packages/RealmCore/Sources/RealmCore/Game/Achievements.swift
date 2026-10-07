@@ -5,6 +5,9 @@ public struct Achievement: Identifiable, Equatable, Sendable {
     public let title: String
     public let detail: String
     public let icon: String
+    public init(id: String, title: String, detail: String, icon: String) {
+        self.id = id; self.title = title; self.detail = detail; self.icon = icon
+    }
 }
 
 public enum Achievements {
