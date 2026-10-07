@@ -1,0 +1,27 @@
+name: Ověření adres modelů
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: HEAD na Hugging Face (velikost a SHA-256 z X-Linked-Etag)
+        run: |
+          for u in \
+            https://huggingface.co/bartowski/google_gemma-3-4b-it-GGUF/resolve/main/google_gemma-3-4b-it-Q4_K_M.gguf \
+            https://huggingface.co/unsloth/gemma-3-4b-it-GGUF/resolve/main/gemma-3-4b-it-Q4_K_M.gguf \
+            https://huggingface.co/lmstudio-community/gemma-3-4b-it-GGUF/resolve/main/gemma-3-4b-it-Q4_K_M.gguf \
+            https://huggingface.co/ggml-org/gemma-3-4b-it-GGUF/resolve/main/gemma-3-4b-it-Q4_K_M.gguf \
+            https://huggingface.co/bartowski/Qwen_Qwen3-4B-Instruct-2507-GGUF/resolve/main/Qwen_Qwen3-4B-Instruct-2507-Q4_K_M.gguf \
+            https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo-q5_0.bin \
+            https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-small-q5_1.bin ; do
+            echo "=== $u"
+            curl -sI "$u" | grep -iE "^HTTP|x-linked-etag|x-linked-size|^location" || true
+            echo "--- po přesměrování:"
+            curl -sIL -o /dev/null -w "%{http_code} %{url_effective}\n" "$u" | cut -c1-160
+          done
