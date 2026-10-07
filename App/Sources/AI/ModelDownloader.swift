@@ -25,6 +25,7 @@ final class ModelDownloader: NSObject, ObservableObject {
     private weak var models: ModelManager?
     private var queue: [DownloadSource] = []
     private var failedIds: Set<String> = []
+    private var starting = false
 
     override init() {
         super.init()
@@ -48,7 +49,8 @@ final class ModelDownloader: NSObject, ObservableObject {
     /// Stáhne, co chybí: nejdřív vypravěče, pak hlasové ovládání.
     func startIfNeeded(models: ModelManager) {
         self.models = models
-        guard !isWorking else { return }
+        guard !isWorking, !starting else { return }
+        starting = true
         var q: [DownloadSource] = []
         if models.active(.llm) == nil { q += ModelCatalog.narratorDownloads.filter { !failedIds.contains($0.id) } }
         if models.active(.speech) == nil && UserDefaults.standard.object(forKey: "voice.autoDownload") as? Bool ?? true {
@@ -58,6 +60,7 @@ final class ModelDownloader: NSObject, ObservableObject {
         session.getAllTasks { tasks in
             let running = tasks.first { $0.state == .running || $0.state == .suspended }
             Task { @MainActor in
+                self.starting = false
                 if let t = running, let id = t.taskDescription, let src = ModelCatalog.download(id: id) {
                     self.phase = .downloading(name: src.name, received: t.countOfBytesReceived, total: src.size)
                     if t.state == .suspended { t.resume() }

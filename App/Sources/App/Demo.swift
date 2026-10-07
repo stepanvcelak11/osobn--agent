@@ -38,8 +38,8 @@ enum Demo {
                 s.epilogue = "Říká se, že Ráchel ze slumů Vranova sestoupila do kobky, odkud se nikdo nevrátil, a vynesla Srdce mlhy v holých dlaních. Mlha od té doby nad klášterem nestoupá – a děti si hrají na stínochodku, která se nebála tmy."
             }
             return s
-        case "game-realm":
-            var s = GameEngine.newGame(NewGameSetup(mode: .realm, heroName: "Ota", cityName: "Černá Lhota", backgroundId: "rytir", seed: 5), now: now).state
+        case "game-realm", "game-endless":
+            var s = GameEngine.newGame(NewGameSetup(mode: name == "game-endless" ? .endless : .realm, heroName: "Ota", cityName: "Černá Lhota", backgroundId: "rytir", seed: 5), now: now).state
             s.log = [
                 LogEntry(kind: .narration, text: "Vítej v osadě Černá Lhota, Oto. Pár desítek duší, jedna farma a rozpadlá palisáda. Lidé k tobě vzhlížejí a čekají, jestli je dovedeš přes zimu."),
                 LogEntry(kind: .event, text: "🌅 Úsvit 2. dne. Jídlo +5, zlato +8; přibyli 2 obyvatelé.", delta: StatDelta(pop: 2, gold: 8, food: 5)),

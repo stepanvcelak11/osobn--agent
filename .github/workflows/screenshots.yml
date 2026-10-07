@@ -62,6 +62,8 @@ jobs:
           shot 06-campaign game-campaign ""
           shot 07-gameover gameover ""
           shot 08-inventory game-quest inventory
+          shot 09-endless game-endless ""
+          shot 10-help game-quest help
           ls -la shots
       - uses: actions/upload-artifact@v4
         with:
