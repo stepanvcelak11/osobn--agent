@@ -72,6 +72,7 @@ enum Theme {
 struct SceneBackdrop: View {
     var scene: SceneKind
     var phase: Int
+    var weather: Weather? = nil
     var embers = true
     @AppStorage("fx.embers") private var embersEnabled = true
 
@@ -85,7 +86,12 @@ struct SceneBackdrop: View {
                 .offset(y: 140)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .clipped()
-            if embers && embersEnabled { EmberField(count: phase == 3 ? 26 : 18) }
+            if embers && embersEnabled {
+                if let w = weather, scene != .dungeon { WeatherLayer(weather: w) }
+                if weather == nil || ![.dest, .bourka, .snih].contains(weather!) || scene == .dungeon {
+                    EmberField(count: phase == 3 ? 26 : 18)
+                }
+            }
             RadialGradient(colors: [.clear, .black.opacity(0.7)], center: .center, startRadius: 120, endRadius: 520)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -93,6 +99,97 @@ struct SceneBackdrop: View {
         .ignoresSafeArea()
         .animation(.easeInOut(duration: 1.2), value: phase)
         .animation(.easeInOut(duration: 1.2), value: scene)
+    }
+}
+
+/// Počasí nad scénou: déšť, sníh, mlha, blesky (jedno plátno, levné).
+struct WeatherLayer: View {
+    var weather: Weather
+    @State private var flash = 0.0
+
+    var body: some View {
+        ZStack {
+            switch weather {
+            case .dest: Rain(count: 70, speed: 900, alpha: 0.22)
+            case .bourka:
+                Rain(count: 110, speed: 1250, alpha: 0.3)
+                Color.white.opacity(flash).allowsHitTesting(false)
+            case .snih: Snow(count: 60)
+            case .mlha: Fog()
+            case .mraz: Snow(count: 14)
+            default: EmptyView()
+            }
+        }
+        .allowsHitTesting(false)
+        .task(id: weather) {
+            guard weather == .bourka else { return }
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: UInt64.random(in: 4_000_000_000...9_000_000_000))
+                withAnimation(.easeOut(duration: 0.08)) { flash = 0.35 }
+                try? await Task.sleep(nanoseconds: 90_000_000)
+                withAnimation(.easeOut(duration: 0.6)) { flash = 0 }
+            }
+        }
+    }
+}
+
+private struct Rain: View {
+    var count: Int, speed: Double, alpha: Double
+    var body: some View {
+        TimelineView(.periodic(from: .now, by: 1.0 / 30.0)) { tl in
+            Canvas { ctx, size in
+                let t = tl.date.timeIntervalSinceReferenceDate
+                let h = Double(size.height) + 60
+                for i in 0..<count {
+                    let seed = Double(i) * 7.31
+                    let v = speed * (0.75 + (sin(seed) * 0.5 + 0.5) * 0.5)
+                    let y = (t * v + seed * 97).truncatingRemainder(dividingBy: h) - 30
+                    let x = (sin(seed * 2.3) * 0.5 + 0.5) * Double(size.width + 80) - 40 + y * 0.18
+                    var p = Path()
+                    p.move(to: CGPoint(x: x, y: y))
+                    p.addLine(to: CGPoint(x: x - 4, y: y - 18))
+                    ctx.stroke(p, with: .color(.white.opacity(alpha)), lineWidth: 1)
+                }
+            }
+        }
+    }
+}
+
+private struct Snow: View {
+    var count: Int
+    var body: some View {
+        TimelineView(.periodic(from: .now, by: 1.0 / 30.0)) { tl in
+            Canvas { ctx, size in
+                let t = tl.date.timeIntervalSinceReferenceDate
+                let h = Double(size.height) + 20
+                for i in 0..<count {
+                    let seed = Double(i) * 3.77
+                    let v = 22 + (cos(seed) * 0.5 + 0.5) * 30
+                    let y = (t * v + seed * 61).truncatingRemainder(dividingBy: h) - 10
+                    let x = (sin(seed * 1.7) * 0.5 + 0.5) * Double(size.width) + sin(t * 0.7 + seed) * 14
+                    let r = 1 + (sin(seed * 5) * 0.5 + 0.5) * 2.2
+                    ctx.fill(Path(ellipseIn: CGRect(x: x - r, y: y - r, width: r * 2, height: r * 2)), with: .color(.white.opacity(0.55)))
+                }
+            }
+        }
+    }
+}
+
+private struct Fog: View {
+    var body: some View {
+        TimelineView(.periodic(from: .now, by: 1.0 / 15.0)) { tl in
+            Canvas { ctx, size in
+                let t = tl.date.timeIntervalSinceReferenceDate
+                ctx.addFilter(.blur(radius: 40))
+                for i in 0..<6 {
+                    let seed = Double(i) * 1.9
+                    let w = Double(size.width) * 0.9
+                    let x = ((t * (6 + seed * 2) + seed * 300).truncatingRemainder(dividingBy: Double(size.width) + w)) - w
+                    let y = Double(size.height) * (0.25 + 0.12 * Double(i))
+                    ctx.fill(Path(ellipseIn: CGRect(x: x, y: y, width: w, height: 120)), with: .color(.white.opacity(0.09)))
+                }
+            }
+        }
     }
 }
 
@@ -193,6 +290,17 @@ enum Haptics {
         guard enabled else { return }
         UIImpactFeedbackGenerator(style: style).impactOccurred()
     }
+}
+
+/// Barva záznamu události podle jeho znaku.
+func eventAccent(_ text: String) -> Color {
+    let red = ["⚠️", "🔥", "🩸", "🤒", "⌛", "⚔️"], gold = ["⭐", "🏰", "✅", "🏆"], green = ["🛡️", "🩹", "🌿", "🌱"]
+    if red.contains(where: { text.hasPrefix($0) }) { return Theme.blood }
+    if gold.contains(where: { text.hasPrefix($0) }) { return Theme.gold }
+    if green.contains(where: { text.hasPrefix($0) }) { return Color(red: 0.45, green: 0.8, blue: 0.5) }
+    if text.hasPrefix("📜") { return Theme.ember }
+    if ["❄️", "☀️", "🍂"].contains(where: { text.hasPrefix($0) }) { return Theme.defense }
+    return Theme.parchment.opacity(0.5)
 }
 
 extension StatDelta {

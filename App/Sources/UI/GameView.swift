@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 import RealmCore
 
 struct GameView: View {
@@ -16,7 +17,7 @@ struct GameView: View {
     @AppStorage("tts.enabled") private var ttsEnabled = false
 
     enum SheetKind: String, Identifiable {
-        case inventory, chronicle, settlement, achievements, help
+        case inventory, chronicle, settlement, achievements, help, world, memory
         var id: String { rawValue }
     }
 
@@ -39,7 +40,7 @@ struct GameView: View {
         }
         .background {
             ZStack {
-                SceneBackdrop(scene: state.scene, phase: state.phase)
+                SceneBackdrop(scene: state.scene, phase: state.phase, weather: state.weather)
                 DangerVignette(intensity: dangerIntensity)
             }
         }
@@ -62,7 +63,9 @@ struct GameView: View {
 
     @ViewBuilder private var gameContent: some View {
             VStack(spacing: 8) {
-                DashboardView(state: state, onMenu: { showMenu = true }, onSettlement: { sheet = state.mode == .quest ? .inventory : .settlement })
+                DashboardView(state: state, onMenu: { showMenu = true },
+                              onSettlement: { sheet = state.mode == .quest ? .inventory : .settlement },
+                              onHero: { sheet = .inventory }, onWorld: { sheet = .world })
                 story
                 if !state.isOver {
                     InputBar(session: session, input: $input, focused: $inputFocused)
@@ -89,13 +92,16 @@ struct GameView: View {
         ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 18) {
-                    ForEach(state.log) { e in
-                        LogEntryView(entry: e, paranoid: state.hero.stress >= 70 && e.kind == .narration)
-                            .id(e.id)
+                    ForEach(rows, id: \.entry.id) { row in
+                        if let d = row.newDay { DayDivider(day: d) }
+                        LogEntryView(entry: row.entry, paranoid: state.hero.stress >= 70 && row.entry.kind == .narration)
+                            .id(row.entry.id)
+                            .contextMenu { entryMenu(row.entry) }
                     }
                     if let p = session.pendingAction {
-                        LogEntryView(entry: LogEntry(kind: .player, text: p)).id("pending")
+                        LogEntryView(entry: { var e = LogEntry(kind: .player, text: p); e.input = session.pendingMode == .act ? nil : session.pendingMode; return e }()).id("pending")
                     }
+                    if !session.isBusy && session.canRetry && !state.isOver { turnTools }
                     if let b = session.busy, b != .epilogue {
                         StreamingNarration(busy: b, text: session.streamingText, roll: session.liveRoll).id("stream")
                     }
@@ -110,6 +116,41 @@ struct GameView: View {
             .onChange(of: session.pendingAction) { _, _ in scrollDown(proxy) }
             .onChange(of: inputFocused) { _, f in if f { scrollDown(proxy) } }
             .onAppear { scrollDown(proxy, animated: false) }
+        }
+    }
+
+    /// Záznamy deníku s vyznačeným začátkem nového dne.
+    private var rows: [(entry: LogEntry, newDay: Int?)] {
+        var lastDay = state.log.first(where: { $0.day != nil })?.day ?? 1
+        return state.log.map { e in
+            guard e.kind == .player, let d = e.day, d > lastDay else { return (e, nil) }
+            lastDay = d
+            return (e, d)
+        }
+    }
+
+    /// „Znovu“ a „Vrátit“ pod posledním vyprávěním (jako v AI Dungeon).
+    private var turnTools: some View {
+        HStack(spacing: 10) {
+            Spacer()
+            Button { session.retry() } label: { Label("Znovu", systemImage: "arrow.triangle.2.circlepath") }
+                .accessibilityHint("Vypravěč převypráví poslední tah. Hod kostkou zůstane stejný.")
+            Button { session.undo() } label: { Label("Vrátit tah", systemImage: "arrow.uturn.backward") }
+        }
+        .font(.caption.weight(.medium))
+        .foregroundStyle(Theme.dimText)
+        .buttonStyle(.plain)
+        .padding(.top, -8)
+    }
+
+    @ViewBuilder private func entryMenu(_ e: LogEntry) -> some View {
+        Button { UIPasteboard.general.string = e.text } label: { Label("Kopírovat", systemImage: "doc.on.doc") }
+        if e.kind == .narration, e.id == state.log.last(where: { $0.kind == .narration })?.id, session.canRetry {
+            Button { session.retry() } label: { Label("Převyprávět (stejný hod)", systemImage: "arrow.triangle.2.circlepath") }
+            Button(role: .destructive) { session.undo() } label: { Label("Vrátit tah", systemImage: "arrow.uturn.backward") }
+        }
+        if e.kind == .narration {
+            Button { speaker.speak(e.text) } label: { Label("Přečíst nahlas", systemImage: "speaker.wave.2") }
         }
     }
 
@@ -157,7 +198,9 @@ struct GameView: View {
     // MARK: Menu a listy
 
     @ViewBuilder private var menuButtons: some View {
-        Button("🎒 Inventář") { sheet = .inventory }
+        Button("🎒 Hrdina a inventář") { sheet = .inventory }
+        Button("🌦️ Svět, postavy, zakázky") { sheet = .world }
+        Button("🧠 Paměť vypravěče") { sheet = .memory }
         if state.mode != .quest { Button(state.mode.hasSettlement ? "🏰 Osada a stavby" : "🐎 Karavana a cesta") { sheet = .settlement } }
         Button("📜 Kronika") { sheet = .chronicle }
         Button("🏆 Úspěchy") { sheet = .achievements }
@@ -174,7 +217,7 @@ struct GameView: View {
     @ViewBuilder private func sheetView(_ kind: SheetKind) -> some View {
         switch kind {
         case .inventory:
-            InventorySheet(hero: state.hero) { item in
+            InventorySheet(hero: state.hero, now: state.worldTime) { item in
                 sheet = nil
                 input = input.isEmpty ? "Použiju \(item.name) a " : input + " (\(item.name))"
                 inputFocused = true
@@ -187,6 +230,8 @@ struct GameView: View {
         }
         case .achievements: AchievementsView(unlocked: Set(state.achievements))
         case .help: HelpView()
+        case .world: WorldSheet(state: state)
+        case .memory: MemorySheet(state: state) { m, n in session.setMemory(m, note: n) }
         }
     }
 }
@@ -201,11 +246,14 @@ struct InputBar: View {
     @StateObject private var recorder = AudioRecorder()
     @State private var transcribing = false
     @State private var micError: String?
+    @AppStorage("input.mode") private var modeRaw = InputMode.act.rawValue
+    private var mode: InputMode { InputMode(rawValue: modeRaw) ?? .act }
 
     var body: some View {
         VStack(spacing: 8) {
             if !session.state.hero.items.isEmpty && !session.isBusy { itemChips }
             HStack(alignment: .bottom, spacing: 8) {
+                modePicker
                 TextField("", text: $input, prompt: Text(placeholder).foregroundColor(Theme.dimText), axis: .vertical)
                     .font(.system(.body, design: .serif))
                     .lineLimit(1...5)
@@ -226,7 +274,36 @@ struct InputBar: View {
     private var placeholder: String {
         if recorder.isRecording { return "Poslouchám… (klepni znovu pro konec)" }
         if transcribing { return "Přepisuji řeč…" }
-        return "Co uděláš?"
+        return mode.placeholder
+    }
+
+    /// Čin / Řeč / Příběh – jak bude tah zadán (jako v AI Dungeon).
+    private var modePicker: some View {
+        Menu {
+            ForEach([InputMode.act, .say, .story], id: \.self) { m in
+                Button { modeRaw = m.rawValue; Haptics.impact(.light) } label: {
+                    Label(modeTitle(m), systemImage: m.icon)
+                }
+            }
+        } label: {
+            Image(systemName: mode.icon)
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(mode == .act ? Theme.parchment : Theme.ember)
+                .frame(width: 44, height: 44)
+                .background(Color.white.opacity(0.08), in: Circle())
+                .overlay(Circle().stroke(mode == .act ? Theme.stroke : Theme.ember.opacity(0.5)))
+        }
+        .disabled(session.isBusy)
+        .accessibilityLabel("Způsob tahu: \(mode.czechName)")
+    }
+
+    private func modeTitle(_ m: InputMode) -> String {
+        switch m {
+        case .act: return "Čin – co uděláš"
+        case .say: return "Řeč – co řekneš"
+        case .story: return "Příběh – co se stane"
+        case .proceed: return "Pokračuj"
+        }
     }
 
     private var itemChips: some View {
@@ -271,19 +348,29 @@ struct InputBar: View {
             }
             .accessibilityLabel("Zrušit tah")
             .disabled(session.busy == .intro || session.busy == .epilogue)
+        } else if input.trimmingCharacters(in: .whitespaces).isEmpty {
+            // Prázdné pole = „Pokračuj“: vypravěč vypráví dál a svět jedná sám.
+            Button {
+                focused.wrappedValue = false
+                session.send("", mode: .proceed)
+            } label: {
+                Image(systemName: "forward.circle.fill")
+                    .font(.system(size: 40))
+                    .foregroundStyle(Theme.parchment.opacity(0.55))
+            }
+            .accessibilityLabel("Pokračuj v příběhu")
         } else {
             Button {
                 let t = input
                 input = ""
                 focused.wrappedValue = false
-                session.send(t)
+                session.send(t, mode: mode)
             } label: {
                 Image(systemName: "arrow.up.circle.fill")
                     .font(.system(size: 40))
-                    .foregroundStyle(input.trimmingCharacters(in: .whitespaces).isEmpty ? Color.white.opacity(0.2) : Theme.ember)
-                    .shadow(color: Theme.ember.opacity(input.isEmpty ? 0 : 0.6), radius: 8)
+                    .foregroundStyle(Theme.ember)
+                    .shadow(color: Theme.ember.opacity(0.6), radius: 8)
             }
-            .disabled(input.trimmingCharacters(in: .whitespaces).isEmpty)
             .accessibilityLabel("Odeslat tah")
         }
     }
@@ -314,7 +401,7 @@ struct AchievementToast: View {
         HStack(spacing: 12) {
             Image(systemName: achievement.icon).font(.title2).foregroundStyle(Theme.gold)
             VStack(alignment: .leading, spacing: 2) {
-                Text("Úspěch odemčen").font(.caption2).foregroundStyle(Theme.gold)
+                Text(achievement.id == "level" ? "Nová úroveň" : "Úspěch odemčen").font(.caption2).foregroundStyle(Theme.gold)
                 Text(achievement.title).font(.system(.headline, design: .serif)).foregroundStyle(Theme.parchment)
             }
             Spacer()

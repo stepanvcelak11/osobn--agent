@@ -11,6 +11,7 @@ struct NewGameView: View {
     @State private var feminine = false
     @State private var backgroundId = Catalog.backgrounds[0].id
     @State private var cityName = ""
+    @State private var premise = ""
     @FocusState private var focus: Bool
 
     var body: some View {
@@ -216,9 +217,49 @@ struct NewGameView: View {
                     Text(modeHint).font(.caption).foregroundStyle(Theme.dimText)
                 }
                 .padding(16).panel()
+
+                premiseCard
             }
             .padding(.horizontal, 20).padding(.bottom, 20)
         }
+    }
+
+    static let premiseIdeas = [
+        "Hledám ztraceného bratra, který odešel s poutníky.",
+        "Nesu v sobě kletbu – každou noc slyším hlas z hlubin.",
+        "Dlužím peníze nebezpečnému cechu a jeho lidé mi jdou po krku.",
+        "Jsem posledním svědkem vraždy knížete.",
+        "Krajem táhne mor a kněží tvrdí, že je to trest.",
+    ]
+
+    /// Vlastní zápletka (jako vlastní scénář v AI Dungeon) – nepovinná.
+    private var premiseCard: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Vlastní zápletka").font(.system(.headline, design: .serif)).foregroundStyle(Theme.parchment)
+            Text("Nepovinné. Napiš, o čem má tvůj příběh být – vypravěč ho do hry vplete.").font(.caption).foregroundStyle(Theme.dimText)
+            TextField("", text: $premise, prompt: Text("Např. hledám ztraceného bratra…").foregroundColor(Theme.dimText), axis: .vertical)
+                .lineLimit(2...5)
+                .font(.system(.body, design: .serif))
+                .foregroundStyle(Theme.parchment)
+                .focused($focus)
+                .padding(12)
+                .background(Color.black.opacity(0.25), in: RoundedRectangle(cornerRadius: 12))
+                .onChange(of: premise) { _, v in if v.count > 400 { premise = String(v.prefix(400)) } }
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 6) {
+                    ForEach(Self.premiseIdeas, id: \.self) { idea in
+                        Button { premise = idea } label: {
+                            Text(idea).font(.caption2).lineLimit(1)
+                                .foregroundStyle(Theme.parchment)
+                                .padding(.horizontal, 10).padding(.vertical, 6)
+                                .background(Color.white.opacity(0.07), in: Capsule())
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+        }
+        .padding(16).panel()
     }
 
     private var modeHint: String {
@@ -256,7 +297,8 @@ struct NewGameView: View {
     }
 
     private func start() {
-        let setup = NewGameSetup(mode: mode, heroName: heroName, cityName: cityName, backgroundId: backgroundId, feminine: feminine)
+        let setup = NewGameSetup(mode: mode, heroName: heroName, cityName: cityName, backgroundId: backgroundId, feminine: feminine,
+                                 premise: premise)
         dismiss()
         app.startNewGame(setup)
     }

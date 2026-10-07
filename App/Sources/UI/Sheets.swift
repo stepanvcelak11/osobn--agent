@@ -22,12 +22,14 @@ struct SheetContainer<Content: View>: View {
 
 struct InventorySheet: View {
     let hero: Hero
+    var now: Date = Date()
     var onUse: (Item) -> Void
 
     var body: some View {
-        SheetContainer(title: "🎒 Inventář") {
+        SheetContainer(title: "🎒 Hrdina a inventář") {
             VStack(alignment: .leading, spacing: 14) {
                 heroCard
+                conditionsCard
                 if hero.items.isEmpty {
                     Text("Nemáš nic. Jen to, co máš na sobě – a odvahu.").italic().foregroundStyle(Theme.dimText)
                 }
@@ -52,13 +54,38 @@ struct InventorySheet: View {
         }
     }
 
+    @ViewBuilder private var conditionsCard: some View {
+        let conds = World.conditions(hero, at: now)
+        if !conds.isEmpty {
+            VStack(alignment: .leading, spacing: 10) {
+                ForEach(conds, id: \.self) { c in
+                    HStack(alignment: .top, spacing: 12) {
+                        Image(systemName: c.icon).foregroundStyle(c.isGood ? Theme.gold : Theme.blood).frame(width: 26)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(c.czechName).font(.system(.headline, design: .serif)).foregroundStyle(Theme.parchment)
+                            Text(c.detail).font(.caption).foregroundStyle(Theme.dimText)
+                        }
+                    }
+                }
+            }
+            .padding(14).panel()
+        }
+    }
+
     private var heroCard: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        let lo = World.xpForLevel(hero.level), hi = World.xpForLevel(hero.level + 1)
+        return VStack(alignment: .leading, spacing: 10) {
             HStack {
                 Text(hero.name).font(Theme.title(22)).foregroundStyle(Theme.parchment)
                 Spacer()
                 Text(Catalog.background(hero.background).displayName(feminine: hero.feminine)).font(.caption).foregroundStyle(Theme.ember)
             }
+            HStack(spacing: 8) {
+                Label("Úroveň \(hero.level)", systemImage: "star.fill").font(.caption.weight(.bold)).foregroundStyle(Theme.gold)
+                ProgressView(value: Double(hero.xp - lo), total: Double(max(1, hi - lo))).tint(Theme.gold)
+                Text("\(hero.xp)/\(hi) zk.").font(.caption2).monospacedDigit().foregroundStyle(Theme.dimText)
+            }
+            Text("Schopnost, kterou používáš nejčastěji, se s každou úrovní zlepší.").font(.caption2).foregroundStyle(Theme.dimText)
             HStack {
                 ForEach(Attribute.allCases, id: \.self) { a in
                     VStack(spacing: 2) {
@@ -121,8 +148,9 @@ struct SettlementSheet: View {
             row("🛡️", "Obrana", "\(st.defense)")
             row("✊", "Morálka", "\(st.morale)")
             if state.mode.hasSettlement {
-                let prod = 8 + st.count(.farma) * 15 + st.population / 4
-                row("🌾", "Bilance jídla / den", signed(prod - st.population))
+                let prod = Int((Double(8 + st.count(.farma) * 15 + st.population / 4) * state.season.harvest).rounded())
+                let eat = Int((Double(st.population) * state.weather.foodFactor).rounded())
+                row("🌾", "Bilance jídla / den (\(state.season.czechName.lowercased()))", signed(prod - eat))
                 row("💰", "Příjem zlata / den", signed(5 + st.count(.trziste) * 12 + st.population / 10))
                 row("🕰️", "Herní čas", "Den \(state.day), \(clock(state.worldTime))")
             }
@@ -249,6 +277,145 @@ struct SettlementSheet: View {
     }
 }
 
+/// Svět kolem hrdiny: počasí, roční období, zakázka a postavy, které potkal.
+struct WorldSheet: View {
+    let state: GameState
+
+    var body: some View {
+        SheetContainer(title: "🌦️ Svět") {
+            VStack(alignment: .leading, spacing: 16) {
+                weatherCard
+                if let c = state.contract { contractCard(c) } else if state.mode != .quest {
+                    Text("Žádná zakázka. Lidé přicházejí s prosbami za úsvitu (v karavaně na zastávkách).")
+                        .font(.caption).foregroundStyle(Theme.dimText).padding(.horizontal, 4)
+                }
+                people
+            }
+        }
+    }
+
+    private var weatherCard: some View {
+        let w = state.weather
+        let effects = ActionCategory.allCases.compactMap { c -> String? in
+            let m = w.modifier(c)
+            return m == 0 ? nil : "\(c.czechName) \(m > 0 ? "+" : "")\(m)"
+        }
+        return VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 12) {
+                Image(systemName: w.icon).symbolRenderingMode(.multicolor).font(.largeTitle).frame(width: 50)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(w.czechName).font(Theme.title(22)).foregroundStyle(Theme.parchment)
+                    Text("\(state.season.czechName), \(World.year(day: state.day)). rok · den \(state.day)").font(.caption).foregroundStyle(Theme.dimText)
+                }
+            }
+            Text(effects.isEmpty ? "Počasí tvé činy neovlivňuje." : "Vliv na hody: " + effects.joined(separator: ", ") + ".")
+                .font(.caption).foregroundStyle(Theme.parchment)
+            if w.foodFactor > 1 { Text("V mrazu a sněhu se sní víc jídla.").font(.caption).foregroundStyle(Theme.food) }
+            if state.mode != .quest {
+                Text("Úroda: jaro ×0,9 · léto ×1,15 · podzim ×1,25 · zima ×0,45. Každé období trvá \(World.seasonDays) dní – na zimu si nachystej sýpky.")
+                    .font(.caption2).foregroundStyle(Theme.dimText)
+            }
+        }
+        .padding(14).panel()
+    }
+
+    private func contractCard(_ c: Contract) -> some View {
+        let h = max(0, Int((c.deadline.timeIntervalSince(state.worldTime) / 3600).rounded(.up)))
+        return VStack(alignment: .leading, spacing: 8) {
+            Label("Zakázka", systemImage: "scroll.fill").font(.system(.headline, design: .serif)).foregroundStyle(Theme.ember)
+            Text(c.title).font(.system(.title3, design: .serif)).foregroundStyle(Theme.parchment)
+            Text("Zadává: \(c.giver)").font(.caption).foregroundStyle(Theme.dimText)
+            HStack {
+                Text("Odměna: \(c.reward.text)").font(.caption.weight(.semibold)).foregroundStyle(Theme.gold)
+                Spacer()
+                Text("zbývá \(h) h").font(.caption.weight(.bold)).foregroundStyle(h < 12 ? Theme.blood : Theme.dimText)
+            }
+            Text("Splníš ji zdařilým činem, který se jí přímo týká (\(c.categories.map(\.czechName).joined(separator: ", "))). Když propadne, lidé si to zapamatují.")
+                .font(.caption2).foregroundStyle(Theme.dimText)
+        }
+        .padding(14).panel()
+    }
+
+    private var people: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("👥 Postavy").font(.system(.headline, design: .serif)).foregroundStyle(Theme.parchment)
+            if state.characters.isEmpty {
+                Text("Zatím nikoho neznáš. Mluv s lidmi – vypravěč si je zapamatuje.").font(.caption).italic().foregroundStyle(Theme.dimText)
+            }
+            ForEach(state.characters.sorted { $0.lastSeen > $1.lastSeen }) { p in
+                HStack(spacing: 12) {
+                    Text(String(p.name.prefix(1)))
+                        .font(.system(.headline, design: .serif).weight(.bold))
+                        .foregroundStyle(Theme.bg0)
+                        .frame(width: 34, height: 34)
+                        .background(color(p.attitude), in: Circle())
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(p.name).font(.system(.subheadline, design: .serif).weight(.semibold)).foregroundStyle(Theme.parchment)
+                        Text("\(p.role) · setkání: \(p.meetings)").font(.caption2).foregroundStyle(Theme.dimText)
+                    }
+                    Spacer()
+                    Label(p.attitude.czechName, systemImage: p.attitude.icon).font(.caption2.weight(.semibold)).foregroundStyle(color(p.attitude))
+                }
+            }
+        }
+        .padding(14).panel()
+    }
+
+    private func color(_ a: Attitude) -> Color {
+        switch a {
+        case .friend: return Color(red: 0.45, green: 0.8, blue: 0.5)
+        case .neutral: return Theme.gold
+        case .hostile: return Theme.blood
+        }
+    }
+}
+
+/// Paměť vypravěče a poznámka ke stylu (jako „Memory“ a „Author's Note“ v AI Dungeon).
+struct MemorySheet: View {
+    let state: GameState
+    var onSave: (String, String) -> Void
+    @State private var memory = ""
+    @State private var note = ""
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        SheetContainer(title: "🧠 Paměť vypravěče") {
+            VStack(alignment: .leading, spacing: 16) {
+                field("Co si má vypravěč vždy pamatovat",
+                      "Důležitá fakta tvého příběhu: kdo je tvůj nepřítel, co jsi slíbil(a), tajemství hrdiny…",
+                      text: $memory, limit: 500)
+                field("Poznámka k vyprávění",
+                      "Styl a nálada: „víc hororu“, „černý humor“, „krátké úderné věty“, „víc dialogů“… Pravidla hry tím nezměníš.",
+                      text: $note, limit: 300)
+                if !state.premise.isEmpty {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Zápletka hry").font(.system(.headline, design: .serif)).foregroundStyle(Theme.ember)
+                        Text(state.premise).font(.subheadline).foregroundStyle(Theme.parchment)
+                    }
+                }
+                Button("Uložit") { onSave(memory, note); dismiss() }.buttonStyle(EmberButtonStyle())
+                Text("Vypravěč dostává poslední kroniku, známé postavy a tuto paměť v každém tahu.")
+                    .font(.caption2).foregroundStyle(Theme.dimText)
+            }
+        }
+        .onAppear { memory = state.memory; note = state.authorsNote }
+    }
+
+    private func field(_ title: String, _ hint: String, text: Binding<String>, limit: Int) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(title).font(.system(.headline, design: .serif)).foregroundStyle(Theme.ember)
+            Text(hint).font(.caption).foregroundStyle(Theme.dimText)
+            TextField("", text: text, axis: .vertical)
+                .lineLimit(3...8)
+                .font(.system(.body, design: .serif))
+                .foregroundStyle(Theme.parchment)
+                .padding(12).panel(12)
+                .onChange(of: text.wrappedValue) { _, v in if v.count > limit { text.wrappedValue = String(v.prefix(limit)) } }
+            Text("\(text.wrappedValue.count)/\(limit)").font(.caption2).foregroundStyle(Theme.dimText).frame(maxWidth: .infinity, alignment: .trailing)
+        }
+    }
+}
+
 struct AchievementsView: View {
     let unlocked: Set<String>
     var body: some View {
@@ -279,6 +446,13 @@ struct HelpView: View {
         SheetContainer(title: "Jak hrát") {
             VStack(alignment: .leading, spacing: 14) {
                 section("Absolutní svoboda", "Žádná tlačítka s volbami. Napiš (nebo řekni), co tvůj hrdina udělá – „plížím se kolem stráže“, „nabídnu lapkům polovinu zlata“, „pojedu na koni do sousední vesnice“. Hraješ, jak dlouho chceš – žádné limity tahů.")
+                section("Čin, Řeč, Příběh, Pokračuj", "Tlačítkem vlevo od textu přepínáš, jak tah zadáváš. ČIN: co hrdina udělá (posoudí se a hodí kostkou). ŘEČ: co řekne nahlas – postavy odpoví. PŘÍBĚH: sám napíšeš, co se stane, a vypravěč naváže (bez kostek a bez odměn). Prázdné pole a šipka ⏩ = POKRAČUJ: vypravěč vypráví dál a svět jedná sám.")
+                section("Znovu a Vrátit", "Nelíbí se ti vyprávění? „Znovu“ ho převypráví – hod kostkou ale zůstane stejný, osud se přepsat nedá. „Vrátit tah“ vezme poslední tah zpět (jen dokud hra neskončila). Podržením prstu na textu ho zkopíruješ nebo necháš přečíst.")
+                section("🧠 Paměť vypravěče", "V menu si zapiš, co si má vypravěč vždy pamatovat (tajemství, sliby, nepřátele), a poznámku ke stylu („víc hororu“, „černý humor“). Při založení hry můžeš zadat i vlastní zápletku.")
+                section("⭐ Úrovně", "Každý čin dává zkušenosti – úspěch víc, ale i z nezdaru se učíš. Na nové úrovni se zlepší schopnost, kterou používáš nejčastěji, a hrdina nabere síly.")
+                section("🩸 Stavy hrdiny", "Krvácení bere každý tah zdraví, dokud ránu neošetříš (léčivý předmět, odpočinek). Horečka oslabuje. Dlouho bez spánku přijde únava (−1) a vyčerpání (−2) – spánek aspoň 6 hodin pomůže. Skvělý úspěch dodá odhodlání (+1).")
+                section("🌦️ Počasí a roční období", "Každý den má své počasí: mlha pomáhá plížení, bouřka a sníh zdržují cestu, mráz zvedá spotřebu jídla. Rok začíná jarem, každé období trvá 20 dní. Na podzim je nejbohatší úroda, v zimě skoro nic neroste.")
+                section("📜 Zakázky a 👥 postavy", "Lidé přicházejí s prosbami – najdi ztracenou dceru, ulov vlka, rozsuď spor. Splň je včas a dostaneš odměnu, jinak klesne morálka. Vypravěč si pamatuje postavy, které potkáš, i to, jestli jsou ti přáteli, nebo nepřáteli.")
                 section("Čas běží podle činů", "Každý čin trvá tolik, kolik by trval ve skutečnosti: rozhlédnutí pár minut, prohledání domu hodinu, jízda do další vesnice celý den, výprava do hor i několik dní. Podle toho se střídá den a noc, karavana jí zásoby a osada mezitím sklízí, staví a čelí hrozbám.")
                 section("Kostky rozhodují", "Riskantní činy se házejí kostkou k20 + schopnost hrdiny (Síla, Obratnost, Důvtip, Charisma) + vhodný předmět. Výsledek je katastrofa, neúspěch, částečný úspěch, úspěch nebo skvělý úspěch. Vypravěč ho nesmí změnit – ani když prosíš.")
                 section("❤️ Zdraví a 🧠 stres", "Zdraví na nule = konec hry. Boje a hrůzy zvedají stres; nad 70 se vypravěč stane paranoidním a tvé hody jsou horší. Odpočinek, kořalka nebo kaple pomáhají.")

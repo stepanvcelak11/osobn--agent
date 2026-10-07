@@ -23,12 +23,17 @@ final class GameSession: ObservableObject, Identifiable {
     @Published private(set) var busy: Busy?
     @Published private(set) var streamingText = ""
     @Published private(set) var pendingAction: String?
+    @Published private(set) var pendingMode: InputMode = .act
     @Published private(set) var liveRoll: RollInfo?
     @Published var diceOverlay: RollInfo?
     @Published var toast: String?
     @Published var achievement: Achievement?
     @Published var error: String?
     @Published private(set) var lastStats: GenerationStats?
+    /// Stav před posledním tahem (pro „Vrátit“ a „Znovu“) a jak byl tah zadán.
+    @Published private(set) var undoState: GameState?
+    private var lastInput: (text: String, mode: InputMode)?
+    private var variation: UInt32 = 0
 
     nonisolated let id: String
     private let store: SaveStore
@@ -50,6 +55,13 @@ final class GameSession: ObservableObject, Identifiable {
 
     var needsIntro: Bool { state.log.isEmpty }
     var isBusy: Bool { busy != nil }
+
+    /// Paměť vypravěče a poznámka ke stylu (upravuje hráč kdykoli během hry).
+    func setMemory(_ memory: String, note: String) {
+        state.memory = String(memory.prefix(500))
+        state.authorsNote = String(note.prefix(300))
+        save()
+    }
 
     func save() {
         try? store.save(state)
@@ -90,10 +102,35 @@ final class GameSession: ObservableObject, Identifiable {
 
     // MARK: Tah
 
-    func send(_ raw: String) {
+    var canUndo: Bool { undoState != nil && task == nil && !state.isOver }
+    var canRetry: Bool { canUndo && lastInput != nil }
+
+    /// Vrátí poslední tah (jako „Undo“ v AI Dungeon). Konec hry vrátit nejde.
+    func undo() {
+        guard canUndo, let prev = undoState else { return }
+        state = prev
+        undoState = nil
+        lastInput = nil
+        save()
+        toast = "Tah vrácen."
+    }
+
+    /// Nové vyprávění téhož tahu. Hod kostkou zůstává stejný – osud se přepsat nedá.
+    func retry() {
+        guard canRetry, let prev = undoState, let last = lastInput else { return }
+        state = prev
+        undoState = nil
+        variation &+= 1
+        send(last.text, mode: last.mode, variation: variation)
+    }
+
+    func send(_ raw: String, mode: InputMode = .act, variation: UInt32 = 0) {
         let text = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty, task == nil, !state.isOver else { return }
-        pendingAction = text
+        guard !text.isEmpty || mode == .proceed, task == nil, !state.isOver else { return }
+        if variation == 0 { self.variation = 0 }
+        let before = state
+        pendingAction = mode == .proceed ? nil : text
+        pendingMode = mode
         streamingText = ""
         liveRoll = nil
         error = nil
@@ -102,9 +139,11 @@ final class GameSession: ObservableObject, Identifiable {
             busy = .interpreting
             let engine = GameEngine(model: modelProvider())
             do {
-                let result = try await engine.playTurn(state, input: text, now: Date()) { ev in
+                let result = try await engine.playTurn(state, input: text, mode: mode, variation: variation, now: Date()) { ev in
                     Task { @MainActor in self.handle(ev) }
                 }
+                undoState = before
+                lastInput = (text, mode)
                 finish(result)
             } catch is CancellationError {
                 toast = "Tah zrušen."
@@ -145,6 +184,11 @@ final class GameSession: ObservableObject, Identifiable {
         save()
         if r.delta.hp < -10 { Haptics.impact(.heavy) }
         if let a = r.newAchievements.first { achievement = a }
+        else if let lvl = r.state.log.suffix(8).last(where: { $0.kind == .event && $0.text.hasPrefix("⭐") }),
+                !before.log.contains(where: { $0.id == lvl.id }) {
+            achievement = Achievement(id: "level", title: "Úroveň \(r.state.hero.level)", detail: lvl.text, icon: "star.fill")
+            Haptics.outcome(.critSuccess)
+        }
         if let n = r.state.log.last(where: { $0.kind == .narration }), r.state.log.count > before.log.count {
             onNarration?(n.text)
         }

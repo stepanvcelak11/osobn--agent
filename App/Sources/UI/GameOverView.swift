@@ -81,6 +81,7 @@ struct GameOverView: View {
         let items: [(String, String)] = [
             ("Tahů", "\(state.turn)"),
             ("Dní", "\(state.day)"),
+            ("Úroveň", "\(state.hero.level)"),
             ("Zlato", "\(state.settlement.gold)"),
             (state.mode == .quest ? "Předmětů" : "Lidí", state.mode == .quest ? "\(state.hero.items.count)" : "\(state.settlement.population)"),
         ]

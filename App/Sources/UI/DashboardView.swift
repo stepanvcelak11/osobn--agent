@@ -6,32 +6,78 @@ struct DashboardView: View {
     let state: GameState
     var onMenu: () -> Void
     var onSettlement: () -> Void
+    var onHero: () -> Void = {}
+    var onWorld: () -> Void = {}
+    @AppStorage("dash.compact") private var compact = false
 
     var body: some View {
         VStack(spacing: 10) {
             topRow
-            if state.mode == .quest { questRow } else { settlementRow }
+            if !compact {
+                worldRow
+                if state.mode == .quest { questRow } else { settlementRow }
+            }
             heroRow
-            if state.mode == .campaign, let j = state.journey { JourneyBar(journey: j) }
-            if state.mode.hasSettlement { realmRow }
+            if !compact {
+                if state.mode == .campaign, let j = state.journey { JourneyBar(journey: j) }
+                if state.mode.hasSettlement { realmRow }
+                if let c = state.contract { contractRow(c) }
+            }
         }
         .padding(12)
         .panel(20)
         .padding(.horizontal, 10)
+        .animation(.spring(duration: 0.35), value: compact)
+    }
+
+    private var title: String {
+        switch state.mode {
+        case .quest: return state.location
+        case .campaign: return "Karavana z \(state.settlement.name)"
+        case .realm, .endless: return state.settlement.name
+        }
+    }
+
+    private var subtitle: String {
+        switch state.mode {
+        case .quest: return state.mode.title
+        case .campaign: return "\(state.mode.title) · \(state.location)"
+        case .realm, .endless: return "\(Catalog.settlementRank(population: state.settlement.population)) · \(state.mode.title)"
+        }
+    }
+
+    private var badgeIcon: String {
+        switch state.mode {
+        case .quest: return state.scene.icon
+        case .campaign: return "map.fill"
+        case .realm, .endless: return "building.columns.fill"
+        }
     }
 
     private var topRow: some View {
-        HStack(spacing: 8) {
-            Text("🏰")
-            VStack(alignment: .leading, spacing: 0) {
-                Text(state.settlement.name)
-                    .font(.system(.headline, design: .serif)).foregroundStyle(Theme.parchment).lineLimit(1)
-                    .minimumScaleFactor(0.8)
-                Text(state.mode.hasSettlement
-                     ? "\(Catalog.settlementRank(population: state.settlement.population)) · \(state.mode.title)"
-                     : "\(state.mode.title) · \(state.location)")
-                    .font(.caption2).foregroundStyle(Theme.dimText).lineLimit(1)
+        HStack(spacing: 10) {
+            Button { compact.toggle(); Haptics.impact(.light) } label: {
+                HStack(spacing: 10) {
+                    Image(systemName: badgeIcon)
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(Color.black.opacity(0.8))
+                        .frame(width: 34, height: 34)
+                        .background(LinearGradient(colors: [Theme.gold, Theme.ember], startPoint: .topLeading, endPoint: .bottomTrailing), in: Circle())
+                        .shadow(color: Theme.ember.opacity(0.4), radius: 6)
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(title)
+                            .font(.system(.headline, design: .serif)).foregroundStyle(Theme.parchment).lineLimit(1)
+                            .minimumScaleFactor(0.75)
+                        HStack(spacing: 4) {
+                            Text(subtitle).lineLimit(1)
+                            Image(systemName: compact ? "chevron.down" : "chevron.up").font(.system(size: 8, weight: .bold))
+                        }
+                        .font(.caption2).foregroundStyle(Theme.dimText)
+                    }
+                }
             }
+            .buttonStyle(.plain)
+            .accessibilityHint(compact ? "Rozbalit panel" : "Sbalit panel")
             Spacer(minLength: 4)
             HStack(spacing: 4) {
                 Image(systemName: Theme.phaseIcon(state.phase))
@@ -40,8 +86,9 @@ struct DashboardView: View {
             }
             .font(.caption.weight(.semibold))
             .foregroundStyle(state.phase == 3 ? Color(red: 0.7, green: 0.75, blue: 1) : Theme.gold)
-            .padding(.horizontal, 8).padding(.vertical, 4)
+            .padding(.horizontal, 8).padding(.vertical, 5)
             .background(Color.white.opacity(0.06), in: Capsule())
+            .fixedSize()
             Button(action: onMenu) {
                 Image(systemName: "ellipsis").font(.headline).frame(width: 34, height: 34)
                     .background(Color.white.opacity(0.08), in: Circle())
@@ -51,13 +98,70 @@ struct DashboardView: View {
         }
     }
 
+    /// Počasí, úroveň a stavy hrdiny.
+    private var worldRow: some View {
+        let conds = World.conditions(state.hero, at: state.worldTime)
+        let lvl = state.hero.level
+        let lo = World.xpForLevel(lvl), hi = World.xpForLevel(lvl + 1)
+        let p = Double(state.hero.xp - lo) / Double(max(1, hi - lo))
+        return HStack(spacing: 6) {
+            Button(action: onWorld) {
+                HStack(spacing: 4) {
+                    Image(systemName: state.weather.icon).symbolRenderingMode(.multicolor)
+                    Text(state.weather.czechName)
+                    Text("·").opacity(0.5)
+                    Image(systemName: state.season.icon).font(.system(size: 9))
+                    Text(state.season.czechName)
+                }
+                .font(.caption2.weight(.medium))
+                .foregroundStyle(Theme.parchment.opacity(0.85))
+                .padding(.horizontal, 8).padding(.vertical, 5)
+                .background(Color.white.opacity(0.06), in: Capsule())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Počasí \(state.weather.czechName), \(state.season.czechName)")
+            Button(action: onHero) {
+                HStack(spacing: 5) {
+                    Image(systemName: "star.fill").font(.system(size: 9)).foregroundStyle(Theme.gold)
+                    Text("\(lvl)").font(.system(.caption2, design: .rounded).weight(.heavy)).foregroundStyle(Theme.gold)
+                    ZStack(alignment: .leading) {
+                        Capsule().fill(Color.white.opacity(0.1))
+                        Capsule().fill(Theme.gold).frame(width: 34 * max(0.04, min(1, p)))
+                    }
+                    .frame(width: 34, height: 4)
+                }
+                .padding(.horizontal, 8).padding(.vertical, 5)
+                .background(Color.white.opacity(0.06), in: Capsule())
+                .animation(.spring(duration: 0.6), value: state.hero.xp)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Úroveň \(lvl), zkušenosti \(state.hero.xp) z \(hi)")
+            Spacer(minLength: 0)
+            ForEach(conds, id: \.self) { c in
+                Image(systemName: c.icon)
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundStyle(c.isGood ? Theme.gold : Theme.blood)
+                    .frame(width: 24, height: 24)
+                    .background((c.isGood ? Theme.gold : Theme.blood).opacity(0.15), in: Circle())
+                    .accessibilityLabel(c.czechName)
+                    .onTapGesture(perform: onHero)
+            }
+        }
+    }
+
     private var questRow: some View {
         let q = state.quest
-        return HStack(spacing: 8) {
-            Text("🎯").font(.callout)
-            Text(q?.objective ?? "").font(.caption).foregroundStyle(Theme.parchment).lineLimit(3)
-                .fixedSize(horizontal: false, vertical: true)
-                .frame(maxWidth: .infinity, alignment: .leading)
+        return HStack(alignment: .top, spacing: 8) {
+            Image(systemName: "scope").font(.callout).foregroundStyle(Theme.ember).padding(.top, 1)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(q?.objective ?? "").font(.caption.weight(.semibold)).foregroundStyle(Theme.parchment).lineLimit(3)
+                    .fixedSize(horizontal: false, vertical: true)
+                if let st = q?.currentStage {
+                    Label(st, systemImage: "arrow.turn.down.right").font(.caption2).foregroundStyle(Theme.gold)
+                        .labelStyle(TightIconLabel())
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
             VStack(alignment: .trailing, spacing: 5) {
                 HStack(spacing: 3) {
                     ForEach(0..<(q?.steps ?? 3), id: \.self) { i in
@@ -105,12 +209,13 @@ struct DashboardView: View {
             if state.mode == .realm {
                 let p = min(1, Double(state.settlement.population) / Double(Catalog.realmGoalPopulation))
                 HStack(spacing: 6) {
-                    Text("🎯").font(.caption)
+                    Image(systemName: "scope").font(.caption).foregroundStyle(Theme.ember)
                     ProgressView(value: p).tint(Theme.gold).frame(width: 70)
                     Text("\(state.settlement.population)/\(Catalog.realmGoalPopulation)").font(.caption2).foregroundStyle(Theme.dimText)
                 }
             } else {
-                Label("\(state.settlement.buildings.values.reduce(0, +)) staveb", systemImage: "infinity").font(.caption).foregroundStyle(Theme.dimText)
+                Label("\(state.settlement.buildings.values.reduce(0, +)) staveb · rok \(World.year(day: state.day))", systemImage: "infinity")
+                    .font(.caption).foregroundStyle(Theme.dimText)
             }
             Spacer()
             if !state.settlement.construction.isEmpty {
@@ -122,6 +227,32 @@ struct DashboardView: View {
                         .font(.caption.weight(.semibold)).foregroundStyle(Theme.blood)
                 }
             }
+        }
+    }
+
+    private func contractRow(_ c: Contract) -> some View {
+        let h = max(0, Int((c.deadline.timeIntervalSince(state.worldTime) / 3600).rounded(.up)))
+        return Button(action: onWorld) {
+            HStack(spacing: 8) {
+                Image(systemName: "scroll.fill").font(.caption).foregroundStyle(Theme.ember)
+                Text(c.title).font(.caption).foregroundStyle(Theme.parchment).lineLimit(1)
+                Spacer(minLength: 4)
+                Text("\(h) h").font(.caption2.weight(.bold)).monospacedDigit()
+                    .foregroundStyle(h < 12 ? Theme.blood : Theme.dimText)
+            }
+            .padding(.horizontal, 10).padding(.vertical, 6)
+            .background(Theme.ember.opacity(0.08), in: RoundedRectangle(cornerRadius: 10))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Zakázka: \(c.title), zbývá \(h) hodin")
+    }
+}
+
+struct TightIconLabel: LabelStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 4) {
+            configuration.icon.font(.system(size: 8, weight: .bold))
+            configuration.title
         }
     }
 }

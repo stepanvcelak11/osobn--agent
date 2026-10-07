@@ -65,6 +65,8 @@ jobs:
           shot 08-inventory game-quest inventory
           shot 09-endless game-endless ""
           shot 10-help game-quest help
+          shot 11-world game-realm world
+          shot 12-memory game-campaign memory
           ls -la shots
       - uses: actions/upload-artifact@v4
         with:

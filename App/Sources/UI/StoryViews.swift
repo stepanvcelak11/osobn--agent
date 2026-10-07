@@ -19,7 +19,7 @@ struct LogEntryView: View {
     private var narration: some View {
         VStack(alignment: .leading, spacing: 8) {
             if let roll = entry.roll { RollBadge(roll: roll) }
-            Text(entry.text)
+            initialText
                 .font(.system(size: 17 * textScale, design: .serif))
                 .lineSpacing(5)
                 .foregroundStyle(paranoid ? Color(red: 0.95, green: 0.8, blue: 0.78) : Theme.parchment)
@@ -40,15 +40,48 @@ struct LogEntryView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    private var player: some View {
-        HStack {
-            Spacer(minLength: 50)
-            Text(entry.text)
-                .font(.system(size: 15 * textScale, design: .serif)).italic()
-                .foregroundStyle(Color.black.opacity(0.85))
-                .padding(.horizontal, 14).padding(.vertical, 10)
-                .background(LinearGradient(colors: [Theme.parchment, Theme.parchment.opacity(0.85)], startPoint: .top, endPoint: .bottom),
-                            in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+    /// Iniciála: první písmeno vyprávění větší a žhavé, jako v kronice.
+    private var initialText: Text {
+        guard let first = entry.text.first, first.isLetter else { return Text(entry.text) }
+        return Text(String(first)).font(.system(size: 30 * textScale, weight: .bold, design: .serif)).foregroundColor(Theme.ember)
+            + Text(entry.text.dropFirst())
+    }
+
+    @ViewBuilder private var player: some View {
+        switch entry.input ?? .act {
+        case .proceed:
+            HStack(spacing: 6) {
+                Image(systemName: "forward.fill")
+                Text("Pokračuj…").italic()
+            }
+            .font(.caption).foregroundStyle(Theme.dimText)
+            .frame(maxWidth: .infinity, alignment: .trailing)
+        case .story:
+            HStack(alignment: .top) {
+                Spacer(minLength: 40)
+                Label { Text(entry.text).italic() } icon: { Image(systemName: "book.fill").foregroundStyle(Theme.ember) }
+                    .font(.system(size: 15 * textScale, design: .serif))
+                    .foregroundStyle(Theme.parchment)
+                    .padding(.horizontal, 14).padding(.vertical, 10)
+                    .background(Theme.ember.opacity(0.1), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(Theme.ember.opacity(0.4), style: StrokeStyle(lineWidth: 1, dash: [4, 3])))
+            }
+        case .act, .say:
+            HStack {
+                Spacer(minLength: 50)
+                Text(entry.input == .say ? "„\(entry.text)“" : entry.text)
+                    .font(.system(size: 15 * textScale, design: .serif)).italic()
+                    .foregroundStyle(Color.black.opacity(0.85))
+                    .padding(.horizontal, 14).padding(.vertical, 10)
+                    .background(LinearGradient(colors: [Theme.parchment, Theme.parchment.opacity(0.85)], startPoint: .top, endPoint: .bottom),
+                                in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    .overlay(alignment: .topLeading) {
+                        if entry.input == .say {
+                            Image(systemName: "quote.bubble.fill").font(.caption).foregroundStyle(Theme.ember)
+                                .padding(5).background(Theme.bg0, in: Circle()).offset(x: -10, y: -10)
+                        }
+                    }
+            }
         }
     }
 
@@ -62,17 +95,44 @@ struct LogEntryView: View {
     }
 
     private var event: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        let accent = eventAccent(entry.text)
+        let big = entry.text.hasPrefix("⭐") || entry.text.hasPrefix("🏰") || entry.text.hasPrefix("✅")
+        return VStack(alignment: .leading, spacing: 6) {
             HStack(alignment: .top, spacing: 8) {
-                Text(entry.text).font(.footnote).foregroundStyle(Theme.parchment)
+                Text(entry.text).font(big ? .system(.subheadline, design: .serif).weight(.semibold) : .footnote)
+                    .foregroundStyle(big ? accent : Theme.parchment)
                 Spacer(minLength: 0)
                 Text(clock(entry.date)).font(.caption2).foregroundStyle(Theme.dimText)
             }
             if let d = entry.delta, !d.isZero { DeltaChips(delta: d) }
         }
-        .padding(10)
-        .background(Color.white.opacity(0.05), in: RoundedRectangle(cornerRadius: 12))
-        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Theme.stroke))
+        .padding(.vertical, 10).padding(.leading, 14).padding(.trailing, 10)
+        .background(LinearGradient(colors: [accent.opacity(big ? 0.16 : 0.09), Color.white.opacity(0.03)], startPoint: .leading, endPoint: .trailing),
+                    in: RoundedRectangle(cornerRadius: 12))
+        .overlay(alignment: .leading) {
+            UnevenRoundedRectangle(topLeadingRadius: 12, bottomLeadingRadius: 12).fill(accent.opacity(0.85)).frame(width: 3)
+        }
+        .overlay(RoundedRectangle(cornerRadius: 12).stroke(big ? accent.opacity(0.45) : Theme.stroke))
+        .shadow(color: big ? accent.opacity(0.25) : .clear, radius: 10)
+    }
+}
+
+/// Oddělovač nového herního dne v deníku.
+struct DayDivider: View {
+    let day: Int
+    var body: some View {
+        HStack(spacing: 10) {
+            Rectangle().fill(LinearGradient(colors: [.clear, Theme.gold.opacity(0.5)], startPoint: .leading, endPoint: .trailing)).frame(height: 1)
+            HStack(spacing: 5) {
+                Image(systemName: World.season(day: day).icon).font(.caption2)
+                Text("Den \(day)").font(.system(.caption, design: .serif).weight(.semibold)).tracking(1.5)
+            }
+            .foregroundStyle(Theme.gold)
+            .fixedSize()
+            Rectangle().fill(LinearGradient(colors: [Theme.gold.opacity(0.5), .clear], startPoint: .leading, endPoint: .trailing)).frame(height: 1)
+        }
+        .padding(.vertical, 2)
+        .accessibilityLabel("Den \(day)")
     }
 }
 
