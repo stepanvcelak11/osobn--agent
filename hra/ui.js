@@ -1,6 +1,6 @@
 // Rovnováha – zobrazení a ovládání (tažení karty do čtyř stran, šipky, klávesy, uložení hry).
 import { portrait, meterIcon, glyph, icon, mood, mix } from './art.js';
-import { newGame, choose, nextLeader, currentCard, preview, outcome, optionOf, unlocked, skip, nudge, ready, tenure, timeLabel, danger, kindOf, upgrade, activeLaws, seals, taskById, taskProgress, KINDS, CHARGE, NUDGE, METERS, ENDINGS, LAWS, TASKS, ERAS, SPECIAL, PEOPLE, REL_LOYAL } from './game.js';
+import { newGame, newBlitz, choose, nextLeader, currentCard, cardById, preview, outcome, optionOf, unlocked, skip, nudge, reformLaw, choosePerk, ready, tenure, timeLabel, danger, kindOf, upgrade, activeLaws, seals, taskById, taskProgress, seesDirection, toElection, support, KINDS, ACTIVE, CHARGE, NUDGE, METERS, ENDINGS, LAWS, TASKS, ERAS, SPECIAL, PEOPLE, REL_LOYAL, PERKS, CRISES, ELECTION, VOTE_MIN, BLITZ_START, BLITZ_BONUS, BLITZ_FALL } from './game.js';
 
 const SAVE = 'rovnovaha.save';
 const app = document.getElementById('app');
@@ -26,8 +26,50 @@ function load() {
   } catch { return null; }
 }
 function save() {
+  if (state?.mode === 'blitz') return; // bleskovka se neukládá – hlavní hra zůstává netknutá
   try { localStorage.setItem(SAVE, JSON.stringify(state)); } catch { /* soukromé okno – hraje se bez ukládání */ }
 }
+// ── Statistiky hráče (přežijí i novou hru) ───────────
+const STATS = 'rovnovaha.stats';
+const emptyStats = () => ({ games: 0, decisions: 0, reigns: 0, months: 0, tasks: 0, elections: 0, crises: 0, ends: {}, top: [], blitz: [] });
+let stats = loadStats();
+function loadStats() {
+  let s = null;
+  try { s = JSON.parse(localStorage.getItem(STATS)); } catch { /* nic */ }
+  if (s) return { ...emptyStats(), ...s };
+  // První spuštění se statistikami: převezmi vůdce z kroniky.
+  const st = emptyStats();
+  for (const h of state?.history ?? []) {
+    st.reigns += 1; st.months += h.months; st.ends[h.ending] = (st.ends[h.ending] ?? 0) + 1;
+    st.top.push({ name: h.name, months: h.months, title: h.title, kind: null });
+  }
+  st.top = st.top.sort((a, b) => b.months - a.months).slice(0, 10);
+  st.games = state ? 1 : 0;
+  return st;
+}
+function saveStats() { try { localStorage.setItem(STATS, JSON.stringify(stats)); } catch { /* nic */ } }
+/** Konec vlády do statistik (jen hlavní hra). */
+function recordReign() {
+  const h = state.history[state.history.length - 1];
+  if (!h || state.mode === 'blitz') return;
+  stats.reigns += 1;
+  stats.months += h.months;
+  stats.ends[h.ending] = (stats.ends[h.ending] ?? 0) + 1;
+  stats.top.push({ name: h.name, months: h.months, title: h.title, kind: state.leader.kind });
+  stats.top = stats.top.sort((a, b) => b.months - a.months).slice(0, 10);
+  saveStats();
+}
+/// Hodnocení: body za nejdelší vládu, konce, úkoly, volby, krize a zkušenosti.
+const RANKS = [[0, 'Nováček'], [30, 'Radní'], [80, 'Ministr'], [160, 'Prezident'], [300, 'Státník'], [500, 'Legenda republiky']];
+function rating() {
+  const best = Math.max(state?.best ?? 0, stats.top[0]?.months ?? 0);
+  const ends = state?.endings?.length ?? 0;
+  const pts = best + 5 * ends + 4 * stats.tasks + 3 * stats.crises + 3 * stats.elections + Math.floor(stats.decisions / 50);
+  let i = RANKS.length - 1;
+  while (RANKS[i][0] > pts) i--;
+  return { pts, rank: RANKS[i][1], from: RANKS[i][0], to: RANKS[i + 1]?.[0] ?? null, next: RANKS[i + 1]?.[1] ?? null, best, ends };
+}
+
 const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
 const ARROW = { left: '←', right: '→', up: '↑', down: '↓' };
 const kindName = (k, female) => (female ? k.f : k.m);
@@ -35,7 +77,7 @@ const DIR_WORD = { left: 'doleva ←', right: 'doprava →', up: 'nahoru ↑', d
 
 /** Výběr typu prezidenta (start i nástupce): řada ikon a pod ní popis vybraného typu. Popis jde i přetáhnout prstem. */
 function kindPicker() {
-  return `<div class="kinds">${KINDS.map((k) => `<button class="kind" data-k="${k.id}" aria-label="${k.m}">${icon(k.id)}<span>${k.short}</span></button>`).join('')}</div>
+  return `<div class="kinds">${KINDS.map((k) => `<button class="kind" data-k="${k.id}" aria-label="${k.m}">${icon(k.id)}</button>`).join('')}</div>
     <div class="kdesc" id="kd"></div>`;
 }
 function bindPicker(root, selected, female, onPick) {
@@ -45,7 +87,8 @@ function bindPicker(root, selected, female, onPick) {
     const k = KINDS.find((x) => x.id === id);
     for (const b of root.querySelectorAll('.kind')) b.classList.toggle('on', b.dataset.k === id);
     const name = female() == null ? k.m.replace('Prezident s rádcem', 'S rádcem') : kindName(k, female());
-    root.querySelector('.kdesc').innerHTML = `${icon(k.id, 'ico lg')}<div><b>${name}</b><small>${k.text}</small></div>`;
+    const active = ACTIVE.includes(k.id) ? 'Schopnost na tlačítko' : 'Stálá schopnost';
+    root.querySelector('.kdesc').innerHTML = `${icon(k.id, 'ico lg')}<div><b>${name}</b><em>${active}</em><small>${k.text}</small></div>`;
     onPick(id);
   };
   for (const b of root.querySelectorAll('.kind')) b.onclick = () => show(b.dataset.k);
@@ -75,26 +118,31 @@ function startScreen() {
       <div class="col">
         ${state ? `<button class="primary" id="cont">Pokračovat – ${esc(state.leader.name)}</button>` : ''}
         <button class="${state ? 'ghost' : 'primary'}" id="new">${state ? 'Nová hra od začátku' : 'Nová hra'}</button>
-        <button class="ghost" id="help">Jak hrát</button>
+        <button class="ghost blitzbtn" id="blitz">${icon('timer', 'ico sm')} Bleskovka na čas</button>
+        <div class="row2"><button class="ghost" id="stats">${icon('stats', 'ico sm')} Statistiky</button><button class="ghost" id="help">Jak hrát</button></div>
       </div>
     </div>`;
   $('#help').onclick = () => helpScreen(startScreen);
+  $('#stats').onclick = () => statsScreen(startScreen);
+  $('#blitz').onclick = () => setupScreen('blitz');
   if (state) $('#cont').onclick = () => (state.dead ? deathScreen() : gameScreen());
   $('#new').onclick = setupScreen;
 }
 
 /** Nový vůdce: jméno, prezident/prezidentka a typ – vše na jedné obrazovce bez posouvání. */
-function setupScreen() {
-  let female = false, kind = 'vize';
+function setupScreen(mode = 'normal', kind = 'vize') {
+  let female = false;
+  const blitzMode = mode === 'blitz';
   app.innerHTML = `
     <div class="start setup">
-      <h2 class="title">Kdo povede republiku?</h2>
+      <h2 class="title">${blitzMode ? 'Bleskovka' : 'Kdo povede republiku?'}</h2>
+      ${blitzMode ? `<div class="small">Máš ${BLITZ_START / 60} minuty. Každé rozhodnutí přidá ${BLITZ_BONUS} s, pád vlády ${BLITZ_FALL} s ubere. Kolik rozhodnutí stihneš?</div>` : ''}
       <input id="name" maxlength="30" placeholder="Tvoje jméno" autocomplete="off" enterkeyhint="done">
       <div class="seg"><button id="m" class="on">Prezident</button><button id="f">Prezidentka</button></div>
       <div class="label">Jaký budeš vůdce?</div>
       <div id="kp">${kindPicker()}</div>
       <div class="col">
-        <button class="primary" id="go">Začít vládnout</button>
+        <button class="primary" id="go">${blitzMode ? 'Spustit odpočet' : 'Začít vládnout'}</button>
         <button class="ghost" id="back">Zpět</button>
       </div>
     </div>`;
@@ -105,10 +153,12 @@ function setupScreen() {
   $('#name').onkeydown = (e) => { if (e.key === 'Enter') e.target.blur(); };
   $('#back').onclick = startScreen;
   $('#go').onclick = () => {
+    if (blitzMode) { startBlitz({ name: $('#name').value, female, kind }); return; }
     if (state && !confirm('Opravdu začít znovu? Současná hra i kronika vůdců se smažou (odemčené konce zůstanou).')) return;
     const keep = state ? { endings: state.endings, best: state.best } : null;
     state = newGame({ name: $('#name').value, female, kind }, (Math.random() * 2 ** 32) >>> 0);
     if (keep) Object.assign(state, keep);
+    stats.games += 1; saveStats();
     save();
     gameScreen();
     toast(`Úkol: ${taskById(state.task.id).text}`, 'newtask');
@@ -153,6 +203,7 @@ function gameScreen() {
   for (const b of Object.values(ui.chev)) b.onclick = () => tapDir(b.dataset.dir);
   setupDrag(ui.card);
   render(true);
+  offerPerk();
 }
 
 function render(enter) {
@@ -160,14 +211,21 @@ function render(enter) {
   $('#who').textContent = l.name;
   const k = kindOf(state);
   $('#nth').textContent = `${l.n}. ${l.female ? 'prezidentka' : 'prezident'} · ${timeLabel(state)}`;
+  if (state.mode === 'blitz') updateClock();
   // Vpravo nahoře: ikona typu vůdce. U aktivních schopností kroužek ukazuje nabití.
-  const ab = $('#ab'), active = ['odklad', 'kormidlo'].includes(k.id);
+  const ab = $('#ab'), active = ACTIVE.includes(k.id);
   if (ab.dataset.k !== k.id) { ab.querySelector('i').innerHTML = icon(k.id); ab.dataset.k = k.id; }
   ab.classList.toggle('active', active);
   ab.querySelector('.ring').style.strokeDasharray = active ? `${(Math.min(state.charge, CHARGE) / CHARGE) * 100} 100` : '0 100';
   ab.classList.toggle('ready', active && ready(state));
   ab.setAttribute('aria-label', kindName(k, l.female));
-  $('#adv').innerHTML = state.advice ? `${icon('rada', 'ico sm')} Rádce radí: <b>${DIR_WORD[state.advice]}</b>` : '';
+  const c0 = currentCard(state), chips = [];
+  if (state.advice) chips.push(`${icon('rada', 'ico sm')} Rádce radí: <b>${DIR_WORD[state.advice]}</b>`);
+  if (c0.crisis) chips.push(`<span class="warn">${icon('crisis', 'ico sm')} ${CRISES[c0.crisis].name} · krok ${CRISES[c0.crisis].steps.indexOf(c0.id) + 1} z ${CRISES[c0.crisis].steps.length}</span>`);
+  else if (state.crisis) chips.push(`${icon('crisis', 'ico sm')} Probíhá: ${CRISES[state.crisis.id].name}`);
+  if (state.turn > 0 && toElection(state) <= 6) chips.push(`${icon('vote', 'ico sm')} Volby za ${toElection(state)} m. · podpora <b class="${support(state) >= VOTE_MIN ? 'ok' : 'bad'}">${support(state)} %</b>`);
+  if (state.peek && cardById(state.peek)) chips.push(`${icon('prorok', 'ico sm')} Příště: <b>${esc(PEOPLE[cardById(state.peek).who].name)}</b>`);
+  $('#adv').innerHTML = chips.map((x) => `<span>${x}</span>`).join('');
   for (const m of METERS) {
     const v = state.meters[m.id], d = danger(v);
     ui.levels[m.id].style.transform = `translateY(${((100 - v) * 0.24).toFixed(2)}px)`;
@@ -237,7 +295,7 @@ function highlight(dir, strength) {
     if (current && ui.opts[current]) ui.opts[current].style.opacity = 0;
     for (const [d, b] of Object.entries(ui.chev)) b.classList.toggle('on', d === dir);
     ui.card.classList.toggle('choosing', !!dir);
-    if (dir && state.leader.kind === 'vize') {
+    if (dir && seesDirection(state)) {
       // Vizionář vidí směr změny, ne její velikost.
       const after = outcome(state, dir);
       for (const m of METERS) {
@@ -271,9 +329,18 @@ function commit(dir) {
   const before = { ...state.meters };
   setTimeout(() => {
     const dead = choose(state, dir);
+    stats.decisions += 1; saveStats();
+    if (state.mode === 'blitz') {
+      blitz.left += BLITZ_BONUS * 1000;
+      state.decisions += 1;
+      busy = false;
+      if (dead) { blitzFall(dead); return; }
+      render(true); flash(before); showNews(); offerPerk();
+      return;
+    }
     save();
     busy = false;
-    if (dead) deathScreen(); else { render(true); flash(before); showNews(); }
+    if (dead) { recordReign(); deathScreen(); } else { render(true); flash(before); showNews(); offerPerk(); }
   }, 220);
 }
 
@@ -333,20 +400,27 @@ function nextToast() {
   if (!m) return;
   const t = document.createElement('div');
   t.className = `toast ${m.kind}`;
-  t.innerHTML = (m.kind && m.kind !== 'newtask' ? icon({ law: 'law', task: 'task', era: 'era' }[m.kind] || 'task', 'ico sm') : '') + `<span>${esc(m.text)}</span>`;
+  const ic = { law: 'law', task: 'task', era: 'era', crisis: 'crisis', crisisLost: 'crisis', election: 'vote', electionSoon: 'vote', rescue: 'rescue', perk: 'perk', fall: 'crisis' }[m.kind];
+  t.innerHTML = (ic ? icon(ic, 'ico sm') : '') + `<span>${esc(m.text)}</span>`;
   document.body.appendChild(t);
   setTimeout(() => { t.remove(); toasts.shift(); nextToast(); }, m.kind ? 2800 : 1800);
 }
 /** Zprávy ze hry (zákon, úkol, éra) jako krátké oznámení. */
 function showNews() {
-  for (const n of state.news ?? []) toast(n.text, n.kind);
+  for (const n of state.news ?? []) {
+    toast(n.text, n.kind);
+    if (n.kind === 'task') stats.tasks += 1;
+    if (n.kind === 'election') stats.elections += 1;
+    if (n.kind === 'crisis') stats.crises += 1;
+  }
+  if (state.news?.length) saveStats();
   if (state.news?.length) { state.news = []; save(); }
 }
 
 function ability() {
   if (busy || state.dead) return;
   const k = state.leader.kind;
-  if (!['odklad', 'kormidlo'].includes(k)) { kindInfo(); return; }
+  if (!ACTIVE.includes(k)) { kindInfo(); return; }
   if (!ready(state)) {
     const n = CHARGE - state.charge;
     toast(`Nabije se za ${n} rozhodnutí`);
@@ -358,9 +432,14 @@ function ability() {
     ui.card.className = 'card fly';
     ui.card.style.transform = 'translate(0, 30px) scale(.85)';
     ui.card.style.opacity = '0';
-    setTimeout(() => { skip(state); save(); busy = false; if (state.dead) { deathScreen(); return; } render(true); toast('Karta odložena'); showNews(); }, 220);
+    setTimeout(() => {
+      skip(state); save(); busy = false;
+      if (state.dead) { if (state.mode === 'blitz') { blitzFall(state.dead); return; } recordReign(); deathScreen(); return; }
+      render(true); toast('Karta odložena'); showNews(); offerPerk();
+    }, 220);
   }
   if (k === 'kormidlo') steerPicker();
+  if (k === 'reform') lawPicker();
 }
 
 /** Popis schopnosti vůdce (u typů, které se nepoužívají klepnutím). */
@@ -372,9 +451,56 @@ function kindInfo() {
     <div class="pane" role="dialog">
       <div class="pane-head">${icon(k.id, 'ico lg')}<div><b>${kindName(k, state.leader.female)}</b><span class="dim">Tvoje schopnost</span></div></div>
       <p>${k.text}</p>
+      ${perkList()}
       <button class="primary">Zpět do hry</button>
     </div>`;
   p.onclick = (e) => { if (e.target === p || e.target.tagName === 'BUTTON') p.remove(); };
+  document.body.appendChild(p);
+}
+
+function perkList() {
+  const ps = state.perks ?? [];
+  return ps.length ? `<div class="label" style="text-align:left">Výhody</div>${ps.map((p) => `<div class="perkrow">${icon('perk', 'ico sm')}<div><b>${PERKS[p].name}</b> – ${PERKS[p].text}</div></div>`).join('')}` : '';
+}
+
+/** Po splněném úkolu: vyber jednu ze tří výhod (do konce vlády). */
+function offerPerk() {
+  if (!state.perkOffer || document.querySelector('.pop.perks')) return;
+  const p = document.createElement('div');
+  p.className = 'pop perks';
+  p.innerHTML = `
+    <div class="pane" role="dialog" aria-label="Vyber výhodu">
+      <div class="pane-head">${icon('perk', 'ico lg')}<div><b>Úkol splněn!</b><span class="dim">Vyber si jednu výhodu na zbytek vlády</span></div></div>
+      <div class="steer">${state.perkOffer.map((id) => `<button class="perk" data-p="${id}"><b>${PERKS[id].name}</b><small>${PERKS[id].text}</small></button>`).join('')}</div>
+    </div>`;
+  p.onclick = (e) => {
+    const b = e.target.closest('button[data-p]');
+    if (!b || !choosePerk(state, b.dataset.p)) return;
+    p.remove();
+    save();
+    if (ui) render(false);
+    toast(`Výhoda: ${PERKS[b.dataset.p].name}`, 'perk');
+  };
+  document.body.appendChild(p);
+}
+
+/** Reformátor: zavede, nebo zruší libovolný zákon. */
+function lawPicker() {
+  const p = document.createElement('div');
+  p.className = 'pop';
+  const on = activeLaws(state);
+  const per = (l) => Object.entries(LAWS[l].per).map(([k, v]) => `<span class="${v > 0 ? 'up' : 'down'}">${METERS.find((m) => m.id === k).name} ${v > 0 ? '▲' : '▼'}</span>`).join(' ');
+  p.innerHTML = `
+    <div class="pane scroll" role="dialog" aria-label="Zákony">
+      <b class="pane-title">${icon('reform', 'ico')} Který zákon zavést, nebo zrušit?</b>
+      <div class="steer">${Object.keys(LAWS).map((l) => `<button data-l="${l}" class="law${on.includes(l) ? ' on' : ''}"><span><b>${LAWS[l].name}</b><small>${per(l)}</small></span><em>${on.includes(l) ? 'Zrušit' : 'Zavést'}</em></button>`).join('')}</div>
+      <button class="ghost" data-x>Zatím ne</button>
+    </div>`;
+  p.onclick = (e) => {
+    const b = e.target.closest('button');
+    if (e.target === p || b?.dataset.x !== undefined) { p.remove(); return; }
+    if (b?.dataset.l && reformLaw(state, b.dataset.l)) { p.remove(); save(); render(false); showNews(); }
+  };
   document.body.appendChild(p);
 }
 
@@ -439,13 +565,14 @@ function meterInfo(id) {
 function menu() {
   const m = document.createElement('div');
   m.className = 'menu';
+  const bl = state.mode === 'blitz';
   m.innerHTML = `
-    <button class="primary" data-a="back">Zpět do hry</button>
+    <button class="primary" data-a="back">${bl ? 'Pokračovat (čas stojí)' : 'Zpět do hry'}</button>
     <button data-a="realm">Stav republiky</button>
-    <button data-a="chron">Kronika a konce</button>
+    ${bl ? '' : '<button data-a="chron">Kronika a konce</button><button data-a="stats">Statistiky a hodnocení</button>'}
     <button data-a="help">Jak hrát</button>
-    <button class="ghost" data-a="start">Hlavní nabídka</button>
-    <div class="small">Hra se ukládá sama po každém rozhodnutí.</div>`;
+    ${bl ? '<button class="ghost" data-a="endblitz">Ukončit bleskovku</button>' : '<button class="ghost" data-a="start">Hlavní nabídka</button>'}
+    <div class="small">${bl ? 'Bleskovka se neukládá. Tvoje hlavní hra zůstává, jak byla.' : 'Hra se ukládá sama po každém rozhodnutí.'}</div>`;
   m.onclick = (e) => {
     const a = e.target.dataset?.a;
     if (!a && e.target !== m) return;
@@ -453,6 +580,8 @@ function menu() {
     if (a === 'chron') chronicleScreen(gameScreen);
     if (a === 'realm') realmScreen(gameScreen);
     if (a === 'help') helpScreen(gameScreen);
+    if (a === 'stats') statsScreen(gameScreen);
+    if (a === 'endblitz') endBlitz();
     if (a === 'start') startScreen();
   };
   document.body.appendChild(m);
@@ -463,12 +592,13 @@ function deathScreen() {
   ui = null;
   document.body.classList.remove('game');
   const d = state.dead, l = state.leader, m = METERS.find((x) => x.id === d.meter);
-  const total = 14 + Object.keys(SPECIAL).length;
+  const total = 15 + Object.keys(SPECIAL).length;
+  const why = d.special ? 'Tajný konec – legenda' : d.election ? `Podpora Lidu a Spojenců klesla pod ${VOTE_MIN} %` : `Ukazatel ${m.name} ${d.side === 'low' ? 'klesl na nulu' : 'vystoupal na maximum'}`;
   app.innerHTML = `
     <div class="sheet">
-      <div class="big">${d.special ? icon(d.special, 'ico xl') : glyph(m.id, 'glyph xl')}</div>
+      <div class="big">${d.special ? icon(d.special, 'ico xl') : d.election ? icon('vote', 'ico xl bad') : glyph(m.id, 'glyph xl')}</div>
       <h2 class="${d.special ? 'legend' : ''}">${esc(d.title)}</h2>
-      <div class="small" style="text-align:center">${d.special ? 'Tajný konec – legenda' : `Ukazatel ${m.name} ${d.side === 'low' ? 'klesl na nulu' : 'vystoupal na maximum'}`}</div>
+      <div class="small" style="text-align:center">${why}</div>
       <p>${esc(d.text)}</p>
       <div class="stats">
         <div class="stat"><span class="small">${l.female ? 'Vládla' : 'Vládl'}</span><b>${tenure(d.months)}</b></div>
@@ -502,7 +632,11 @@ function realmScreen(back) {
       <div class="small">${nextEra ? `Další éra „${nextEra.name}“ přijde s časem${nextEra.seals ? ` a se ${nextEra.seals} pečetěmi (máš ${seals(state)})` : ''}.` : 'Svět dosáhl poslední éry.'}</div>
       <h3>${icon('task', 'ico')} Úkol vůdce</h3>
       ${t ? `<div class="box"><p>${esc(t.text)}</p><div class="bar"><i style="width:${Math.round((p.now / p.of) * 100)}%"></i></div><div class="small">${p.now} / ${p.of}</div></div>` : '<div class="small">Žádný úkol.</div>'}
-      <div class="small">Pečetě (splněné úkoly): <b>${seals(state)} z ${TASKS.length}</b>. Splněný úkol hned nabije schopnost.</div>
+      <div class="small">Pečetě (splněné úkoly): <b>${seals(state)} z ${TASKS.length}</b>. Splněný úkol hned nabije schopnost a dá ti vybrat výhodu.</div>
+      <h3>${icon('vote', 'ico')} Volby</h3>
+      <div class="small">Další volby za ${toElection(state)} ${toElection(state) === 1 ? 'měsíc' : toElection(state) < 5 ? 'měsíce' : 'měsíců'}. Podpora (průměr Lidu a Spojenců): <b class="${support(state) >= VOTE_MIN ? 'ok' : 'bad'}">${support(state)} %</b>, potřebuješ aspoň ${VOTE_MIN} %.</div>
+      ${state.crisis ? `<h3>${icon('crisis', 'ico')} Krize</h3><div class="small">${CRISES[state.crisis.id].name}: krok ${state.crisis.step} z ${CRISES[state.crisis.id].steps.length} za tebou, zvládnuto ${state.crisis.score}. K úspěchu potřebuješ zvládnout ${CRISES[state.crisis.id].good}.</div>` : ''}
+      ${state.perks?.length ? `<h3>${icon('perk', 'ico')} Výhody</h3>${perkList().replace(/<div class="label"[^>]*>Výhody<\/div>/, '')}` : ''}
       <h3>${icon('law', 'ico')} Zákony (${laws.length})</h3>
       ${laws.length ? laws.map((l) => `<div class="past"><span>${LAWS[l].name}</span><span class="per">${per(l)} / měsíc</span></div>`).join('') : '<div class="small">Žádný zákon zatím neplatí. Návrhy zákonů ti přinesou ministři.</div>'}
       <h3>${icon('people', 'ico')} Lidé</h3>
@@ -518,7 +652,7 @@ function chronicleScreen(back) {
   document.body.classList.remove('game');
   const past = [...state.history].reverse();
   const ends = METERS.flatMap((m) => ['low', 'high'].map((s) => ({ key: `${m.id}.${s}`, m, s, e: ENDINGS[m.id][s] })));
-  const total = ends.length + Object.keys(SPECIAL).length;
+  const total = ends.length + 1 + Object.keys(SPECIAL).length;
   app.innerHTML = `
     <div class="sheet">
       <h3>Vůdci republiky</h3>
@@ -529,12 +663,132 @@ function chronicleScreen(back) {
         <div class="ending ${state.endings.includes(key) ? '' : 'locked'}">
           <b>${glyph(m.id)} ${state.endings.includes(key) ? esc(e.title) : '???'}</b>${m.name} ${s === 'low' ? 'na nule' : 'na maximu'}
         </div>`).join('')}
+        <div class="ending ${state.endings.includes('volby') ? '' : 'locked'}"><b>${icon('vote', 'ico sm')} ${state.endings.includes('volby') ? ELECTION.title : '???'}</b>Volby každé 4 roky</div>
       </div>
       <h3>Tajné konce</h3>
       <div class="endings">${Object.entries(SPECIAL).map(([id, e]) => {
         const got = state.endings.includes(`x.${id}`);
         return `<div class="ending ${got ? 'legend' : 'locked'}"><b>${got ? icon(id, 'ico sm') : ''} ${got ? esc(e.title) : '???'}</b>${got ? 'Legenda' : 'Skrytý příběh'}</div>`;
       }).join('')}</div>
+      <button class="primary" id="back">Zpět</button>
+    </div>`;
+  $('#back').onclick = back;
+}
+
+// ── Bleskovka ────────────────────────────────────────
+let blitz = null; // {left: ms, last: čas posledního tiku, id: interval}
+function startBlitz(opts) {
+  if (blitz) clearInterval(blitz.id);
+  state = newBlitz(opts, (Math.random() * 2 ** 32) >>> 0);
+  blitz = { left: BLITZ_START * 1000, last: performance.now(), id: setInterval(tickBlitz, 200), kind: opts.kind, female: opts.female, name: opts.name };
+  gameScreen();
+}
+function tickBlitz() {
+  const now = performance.now(), dt = now - blitz.last;
+  blitz.last = now;
+  // Čas stojí v nabídce, v oknech, mimo herní obrazovku a když je aplikace na pozadí.
+  if (document.hidden || !ui || document.querySelector('.pop, .menu')) return;
+  blitz.left -= dt;
+  updateClock();
+  if (blitz.left <= 0) endBlitz();
+}
+function updateClock() {
+  const el = $('#nth');
+  if (!el || !blitz) return;
+  const sec = Math.max(0, Math.ceil(blitz.left / 1000));
+  el.textContent = `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')} · ${state.decisions} rozhodnutí`;
+  el.classList.toggle('hurry', sec <= 15);
+}
+/** Pád vlády v bleskovce: hned nastupuje další, ale stojí to čas. */
+function blitzFall(d) {
+  blitz.left -= BLITZ_FALL * 1000;
+  toast(`${d.title} · −${BLITZ_FALL} s, vládu přebírá nástupce`, 'fall');
+  nextLeader(state, state.leader.kind);
+  render(true);
+  if (blitz.left <= 0) endBlitz();
+}
+function endBlitz() {
+  if (!blitz) return;
+  clearInterval(blitz.id);
+  const timeUp = blitz.left <= 0;
+  const run = { score: state.decisions, months: state.total, leaders: state.leader.n, kind: state.leader.kind, date: Date.now() };
+  const prev = stats.blitz[0]?.score ?? 0;
+  stats.blitz = [...stats.blitz, run].sort((a, b) => b.score - a.score).slice(0, 10);
+  saveStats();
+  const place = stats.blitz.indexOf(run) + 1;
+  const again = { kind: blitz.kind };
+  blitz = null;
+  ui = null;
+  for (const x of document.querySelectorAll('.pop, .menu')) x.remove();
+  document.body.classList.remove('game');
+  state = load(); // zpět k hlavní hře
+  app.innerHTML = `
+    <div class="sheet">
+      <div class="big">${icon('timer', 'ico xl')}</div>
+      <h2 class="legend">${timeUp ? 'Čas vypršel' : 'Bleskovka ukončena'}</h2>
+      <div class="score"><b>${run.score}</b><span>rozhodnutí</span></div>
+      ${run.score > prev ? '<div class="record">Nový rekord!</div>' : place > 0 ? `<div class="small" style="text-align:center">${place}. místo v tvých bleskovkách</div>` : ''}
+      <div class="stats">
+        <div class="stat"><span class="small">Uplynulo</span><b>${tenure(run.months)}</b></div>
+        <div class="stat"><span class="small">Vůdců</span><b>${run.leaders}</b></div>
+        <div class="stat"><span class="small">Rekord</span><b>${stats.blitz[0].score}</b></div>
+        <div class="stat"><span class="small">Typ</span><b>${KINDS.find((k) => k.id === run.kind)?.short ?? ''}</b></div>
+      </div>
+      <button class="primary" id="again">Hrát znovu</button>
+      <button id="st">Statistiky</button>
+      <button class="ghost" id="home">Hlavní nabídka</button>
+    </div>`;
+  $('#again').onclick = () => setupScreen('blitz', again.kind);
+  $('#st').onclick = () => statsScreen(startScreen);
+  $('#home').onclick = startScreen;
+}
+
+// ── Statistiky a hodnocení ───────────────────────────
+function statsScreen(back) {
+  ui = null;
+  document.body.classList.remove('game');
+  const r = rating();
+  const pct = r.to ? Math.round(((r.pts - r.from) / (r.to - r.from)) * 100) : 100;
+  const avg = stats.reigns ? Math.round(stats.months / stats.reigns) : 0;
+  const total = 15 + Object.keys(SPECIAL).length;
+  const endName = (key) => {
+    if (key === 'volby') return ELECTION.title;
+    if (key.startsWith('x.')) return SPECIAL[key.slice(2)]?.title ?? key;
+    const [m, side] = key.split('.');
+    return ENDINGS[m]?.[side]?.title ?? key;
+  };
+  const common = Object.entries(stats.ends).sort((a, b) => b[1] - a[1]).slice(0, 3);
+  const date = (t) => new Date(t).toLocaleDateString('cs-CZ', { day: 'numeric', month: 'numeric' });
+  app.innerHTML = `
+    <div class="sheet">
+      <div class="rankcard">
+        ${icon('trophy', 'ico xl')}
+        <div class="small">Tvoje hodnocení</div>
+        <h2 class="legend">${r.rank}</h2>
+        <div class="small">${r.pts} bodů</div>
+        <div class="bar"><i style="width:${pct}%"></i></div>
+        <div class="small">${r.next ? `Do hodnosti ${r.next} chybí ${r.to - r.pts} bodů` : 'Nejvyšší hodnost – víc už nejde.'}</div>
+      </div>
+      <div class="stats">
+        <div class="stat"><span class="small">Nejdelší vláda</span><b>${r.best ? tenure(r.best) : '–'}</b></div>
+        <div class="stat"><span class="small">Průměrná vláda</span><b>${stats.reigns ? tenure(avg) : '–'}</b></div>
+        <div class="stat"><span class="small">Vůdců celkem</span><b>${stats.reigns}</b></div>
+        <div class="stat"><span class="small">Rozhodnutí</span><b>${stats.decisions}</b></div>
+        <div class="stat"><span class="small">Splněné úkoly</span><b>${stats.tasks}</b></div>
+        <div class="stat"><span class="small">Vyhrané volby</span><b>${stats.elections}</b></div>
+        <div class="stat"><span class="small">Zvládnuté krize</span><b>${stats.crises}</b></div>
+        <div class="stat"><span class="small">Odemčené konce</span><b>${r.ends} z ${total}</b></div>
+      </div>
+      <div class="small">Body: nejdelší vláda v měsících + 5 za každý konec + 4 za úkol + 3 za vyhrané volby a zvládnutou krizi + 1 za každých 50 rozhodnutí.</div>
+      <h3>${icon('trophy', 'ico')} Nejdelší vlády</h3>
+      ${stats.top.length ? `<table class="board"><tbody>${stats.top.map((t, i) => `
+        <tr><td class="n">${i + 1}.</td><td>${t.kind ? icon(t.kind, 'ico sm') : ''} ${esc(t.name)}<small>${esc(t.title)}</small></td><td class="r">${tenure(t.months)}</td></tr>`).join('')}</tbody></table>`
+        : '<div class="small">Zatím žádná dokončená vláda.</div>'}
+      ${common.length ? `<h3>Nejčastější konce</h3>${common.map(([k, n]) => `<div class="past"><span>${esc(endName(k))}</span><span>${n}×</span></div>`).join('')}` : ''}
+      <h3>${icon('timer', 'ico')} Bleskovka</h3>
+      ${stats.blitz.length ? `<table class="board"><tbody>${stats.blitz.slice(0, 5).map((b, i) => `
+        <tr><td class="n">${i + 1}.</td><td>${icon(b.kind, 'ico sm')} ${b.score} rozhodnutí<small>${tenure(b.months)} · ${b.leaders} ${b.leaders === 1 ? 'vůdce' : 'vůdců'}</small></td><td class="r">${date(b.date)}</td></tr>`).join('')}</tbody></table>`
+        : '<div class="small">Bleskovku jsi ještě nehrál/a. Najdeš ji v hlavní nabídce.</div>'}
       <button class="primary" id="back">Zpět</button>
     </div>`;
   $('#back').onclick = back;
@@ -563,7 +817,12 @@ function helpScreen(back) {
         <li><b>Zákony</b> platí, dokud je někdo nezruší, a každý měsíc pomalu posouvají ukazatele. Platí i pro nástupce.</li>
         <li><b>Úkoly:</b> každý vůdce dostane úkol. Splněný úkol je pečeť – pečetě a čas otevírají nové éry světa a tajné příběhy s legendárními konci.</li>
         <li>Některé volby se odemknou, jen když je země silná v něčem (třeba v diplomacii) – poznáš je podle <b>klíče</b>.</li>
-        <li>Sbírej všech <b>14 konců</b> a překonej svou nejdelší vládu.</li>
+        <li><b>Výhody:</b> za splněný úkol si vybereš jednu ze tří výhod (třeba Brzda, Druhá šance nebo Zvědové). Platí do konce vlády.</li>
+        <li><b>Volby</b> jsou každé 4 roky. Hlasy ti dají Lid a Spojenci – když je jejich průměr pod ${VOTE_MIN} %, prohraješ a vláda končí. Půl roku předem tě varují.</li>
+        <li><b>Krize</b> (epidemie, povodeň, útok na síť) trvají několik karet. Když zvládneš většinu kroků, země z toho vyjde silnější, jinak to bolí.</li>
+        <li><b>Bleskovka:</b> hra na čas. Začínáš se 3 minutami, každé rozhodnutí přidá 5 s, pád vlády 15 s ubere. Počítá se, kolik rozhodnutí stihneš.</li>
+        <li><b>Statistiky</b> ukazují tvoje hodnocení (od Nováčka po Legendu republiky), nejdelší vlády a rekordy z bleskovky.</li>
+        <li>Sbírej všech <b>${15 + Object.keys(SPECIAL).length} konců</b> a překonej svou nejdelší vládu.</li>
         <li>Hra běží i offline. V Safari dej <b>Sdílet → Přidat na plochu</b> a hraj jako aplikaci.</li>
       </ul>
       <button class="primary" id="back">Zpět</button>

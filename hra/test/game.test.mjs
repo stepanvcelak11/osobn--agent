@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { effect, newGame, choose, nextLeader, currentCard, preview, fill, tenure, DIRS, cardById, METERS, CARDS, INTRO, PEOPLE, ENDINGS, KINDS, outcome, bestDir, skip, nudge, ready, CHARGE, activeLaws, optionOf, taskProgress, upgrade, SPECIAL, TASKS } from '../game.js';
+import { effect, newGame, choose, nextLeader, currentCard, preview, fill, tenure, DIRS, cardById, METERS, CARDS, INTRO, PEOPLE, ENDINGS, KINDS, outcome, bestDir, skip, nudge, ready, CHARGE, activeLaws, optionOf, taskProgress, upgrade, SPECIAL, TASKS , reformLaw, choosePerk, offerPerks, newBlitz, toElection, PERKS, CRISES, TERM, VOTE_MIN, RESCUE, seals } from '../game.js';
 
 const meterIds = new Set(METERS.map((m) => m.id));
 const all = [INTRO, ...CARDS];
@@ -318,4 +318,150 @@ test('stará uložená hra se doplní', () => {
   assert.ok(s.task);
   choose(s, 'left'); choose(s, 'left');
   assert.ok(taskProgress(s));
+});
+
+// ── Další typy, výhody, volby, krize, bleskovka ─────────
+test('Zachránce se jednou za vládu odrazí od kraje', () => {
+  const s = onCard('zachrance', 'stavka', { lid: 3 });
+  choose(s, 'down'); // lid −15 → pod nulu
+  assert.equal(s.dead, null);
+  assert.equal(s.meters.lid, RESCUE);
+  assert.ok(s.rescued);
+  s.meters.lid = 3; s.card = 'stavka';
+  assert.ok(choose(s, 'down'), 'podruhé už ne');
+});
+
+test('Charismatik mění vztahy dvakrát rychleji', () => {
+  const a = onCard('vize', 'gen_verna'), b = onCard('charisma', 'gen_verna');
+  const dir = DIRS.find((d) => cardById('gen_verna').opts[d].e.sil > 0);
+  choose(a, dir); choose(b, dir);
+  assert.equal(Math.abs(b.rel.gen), 2 * Math.abs(a.rel.gen));
+});
+
+test('Prorok vidí, kdo přijde příště, a předpověď platí', () => {
+  let hits = 0, n = 0;
+  for (let i = 0; i < 50; i++) {
+    const s = newGame({ kind: 'prorok' }, 500 + i);
+    choose(s, 'left');
+    for (let k = 0; k < 20 && !s.dead; k++) {
+      const p = s.peek;
+      assert.ok(p, 'předpověď existuje');
+      choose(s, bestDir(s));
+      if (s.dead) break;
+      n++; if (s.card === p) hits++;
+    }
+  }
+  assert.ok(hits / n > 0.85, `předpověď vyšla jen v ${hits}/${n}`);
+});
+
+test('Byrokrat: menší účinek voleb, dvojnásobné zákony', () => {
+  const a = onCard('vize', 'stavka', { lid: 50 }), b = onCard('byro', 'stavka', { lid: 50 });
+  choose(a, 'down'); choose(b, 'down');
+  assert.ok(50 - b.meters.lid < 50 - a.meters.lid);
+});
+
+test('Hazardér: náhodný násobek a dvě pečetě za úkol', () => {
+  const s = newGame({ kind: 'hazard' }, 9);
+  const seen = new Set();
+  for (let i = 0; i < 30 && !s.dead; i++) { choose(s, bestDir(s)); seen.add(s.luck); }
+  assert.ok(seen.size > 3 && [...seen].every((x) => x >= 0.5 && x <= 1.5));
+  const h = newGame({ kind: 'hazard' }, 77);
+  h.task = { id: 'zakony', streak: 0 };
+  choose(h, 'left');
+  h.flags.push('zakon_brannost', 'zakon_cenzura');
+  h.card = 'zakon_lesy';
+  choose(h, 'right');
+  assert.equal(seals(h), 2);
+});
+
+test('Reformátor zavede a zruší zákon, když je nabitý', () => {
+  const s = onCard('reform', 'stavka');
+  assert.equal(reformLaw(s, 'skolstvi'), false, 'nenabitý');
+  s.charge = CHARGE;
+  assert.ok(reformLaw(s, 'skolstvi'));
+  assert.ok(activeLaws(s).includes('skolstvi'));
+  s.charge = CHARGE;
+  reformLaw(s, 'skolstvi');
+  assert.ok(!activeLaws(s).includes('skolstvi'));
+});
+
+test('splněný úkol nabídne výhody, výběr platí do konce vlády', () => {
+  const s = newGame({ kind: 'vize' }, 77);
+  s.task = { id: 'zakony', streak: 0 };
+  choose(s, 'left');
+  s.flags.push('zakon_brannost', 'zakon_cenzura');
+  s.card = 'zakon_lesy';
+  choose(s, 'right');
+  assert.equal(s.perkOffer.length, 3);
+  assert.ok(!s.perkOffer.includes('smer'), 'Vizionář nedostane výhodu, kterou už má');
+  assert.ok(!s.perkOffer.includes('nabiti'), 'pasivní typ nedostane nabíjení');
+  assert.equal(choosePerk(s, 'neexistuje'), false);
+  const p = s.perkOffer[0];
+  assert.ok(choosePerk(s, p));
+  assert.deepEqual(s.perks, [p]);
+  assert.equal(s.perkOffer, null);
+  for (const id of Object.keys(PERKS)) assert.ok(PERKS[id].name && PERKS[id].text);
+  s.dead = null; nextLeader(s);
+  assert.deepEqual(s.perks, []);
+});
+
+test('výhoda Brzda a Druhá šance', () => {
+  let pick = null;
+  for (const c of CARDS) for (const d of DIRS) for (const [k, v] of Object.entries(c.opts[d].e)) if (!pick && !c.opts[d].need && Math.abs(effect(k, v)) > 12) pick = { id: c.id, d, k, v };
+  const s = onCard('vize', pick.id);
+  s.perks = ['brzda'];
+  choose(s, pick.d);
+  assert.equal(s.meters[pick.k], 50 + Math.sign(pick.v) * 12);
+  const t = onCard('vize', 'stavka', { lid: 3 });
+  t.perks = ['sance'];
+  choose(t, 'down');
+  assert.equal(t.dead, null);
+  assert.deepEqual(t.perks, [], 'šance se spotřebuje');
+});
+
+test('volby každé 4 roky: s podporou vyhraješ, bez ní končíš', () => {
+  const s = onCard('vize', 'intro2');
+  s.turn = TERM - 1;
+  choose(s, 'left');
+  assert.equal(s.dead, null);
+  assert.equal(s.tally.elections, 1);
+  const t = onCard('vize', 'intro2', { lid: 20, dip: 30 });
+  t.turn = TERM - 1;
+  const d = choose(t, 'left');
+  assert.ok(d?.election, 'prohrané volby');
+  assert.ok(t.endings.includes('volby'));
+  assert.ok(!/[{}]/.test(d.text));
+  const u = onCard('vize', 'intro2');
+  u.turn = TERM - 7;
+  choose(u, 'left');
+  assert.ok(u.news.some((n) => n.kind === 'electionSoon'));
+  assert.equal(toElection(u), 6);
+});
+
+test('krize jde po krocích a končí odměnou, nebo trestem', () => {
+  for (const [id, cr] of Object.entries(CRISES)) {
+    for (const good of [true, false]) {
+      const s = onCard('vize', cr.steps[0]);
+      s.total = 20;
+      for (let i = 0; i < cr.steps.length; i++) {
+        assert.equal(s.card, cr.steps[i], `${id}: krok ${i + 1}`);
+        Object.assign(s.meters, Object.fromEntries(Object.keys(s.meters).map((k) => [k, 50])));
+        const c = cardById(s.card);
+        const dir = DIRS.find((d) => !!c.opts[d].ok === good);
+        choose(s, dir);
+        if (i < cr.steps.length - 1) { assert.equal(s.crisis.step, i + 1); choose(s, bestDir(s)); }
+      }
+      assert.equal(s.crisis, null);
+      assert.equal(s.tally.crises, good ? 1 : 0);
+      assert.ok(s.news.some((n) => n.kind === (good ? 'crisis' : 'crisisLost')));
+    }
+  }
+});
+
+test('bleskovka začíná rovnou hrou', () => {
+  const s = newBlitz({ kind: 'krize' }, 4);
+  assert.equal(s.mode, 'blitz');
+  assert.notEqual(s.card, 'intro');
+  choose(s, 'left');
+  assert.equal(s.turn, 1);
 });

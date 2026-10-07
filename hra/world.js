@@ -60,6 +60,104 @@ export const SPECIAL = {
     text: 'Odhalil{a} jsi pravdu o Velkém výpadku a svět tě zvolil do čela Rady národů. Republiku jsi opustil{a} jako hrdina – a poprvé po desetiletích lidé věřili, že budoucnost bude lepší.' },
 };
 
+/// Výhody: po splněném úkolu si vůdce vybere jednu ze tří (platí do konce jeho vlády).
+export const PERKS = {
+  tlumic: { name: 'Tlumič', text: 'Všechny změny ukazatelů jsou o pětinu menší.' },
+  brzda: { name: 'Brzda', text: 'Žádný ukazatel se jedním rozhodnutím nepohne o víc než 12 bodů.' },
+  nahled: { name: 'Zvědové', text: 'Vidíš, kdo za tebou přijde příště.' },
+  smer: { name: 'Čtení lidí', text: 'Při tažení vidíš, kterým směrem se ukazatele pohnou.' },
+  sance: { name: 'Druhá šance', text: 'Jednou tě ukazatel na kraji nesesadí – odrazí se na 15, nebo 85 %.' },
+  sarm: { name: 'Šarm', text: 'Vztahy s lidmi se zlepšují dvakrát rychleji.' },
+  nabiti: { name: 'Rychlé nabíjení', text: 'Tvoje schopnost se nabíjí dvakrát rychleji.' },
+  stabilita: { name: 'Stabilita', text: 'Každý rok se všechny ukazatele posunou o 3 body k rovnováze.' },
+};
+
+/// Prohrané volby – konec vlády, který nezpůsobil žádný ukazatel na kraji.
+export const ELECTION = {
+  title: 'Prohrané volby',
+  text: 'Lidé šli k urnám a rozhodli. Získal{a} jsi jen {v} % hlasů. Předal{a} jsi klíče od paláce a poprvé po letech jsi šel{a} domů pěšky.',
+};
+
+/// Víceměsíční krize: karty jdou po sobě (ob jeden měsíc). Volby s ok: 1 krizi zvládají.
+/// Kdo zvládne aspoň `good` kroků, dostane odměnu, jinak přijde trest.
+export const CRISES = {
+  epidemie: { name: 'Epidemie', steps: ['epi1', 'epi2', 'epi3'], good: 2,
+    win: { text: 'nákaza je zažehnána a lidé ti věří víc než dřív.', e: { lid: 10, ved: 5 } },
+    lose: { text: 'nákaza si vybrala krutou daň. Země truchlí.', e: { lid: -12, fin: -8 } } },
+  povoden: { name: 'Povodeň', steps: ['vod1', 'vod2', 'vod3'], good: 2,
+    win: { text: 'republika vodu přestála a nový přístav je pýchou země.', e: { lid: 5, fin: 5, pri: 5 } },
+    lose: { text: 'voda po sobě nechala bídu a hněv.', e: { fin: -10, lid: -10 } } },
+  sit: { name: 'Útok na síť', steps: ['sit1', 'sit2', 'sit3'], good: 2,
+    win: { text: 'útok jsi ustál{a} a síť je odolnější než kdy dřív.', e: { ved: 5, dip: 5, lid: 5 } },
+    lose: { text: 'země byla měsíce bez proudu. Lidé vzpomínají na Velký výpadek.', e: { fin: -10, lid: -8, ved: -5 } } },
+};
+
+const crisisCards = [
+  { id: 'epi1', who: 'lek', crisis: 'epidemie', weight: 0.7, text: 'Na jihu se šíří neznámá horečka, {osl}. Za pár týdnů může být všude. Začíná krize.',
+    opts: {
+      left: { t: 'Hlavně nepanikařit', e: { lid: -5, fin: 5 } },
+      right: { t: 'Uzavřít oblast', e: { fin: -10, lid: -5, sil: 5 }, ok: 1 },
+      up: { t: 'Vědci, najděte lék', e: { ved: 10, fin: -10 }, ok: 1 },
+      down: { t: 'Modlit se', e: { vir: 10, lid: -5 } },
+    } },
+  { id: 'epi2', who: 'lek', crisis: 'epidemie', weight: 0, text: 'Nemocnice jsou plné. Lékaři padají únavou a lidé se bojí vycházet z domu.',
+    opts: {
+      left: { t: 'Povolat armádu', e: { sil: 5, lid: -5, fin: -5 }, ok: 1 },
+      right: { t: 'Polní nemocnice', e: { fin: -10, lid: 10 }, ok: 1 },
+      up: { t: 'Kostely jako útočiště', e: { vir: 10, lid: -5 } },
+      down: { t: 'Zamlčet čísla', e: { lid: -10, vir: 5 } },
+    } },
+  { id: 'epi3', who: 'ved', crisis: 'epidemie', weight: 0, text: 'Máme vakcínu, {osl}! Jenže zatím jen pro polovinu země. Kdo ji dostane první?',
+    opts: {
+      left: { t: 'Děti a staří', e: { lid: 10, fin: -5 }, ok: 1 },
+      right: { t: 'Kdo zaplatí', e: { fin: 15, lid: -15 } },
+      up: { t: 'Lékaři a vojáci', e: { sil: 10, lid: -5 }, ok: 1 },
+      down: { t: 'Losovat', e: { lid: -5, vir: 5 } },
+    } },
+  { id: 'vod1', who: 'starosta', crisis: 'povoden', weight: 0.7, text: 'Prší už třetí týden, {osl}. Řeka u přístavu stoupá a staré hráze nevydrží. Začíná krize.',
+    opts: {
+      left: { t: 'Hráze vydrží', e: { fin: 5, lid: -5 } },
+      right: { t: 'Evakuovat přístav', e: { lid: 5, fin: -10 }, ok: 1 },
+      up: { t: 'Stavět nové hráze', e: { fin: -10, pri: -5, sil: 5 }, ok: 1 },
+      down: { t: 'Nechat to přírodě', e: { pri: 10, lid: -10 } },
+    } },
+  { id: 'vod2', who: 'far', crisis: 'povoden', weight: 0, text: 'Voda vzala pole i úrodu. Bez pomoci budou lidé v zimě hladovět.',
+    opts: {
+      left: { t: 'Otevřít státní sklady', e: { lid: 10, fin: -10 }, ok: 1 },
+      right: { t: 'Dovézt obilí', e: { dip: 5, fin: -10 }, ok: 1 },
+      up: { t: 'Ať si poradí sami', e: { fin: 5, lid: -10 } },
+      down: { t: 'Vybrat sbírku v kostelích', e: { vir: 5, lid: -5 } },
+    } },
+  { id: 'vod3', who: 'starosta', crisis: 'povoden', weight: 0, text: 'Voda opadla. Přístav je v troskách. Postavíme ho znovu stejně, nebo jinak?',
+    opts: {
+      left: { t: 'Stejně jako dřív', e: { fin: -5 } },
+      right: { t: 'Přesunout město výš', e: { fin: -15, lid: 5, pri: 5 }, ok: 1 },
+      up: { t: 'Vrátit řece luhy', e: { pri: 15, fin: -10 }, ok: 1 },
+      down: { t: 'Nechat ruiny', e: { lid: -10, fin: 5 } },
+    } },
+  { id: 'sit1', who: 'nula', crisis: 'sit', weight: 0.7, text: 'Někdo napadl elektrickou síť, {osl}. Polovina země je bez proudu. Začíná krize.',
+    opts: {
+      left: { t: 'Hledat viníka', e: { sil: 5, ved: -5 } },
+      right: { t: 'Záložní zdroje', e: { fin: -10, ved: 5 }, ok: 1 },
+      up: { t: 'Najmout hackery', e: { ved: 10, vir: -5 }, ok: 1 },
+      down: { t: 'Vyhlásit stav nouze', e: { sil: 10, lid: -10 } },
+    } },
+  { id: 'sit2', who: 'stin', crisis: 'sit', weight: 0, text: 'Stopy útoku vedou za hranice. Nejspíš Federace – jenže důkazy nemáme.',
+    opts: {
+      left: { t: 'Veřejně je obvinit', e: { dip: -15, sil: 5 } },
+      right: { t: 'Tiše vyjednávat', e: { dip: 5, fin: -5 }, ok: 1 },
+      up: { t: 'Odvetný útok', e: { sil: 10, dip: -10 } },
+      down: { t: 'Posílit obranu sítě', e: { ved: 5, fin: -10 }, ok: 1 },
+    } },
+  { id: 'sit3', who: 'ved', crisis: 'sit', weight: 0, text: 'Síť znovu běží. Můžeme ji postavit odolnější – ale něco to bude stát.',
+    opts: {
+      left: { t: 'Je dobrá, jak je', e: { fin: 5 } },
+      right: { t: 'Místní solární sítě', e: { pri: 10, fin: -10 }, ok: 1 },
+      up: { t: 'Svěřit ji ORÁKLU', e: { ved: 10, vir: -10 }, ok: 1 },
+      down: { t: 'Ať ji hlídá armáda', e: { sil: 10, lid: -5 } },
+    } },
+];
+
 const lawCard = (id, who, text, law, opts) => ({ id, who, text, not: [`zakon_${law}`], opts: { ...opts, right: { t: 'Uzákonit', ...opts.right, law } } });
 
 const repealCards = Object.entries(LAWS).map(([id, l]) => ({
@@ -74,6 +172,7 @@ const repealCards = Object.entries(LAWS).map(([id, l]) => ({
 }));
 
 export const EXTRA = [
+  ...crisisCards,
   // ── Návrhy zákonů ────────────────────────────────────
   lawCard('zakon_dan', 'fin', 'Navrhuji trvalou daň z bohatství, {osl}. Peníze by tekly každý měsíc – jen boháči budou zuřit.', 'dan_bohati', {
     left: { t: 'Bohaté nechte být', e: { fin: -5, dip: 5 } },

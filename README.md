@@ -27,12 +27,17 @@ Sedm ukazatelů drží zemi pohromadě. **Ideál je uprostřed – oba kraje jso
 
 ## Hloubka hry
 
-- **Pět typů vůdců:** Vizionář (vidí směr změn), Krizový manažer (návrat z krajnosti ×2), Vyčkávač (každých 5 rozhodnutí odloží kartu),
-  Kormidelník (každých 5 rozhodnutí posune ukazatel o 15 k rovnováze), Prezident s rádcem (rada je v 70 % nejlepší).
+- **Jedenáct typů vůdců:** Vizionář (vidí směr změn), Krizový manažer (návrat z krajnosti ×2), Vyčkávač (každých 5 rozhodnutí odloží kartu),
+  Kormidelník (každých 5 rozhodnutí posune ukazatel o 15 k rovnováze), Prezident s rádcem (rada je v 70 % nejlepší),
+  Zachránce (jednou se odrazí od kraje), Charismatik (vztahy ×2), Prorok (vidí další kartu), Byrokrat (volby ×0,75, zákony ×2),
+  Hazardér (náhodný účinek 0,5–1,5×, dvě pečetě za úkol), Reformátor (každých 5 rozhodnutí zavede/zruší zákon).
+- **Výhody:** po splněném úkolu výběr jedné ze tří výhod na zbytek vlády.
+- **Volby** každé 4 roky (průměr Lidu a Spojenců aspoň 40 %), **víceměsíční krize** (epidemie, povodeň, útok na síť).
+- **Statistiky a hodnocení** (Nováček → Legenda republiky), žebříček nejdelších vlád, **bleskovka** na čas (3 min, +5 s za rozhodnutí).
 - **Lidé si pamatují** – věrní pomáhají, rozzlobení škodí.
 - **Zákony** platí, dokud je někdo nezruší, a každý měsíc posouvají ukazatele.
 - **Úkoly vůdců** dávají pečetě; čas a pečetě otevírají **éry** (Obnova → Rozmach → Nové hranice).
-- **Podmíněné volby** (klíč) se odemknou jen silné zemi; **tři tajné příběhy** končí legendou (17 konců celkem).
+- **Podmíněné volby** (klíč) se odemknou jen silné zemi; **tři tajné příběhy** končí legendou (18 konců celkem).
 - Obsah hloubky je v `hra/world.js`.
 
 ## Na iPhonu jako aplikace (offline)

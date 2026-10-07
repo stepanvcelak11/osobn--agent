@@ -1,6 +1,6 @@
 // Herní logika Rovnováhy – bez DOMu, aby šla testovat v Node.
 import { METERS, CARDS as BASE, INTRO, ENDINGS, SUCCESSORS, PEOPLE } from './cards.js';
-import { EXTRA, LAWS, TASKS, ERAS, SPECIAL, CARES, REL_MAX, REL_LOYAL } from './world.js';
+import { EXTRA, LAWS, TASKS, ERAS, SPECIAL, CARES, REL_MAX, REL_LOYAL, PERKS, CRISES, ELECTION } from './world.js';
 
 const CARDS = [...BASE, ...EXTRA];
 
@@ -22,12 +22,27 @@ export const KINDS = [
   { id: 'odklad', short: 'Vyčkávač', m: 'Vyčkávač', f: 'Vyčkávačka', icon: '⏭️', text: 'Po každých 5 rozhodnutích může jednu kartu odložit – nic se nestane a jde se dál.' },
   { id: 'kormidlo', short: 'Kormidelník', m: 'Kormidelník', f: 'Kormidelnice', icon: '🧭', text: 'Po každých 5 rozhodnutích může jeden ukazatel posunout o 15 bodů k rovnováze.' },
   { id: 'rada', short: 'Rádce', m: 'Prezident s rádcem', f: 'Prezidentka s rádcem', icon: '🦉', text: 'Rádce mu ke každé kartě poradí. V 7 případech z 10 radí to nejlepší, jinak se mýlí.' },
+  { id: 'zachrance', short: 'Zachránce', m: 'Zachránce', f: 'Zachránkyně', icon: '🛟', text: 'Jednou za vládu ho ukazatel na nule ani na maximu nesesadí – odrazí se zpátky na 15, nebo 85 %.' },
+  { id: 'charisma', short: 'Charismatik', m: 'Charismatik', f: 'Charismatička', icon: '⭐', text: 'Vztahy s lidmi se mu mění dvakrát rychleji. Věrné spojence získá snadno – nepřátele taky.' },
+  { id: 'prorok', short: 'Prorok', m: 'Prorok', f: 'Prorokyně', icon: '🔮', text: 'Vidí, kdo za ním přijde příště, a může se na to připravit.' },
+  { id: 'byro', short: 'Byrokrat', m: 'Byrokrat', f: 'Byrokratka', icon: '🗂️', text: 'Každé rozhodnutí má jen tři čtvrtiny účinku, ale zákony působí dvakrát silněji.' },
+  { id: 'hazard', short: 'Hazardér', m: 'Hazardér', f: 'Hazardérka', icon: '🎲', text: 'Účinek každé volby je náhodně poloviční až jedenapůlnásobný. Za splněný úkol dostane dvě pečetě.' },
+  { id: 'reform', short: 'Reformátor', m: 'Reformátor', f: 'Reformátorka', icon: '📜', text: 'Po každých 5 rozhodnutích může zavést, nebo zrušit libovolný zákon.' },
 ];
+/// Typy se schopností, kterou hráč spouští sám (tlačítko vpravo nahoře se nabíjí).
+export const ACTIVE = ['odklad', 'kormidlo', 'reform'];
 export const CHARGE = 5;     // po kolika rozhodnutích se nabije schopnost
 export const NUDGE = 15;     // o kolik posune Kormidelník
 const EXTREME = 20;          // Krizový manažer: krajnost = dál než 20 od středu (pod 30 / nad 70)
 export const ADVICE_OK = 0.7;
+export const RESCUE = 15;    // Zachránce / Druhá šance: kam se ukazatel odrazí od kraje
+export const TERM = 48;      // volby každé 4 roky
+export const VOTE_MIN = 40;  // potřebná podpora (průměr Lidu a Spojenců)
 export const kindOf = (state) => KINDS.find((k) => k.id === state.leader.kind) || KINDS[0];
+export const has = (state, perk) => (state.perks ?? []).includes(perk);
+/** Vidí vůdce směr změn / další kartu? (typ, nebo výhoda) */
+export const seesDirection = (state) => state.leader.kind === 'vize' || has(state, 'smer');
+export const seesAhead = (state) => state.leader.kind === 'prorok' || has(state, 'nahled');
 
 // Deterministický generátor (mulberry32) – stav se ukládá, takže hra jde přesně obnovit.
 export function random(state) {
@@ -53,6 +68,15 @@ export function newGame({ name = '', female = false, kind = 'vize' } = {}, seed 
     era: 1,
     news: [], // zprávy pro hráče (úkol splněn, nová éra, zákon…)
     advice: null, // co radí rádce k aktuální kartě
+    peek: null, // kdo přijde příště (Prorok)
+    luck: 1, // násobek účinku aktuální karty (Hazardér)
+    rescued: false, // Zachránce už svou záchranu použil
+    perks: [], // výhody současného vůdce
+    perkOffer: null, // nabídka výhod po splněném úkolu (čeká na výběr)
+    bonusSeals: 0,
+    crisis: null, // probíhající krize {id, step, score}
+    tally: { elections: 0, crises: 0 }, // vyhrané volby a zvládnuté krize (celá hra)
+    mode: 'normal',
     meters: freshMeters(),
     flags: [],
     queue: [],
@@ -91,6 +115,7 @@ function eligible(state, c) {
   if (c.req && !c.req.every((f) => state.flags.includes(f))) return false;
   if (c.not && c.not.some((f) => state.flags.includes(f))) return false;
   if (c.era && (state.era ?? 1) < c.era) return false;
+  if (c.crisis && (state.crisis || (state.total ?? 0) < 10)) return false;
   if (c.seals && seals(state) < c.seals) return false;
   if (c.rel) {
     const [who, n] = c.rel, r = state.rel?.[who] ?? 0;
@@ -102,7 +127,18 @@ function eligible(state, c) {
 /** Nová karta na stůl (a rada rádce k ní). */
 function draw(state) {
   state.card = pickCard(state);
+  state.luck = state.leader.kind === 'hazard' ? 0.5 + Math.round(random(state) * 10) / 10 : 1;
+  state.peek = seesAhead(state) ? peekCard(state) : null;
   state.advice = state.leader.kind === 'rada' ? advise(state) : null;
+}
+
+/** Prorok: kdo přijde příště (pokračování příběhu, nebo předem vylosovaná karta). */
+function peekCard(state) {
+  const due = state.queue.find((q) => q.at <= state.total + 1);
+  if (due) return due.id;
+  const pool = CARDS.filter((c) => c.id !== state.card && eligible(state, c));
+  if (!pool.length) return null;
+  return pool[Math.floor(random(state) * pool.length)].id;
 }
 
 /** Další karta: nejdřív pokračování příběhu, které je na řadě, jinak náhodná vhodná karta. */
@@ -113,6 +149,12 @@ export function pickCard(state) {
     const c = cardById(q.id);
     // Pokračování dává smysl jen tehdy, když jeho předpoklady pořád platí.
     if (c && (!c.req || c.req.every((f) => state.flags.includes(f)))) return c.id;
+  }
+  if (state.peek) {
+    // Předpověď Proroka platí, pokud ji mezitím nezměnilo rozhodnutí.
+    const p = cardById(state.peek);
+    state.peek = null;
+    if (p && eligible(state, p)) return p.id;
   }
   let pool = CARDS.filter((c) => eligible(state, c));
   if (pool.length === 0) {
@@ -155,9 +197,13 @@ export function outcome(state, dir) {
   const card = cardById(state.card) || INTRO;
   const out = { ...state.meters };
   const crisis = state.leader.kind === 'krize';
+  let mult = state.leader.kind === 'byro' ? 0.75 : state.leader.kind === 'hazard' ? state.luck ?? 1 : 1;
+  if (has(state, 'tlumic')) mult *= 0.8;
   for (const [k, v] of Object.entries(optionOf(state, card, dir).e || {})) {
     const from = out[k];
     let d = effect(k, v);
+    if (mult !== 1) d = Math.round(d * mult);
+    if (has(state, 'brzda')) d = Math.max(-12, Math.min(12, d));
     // Krok zpátky ke středu z krajnosti má dvojnásobnou sílu – ale za střed ho bonus nepřehoupne.
     if (crisis && d && Math.abs(from - START) > EXTREME && Math.sign(d) === Math.sign(START - from)) {
       const doubled = from + 2 * d;
@@ -194,6 +240,8 @@ export const ready = (state) => (state.charge ?? 0) >= CHARGE;
 export function skip(state) {
   if (state.leader.kind !== 'odklad' || !ready(state) || state.dead || state.card === INTRO.id) return false;
   state.charge = 0;
+  const card = cardById(state.card);
+  if (card?.crisis) crisisStep(state, card, {}); // odložený krok krize se počítá jako nezvládnutý
   state.recent = [...state.recent, state.card].slice(-RECENT);
   state.turn += 1;
   state.total += 1;
@@ -213,6 +261,30 @@ export function nudge(state, id) {
   return true;
 }
 
+/** Reformátor: zavede, nebo zruší libovolný zákon. */
+export function reformLaw(state, id) {
+  if (state.leader.kind !== 'reform' || !ready(state) || state.dead || !LAWS[id]) return false;
+  const flag = `zakon_${id}`;
+  if (state.flags.includes(flag)) {
+    state.flags = state.flags.filter((f) => f !== flag);
+    news(state, 'law', `Zákon „${LAWS[id].name}“ zrušen`);
+  } else {
+    state.flags.push(flag);
+    news(state, 'law', `Zákon „${LAWS[id].name}“ platí`);
+  }
+  state.charge = 0;
+  return true;
+}
+
+/** Výběr výhody z nabídky po splněném úkolu. */
+export function choosePerk(state, id) {
+  if (!state.perkOffer?.includes(id)) return false;
+  (state.perks ??= []).push(id);
+  state.perkOffer = null;
+  if (id === 'nahled' && !state.peek) state.peek = peekCard(state);
+  return true;
+}
+
 /** Rozhodnutí. Vrací konec vlády (nebo null). */
 export function choose(state, dir) {
   if (state.dead) return state.dead;
@@ -220,7 +292,7 @@ export function choose(state, dir) {
   if (!card.opts[dir]) throw new Error(`neznámý směr ${dir}`);
   const o = optionOf(state, card, dir);
   state.meters = outcome(state, dir);
-  state.charge = Math.min(CHARGE, (state.charge ?? 0) + 1);
+  state.charge = Math.min(CHARGE, (state.charge ?? 0) + (has(state, 'nabiti') ? 2 : 1));
   if (o.set && !state.flags.includes(o.set)) state.flags.push(o.set);
   if (o.unset) state.flags = state.flags.filter((f) => f !== o.unset);
   if (o.law && !state.flags.includes(`zakon_${o.law}`)) {
@@ -233,6 +305,7 @@ export function choose(state, dir) {
   }
   if (o.next) state.queue.push({ id: o.next, at: state.total + 1 + (o.in ?? 3) });
   relate(state, card, o);
+  if (card.crisis) crisisStep(state, card, o);
   if (card.once && !state.used.includes(card.id)) state.used.push(card.id);
   state.recent = [...state.recent, card.id].slice(-RECENT);
   state.total += 1;
@@ -251,7 +324,11 @@ function news(state, kind, text) { (state.news ??= []).push({ kind, text }); }
 /** Lidé si pamatují: komu volba pomohla, toho si naklonila. */
 function relate(state, card, o) {
   state.rel ??= {};
-  const add = (who, n) => { state.rel[who] = Math.max(-REL_MAX, Math.min(REL_MAX, (state.rel[who] ?? 0) + n)); };
+  const k = state.leader.kind === 'charisma' ? 2 : 1;
+  const add = (who, n) => {
+    const m = n * k * (n > 0 && has(state, 'sarm') ? 2 : 1);
+    state.rel[who] = Math.max(-REL_MAX, Math.min(REL_MAX, (state.rel[who] ?? 0) + m));
+  };
   const cares = CARES[card.who];
   const raw = cares ? (o.e?.[cares] ?? 0) : 0;
   if (raw && !o.rel?.[card.who]) add(card.who, Math.sign(raw));
@@ -259,21 +336,63 @@ function relate(state, card, o) {
 }
 
 export const activeLaws = (state) => state.flags.filter((f) => f.startsWith('zakon_')).map((f) => f.slice(6)).filter((id) => LAWS[id]);
-export const seals = (state) => (state.tasksDone ?? []).length;
+export const seals = (state) => (state.tasksDone ?? []).length + (state.bonusSeals ?? 0);
+
+/** Víceměsíční krize: každý krok se počítá, na konci odměna, nebo trest. */
+function crisisStep(state, card, o) {
+  const cr = CRISES[card.crisis];
+  if (!state.crisis || state.crisis.id !== card.crisis) state.crisis = { id: card.crisis, step: 0, score: 0 };
+  state.crisis.step += 1;
+  if (o.ok) state.crisis.score += 1;
+  if (state.crisis.step < cr.steps.length) {
+    state.queue.push({ id: cr.steps[state.crisis.step], at: state.total + 2 });
+    return;
+  }
+  const won = state.crisis.score >= cr.good;
+  const r = won ? cr.win : cr.lose;
+  for (const [k, v] of Object.entries(r.e)) state.meters[k] = clamp(state.meters[k] + effect(k, v));
+  if (won) state.tally.crises += 1;
+  news(state, won ? 'crisis' : 'crisisLost', `${cr.name}: ${fill(r.text, state.leader)}`);
+  state.crisis = null;
+}
+
+/** Do voleb zbývá (měsíců). */
+export const toElection = (state) => TERM - (state.turn % TERM);
+export const support = (state) => Math.round((state.meters.lid + state.meters.dip) / 2);
 
 /** Uplynul měsíc: zákony, konec vlády, úkol, éra. */
 function monthPasses(state) {
   state.drift ??= {};
-  for (const id of activeLaws(state)) for (const [k, v] of Object.entries(LAWS[id].per)) state.drift[k] = (state.drift[k] ?? 0) + v;
+  const lawPower = state.leader.kind === 'byro' ? 2 : 1;
+  for (const id of activeLaws(state)) for (const [k, v] of Object.entries(LAWS[id].per)) state.drift[k] = (state.drift[k] ?? 0) + v * lawPower;
+  if (has(state, 'stabilita') && state.turn % 12 === 0) {
+    for (const m of METERS) { const v = state.meters[m.id]; state.meters[m.id] = v < START ? Math.min(START, v + 3) : Math.max(START, v - 3); }
+  }
   for (const [k, v] of Object.entries(state.drift)) {
     const whole = Math.trunc(v);
     if (whole) { state.meters[k] = clamp(state.meters[k] + whole); state.drift[k] = v - whole; }
   }
-  const hit = METERS.find((m) => state.meters[m.id] <= 0 || state.meters[m.id] >= 100);
+  let hit = METERS.find((m) => state.meters[m.id] <= 0 || state.meters[m.id] >= 100);
+  if (hit && ((state.leader.kind === 'zachrance' && !state.rescued) || has(state, 'sance'))) {
+    // Záchrana: ukazatel se odrazí od kraje. Typ Zachránce jednou za vládu, výhoda Druhá šance jednou.
+    if (has(state, 'sance')) state.perks = state.perks.filter((p) => p !== 'sance');
+    else state.rescued = true;
+    state.meters[hit.id] = state.meters[hit.id] <= 0 ? RESCUE : 100 - RESCUE;
+    news(state, 'rescue', `Na poslední chvíli: ${hit.name} se vrací na ${state.meters[hit.id]} %`);
+    hit = METERS.find((m) => state.meters[m.id] <= 0 || state.meters[m.id] >= 100);
+  }
   if (hit) {
     const side = state.meters[hit.id] <= 0 ? 'low' : 'high';
     endReign(state, { meter: hit.id, side, ...ENDINGS[hit.id][side] }, `${hit.id}.${side}`);
     return;
+  }
+  if (state.turn > 0 && state.turn % TERM === 0) {
+    const v = support(state);
+    if (v < VOTE_MIN) { endReign(state, { election: true, ...ELECTION, text: ELECTION.text.replace('{v}', v) }, 'volby'); return; }
+    state.tally.elections += 1;
+    news(state, 'election', `Vyhrál${state.leader.female ? 'a' : ''} jsi volby s ${v} % hlasů`);
+  } else if (state.turn % TERM === TERM - 6) {
+    news(state, 'electionSoon', `Za půl roku jsou volby. Hlasy ti dají Lid a Spojenci (teď ${support(state)} %, potřebuješ ${VOTE_MIN} %).`);
   }
   progressTask(state);
   const era = ERAS.filter((e) => state.total >= (e.total ?? 0) && seals(state) >= (e.seals ?? 0)).pop().n;
@@ -285,7 +404,7 @@ function monthPasses(state) {
 }
 
 function endReign(state, e, key) {
-  state.dead = { meter: e.meter ?? null, side: e.side ?? null, special: e.special ?? null, title: e.title, text: fill(e.text, state.leader), months: state.turn };
+  state.dead = { meter: e.meter ?? null, side: e.side ?? null, special: e.special ?? null, election: !!e.election, title: e.title, text: fill(e.text, state.leader), months: state.turn };
   state.history.push({ name: state.leader.name, female: state.leader.female, n: state.leader.n, months: state.turn, ending: key, title: e.title });
   if (!state.endings.includes(key)) state.endings.push(key);
   state.best = Math.max(state.best, state.turn);
@@ -329,10 +448,22 @@ function progressTask(state) {
   const p = taskProgress(state);
   if (p.now < p.of) return;
   if (!state.tasksDone.includes(t.id)) state.tasksDone.push(t.id);
+  if (state.leader.kind === 'hazard') state.bonusSeals = (state.bonusSeals ?? 0) + 1;
   state.charge = CHARGE; // odměna: schopnost se hned nabije
+  state.perkOffer = offerPerks(state);
   news(state, 'task', `Úkol splněn: ${t.text}`);
   assignTask(state);
   news(state, 'newtask', `Nový úkol: ${taskById(state.task.id).text}`);
+}
+
+/** Tři náhodné výhody, které vůdce ještě nemá a které mu k něčemu jsou. */
+export function offerPerks(state) {
+  const k = state.leader.kind;
+  const useless = { smer: k === 'vize', nahled: k === 'prorok', sance: k === 'zachrance' && !state.rescued, sarm: k === 'charisma', nabiti: !ACTIVE.includes(k) };
+  const pool = Object.keys(PERKS).filter((p) => !has(state, p) && !useless[p]);
+  const out = [];
+  while (out.length < 3 && pool.length) out.push(pool.splice(Math.floor(random(state) * pool.length), 1)[0]);
+  return out.length ? out : null;
 }
 
 /** Nástupce: nový vůdce, ukazatele zpět doprostřed. Svět (příznaky) zůstává. */
@@ -346,6 +477,11 @@ export function nextLeader(state, kind = state.leader.kind) {
   state.leader = { name, female, n: state.leader.n + 1, kind };
   state.charge = 0;
   state.drift = {};
+  state.perks = [];
+  state.perkOffer = null;
+  state.rescued = false;
+  state.crisis = null;
+  state.peek = null;
   // Nový vůdce = nová šance: vztahy vychladnou na polovinu.
   for (const k of Object.keys(state.rel ?? {})) state.rel[k] = Math.trunc(state.rel[k] / 2);
   state.meters = freshMeters();
@@ -354,6 +490,18 @@ export function nextLeader(state, kind = state.leader.kind) {
   state.dead = null;
   assignTask(state);
   draw(state);
+}
+
+/** Bleskovka: hra na čas bez úvodu. Čas hlídá zobrazení (BLITZ_START, +BLITZ_BONUS za rozhodnutí). */
+export const BLITZ_START = 180;
+export const BLITZ_BONUS = 5;
+export const BLITZ_FALL = 15; // pád vlády stojí sekundy
+export function newBlitz(opts, seed) {
+  const s = newGame(opts, seed);
+  s.mode = 'blitz';
+  s.decisions = 0;
+  draw(s);
+  return s;
 }
 
 /** „2 roky a 3 měsíce“ */
@@ -381,8 +529,15 @@ export function upgrade(state) {
   state.tasksDone ??= [];
   state.era ??= 1;
   state.news ??= [];
+  state.perks ??= [];
+  state.perkOffer ??= null;
+  state.bonusSeals ??= 0;
+  state.crisis ??= null;
+  state.tally ??= { elections: 0, crises: 0 };
+  state.luck ??= 1;
+  state.mode ??= 'normal';
   if (!state.task && !state.dead) assignTask(state);
   return state;
 }
 
-export { METERS, ENDINGS, PEOPLE, CARDS, INTRO, LAWS, TASKS, ERAS, SPECIAL, REL_LOYAL };
+export { METERS, ENDINGS, PEOPLE, CARDS, INTRO, LAWS, TASKS, ERAS, SPECIAL, REL_LOYAL, PERKS, CRISES, ELECTION };

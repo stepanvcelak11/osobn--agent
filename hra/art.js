@@ -131,6 +131,21 @@ const LINE = {
   kontakt: '<ellipse cx="12" cy="13" rx="10" ry="3.5"/><path d="M6.5 11.5a5.5 5.5 0 0 1 11 0"/><path d="M8 18l-1.5 3M16 18l1.5 3M12 17v4"/>',
   podzemi: '<path d="M3 18h18l-1.5-10-4.5 4-3-6-3 6-4.5-4z"/><path d="M4.5 21h15"/>',
   pravda: '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c-2.6 2.6-4 5.6-4 9s1.4 6.4 4 9M12 3c2.6 2.6 4 5.6 4 9s-1.4 6.4-4 9"/>',
+  // další typy vůdců
+  zachrance: '<path d="M12 3l7 3v5c0 4.6-3 8.3-7 10-4-1.7-7-5.4-7-10V6z"/><path d="M12 8v6M9 11h6"/>',
+  charisma: '<path d="M12 3l2.6 5.6 6 .7-4.5 4.1 1.2 6L12 16.4 6.7 19.4l1.2-6L3.4 9.3l6-.7z"/>',
+  prorok: '<circle cx="12" cy="10" r="6.5"/><path d="M7 19h10M8.5 16.2L7 19M15.5 16.2L17 19"/><path d="M9.5 8.5a3 3 0 0 1 2.5-1.5"/>',
+  byro: '<rect x="5" y="3" width="14" height="18" rx="2"/><path d="M8.5 8h7M8.5 12h7M8.5 16h4"/>',
+  hazard: '<rect x="4" y="4" width="16" height="16" rx="3"/><circle cx="8.5" cy="8.5" r=".9" fill="currentColor"/><circle cx="15.5" cy="15.5" r=".9" fill="currentColor"/><circle cx="12" cy="12" r=".9" fill="currentColor"/><circle cx="15.5" cy="8.5" r=".9" fill="currentColor"/><circle cx="8.5" cy="15.5" r=".9" fill="currentColor"/>',
+  reform: '<path d="M14.5 4.5l5 5M12 7l5 5M4 20l8.5-8.5M10 9.5l4.5 4.5"/><path d="M13 3.5l7.5 7.5-2.5 2.5L10.5 6z"/>',
+  // výhody, volby, krize, čas, statistiky
+  perk: '<path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5L18 18M18 6l-2.5 2.5M8.5 15.5L6 18"/>',
+  vote: '<path d="M4 12h16v8H4z"/><path d="M8 12V5h8v7M10 8.5l1.5 1.5L14.5 7"/>',
+  crisis: '<path d="M12 3.5L21.5 20h-19z"/><path d="M12 10v4.5M12 17.2v.3"/>',
+  timer: '<circle cx="12" cy="13.5" r="7.5"/><path d="M12 13.5V9.5M10 2.5h4M18.5 6.5l1.5-1.5"/>',
+  stats: '<path d="M4 20h16M7 20v-6M12 20V6M17 20v-10"/>',
+  trophy: '<path d="M7 4h10v4a5 5 0 0 1-10 0z"/><path d="M7 6H4.5a2.5 2.5 0 0 0 2.8 3.4M17 6h2.5a2.5 2.5 0 0 1-2.8 3.4M12 13v4M8.5 20.5h7M9.5 20.5c0-2 1-3.5 2.5-3.5s2.5 1.5 2.5 3.5"/>',
+  rescue: '<circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="3.5"/><path d="M6 6l3.5 3.5M18 6l-3.5 3.5M6 18l3.5-3.5M18 18l-3.5-3.5"/>',
 };
 export function icon(name, cls = 'ico') {
   return `<svg class="${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${LINE[name]}</svg>`;
