@@ -38,6 +38,24 @@ rozhlédnutí pár minut, prohledání domu hodinu, jízda na koni do další ve
 Podle toho se střídá den a noc, karavana jí zásoby a osada mezitím sklízí, staví a čelí hrozbám.
 U osady navíc běží i skutečný čas, když nehraješ (nejvýš 3 dny), takže se dá vracet „podívat, co je nového“.
 
+### Jako v AI Dungeon: Čin, Řeč, Příběh, Pokračuj
+
+- **Čin** – co hrdina udělá (posoudí se a hodí kostkou). **Řeč** – co řekne nahlas, postavy odpoví.
+  **Příběh** – hráč sám napíše, co se stane, a vypravěč naváže (bez kostek a bez odměn).
+  Prázdné pole a ⏩ = **Pokračuj** – svět jedná sám.
+- **Znovu** převypráví poslední tah (hod kostkou zůstane stejný), **Vrátit tah** ho vezme zpět (ne po konci hry).
+- **Paměť vypravěče** (co si má vždy pamatovat), **poznámka ke stylu** („víc hororu“) a **vlastní zápletka** při založení hry.
+
+### Hloubka hry
+
+- **Úrovně** – zkušenosti za každý čin; na nové úrovni se zlepší nejpoužívanější schopnost.
+- **Stavy hrdiny** – krvácení (bere zdraví, dokud se neošetří), horečka, únava a vyčerpání bez spánku, odhodlání po skvělém úspěchu.
+- **Počasí a roční období** – mlha pomáhá plížení, bouřka a sníh zdržují cestu; rok začíná jarem, podzim je čas sklizně, zima hladoví.
+- **Zakázky** – lidé přicházejí s prosbami s odměnou a termínem; propadlá zakázka stojí morálku.
+- **Paměť postav** – vypravěč si pamatuje, koho hrdina potkal a jestli je přítel, nebo nepřítel.
+- **Etapy výprav** – každá výprava má tři etapy, panel ukazuje, co hrdinu čeká.
+- **Hodnost osady** – Osada → Ves → Městečko → Město → Hrad a podhradí, každé povýšení se slaví.
+
 ### Co dělá hru zajímavější (vlastní vylepšení)
 
 - **Deterministická pravidla + AI vyprávění** – kostky, zranění, čas a ekonomiku počítá kód, ne model. Hra je férová
@@ -83,6 +101,7 @@ Packages/LlamaKit      llama.cpp (XCFramework b11440) – jazykový model
 Packages/WhisperBridge whisper.cpp (XCFramework v1.9.2) – rozpoznávání řeči
 App/                   SwiftUI aplikace (iOS 17+)
 tools/grammar-check    ověření gramatik skutečným parserem llama.cpp
+tools/playtest         zkušební hra se skutečným modelem (macOS; CI „Zkušební hra se skutečným modelem“)
 ```
 
 ```bash
