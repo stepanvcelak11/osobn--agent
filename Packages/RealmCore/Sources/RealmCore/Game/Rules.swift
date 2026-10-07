@@ -156,6 +156,8 @@ public struct Resolution: Equatable, Sendable {
     public var contractEligible = false
     /// Jak hráč tah zadal.
     public var input: InputMode = .act
+    /// Použité schopnosti (id).
+    public var usedAbilities: [String] = []
 }
 
 public enum Rules {
@@ -194,7 +196,10 @@ public enum Rules {
         if itemBonus > 0 { notes.append("Předmět pomáhá (+\(min(itemBonus, 3)) k hodu).") }
         mod += min(itemBonus, 3)
         let s = state.hero.stress
-        if s >= 90 { mod -= 3 } else if s >= 70 { mod -= 2 } else if s >= 50 { mod -= 1 }
+        if !state.hero.has("zelezna_vule") {
+            if s >= 90 { mod -= 3 } else if s >= 70 { mod -= 2 } else if s >= 50 { mod -= 1 }
+        }
+        if intent.category == .social && state.hero.has("vudce") { mod += 1 }
         let w = state.weather.modifier(intent.category)
         if w != 0 { notes.append("Počasí (\(state.weather.czechName.lowercased())): \(w > 0 ? "+" : "")\(w) k hodu.") }
         mod += w
@@ -202,8 +207,10 @@ public enum Rules {
         let hp = state.hero.hp
         if hp < 25 { mod -= 2 } else if hp < 50 { mod -= 1 }
         if state.phase == 3 {
-            if intent.category == .stealth { mod += 1 }
-            if [.combat, .explore, .travel].contains(intent.category) { mod -= 1 }
+            if state.hero.has("nocni") { mod += 1 } else {
+                if intent.category == .stealth { mod += 1 }
+                if [.combat, .explore, .travel].contains(intent.category) { mod -= 1 }
+            }
         }
         return mod
     }
@@ -229,10 +236,18 @@ public enum Rules {
         var notes: [String] = []
         var used: [Item] = []
         var missing: [String] = []
+        var abilities: [Ability] = []
+        var spent: [String] = []
         for name in intent.itemsUsed {
-            if let it = state.hero.item(named: name) {
+            if let ab = state.hero.ability(named: name) {
+                if abilities.contains(where: { $0.id == ab.id }) || spent.contains(ab.name) { continue }
+                if ab.usesLeft > 0 { abilities.append(ab) } else { spent.append(ab.name) }
+            } else if let it = state.hero.item(named: name) {
                 if !used.contains(where: { $0.id == it.id }) { used.append(it) }
             } else { missing.append(name) }
+        }
+        if !spent.isEmpty {
+            notes.append("Schopnost \(spent.joined(separator: ", ")) je pro dnešek vyčerpaná – hrdinovi tentokrát nepomůže. Obnoví se po spánku.")
         }
         if !missing.isEmpty {
             notes.append("Hrdina NEMÁ: \(missing.joined(separator: ", ")). Tyto věci nesmí ve vyprávění použít.")
@@ -255,9 +270,18 @@ public enum Rules {
             }
         }
 
+        // Zvláštní schopnosti
+        for ab in abilities {
+            if ab.heal > 0 { mandatory.hp += ab.heal }
+            if ab.stressRelief > 0 { mandatory.stress -= ab.stressRelief }
+            if ab.cures { res.cures += [.krvaceni, .horecka] }
+            notes.append("Hrdina použije svou schopnost „\(ab.name)“ (\(ab.detail)) – popiš to.")
+        }
+        res.usedAbilities = abilities.map(\.id)
+
         // Stavy hrdiny
         let active = World.conditions(state.hero, at: state.worldTime)
-        let healed = used.contains { $0.kind == .consumable && $0.heals }
+        let healed = used.contains { $0.kind == .consumable && $0.heals } || abilities.contains { $0.cures }
         if healed { res.cures += [.krvaceni, .horecka] }
         if active.contains(.krvaceni) && !healed {
             mandatory.hp -= 2
@@ -300,10 +324,15 @@ public enum Rules {
         } else if intent.difficulty == .trivial || intent.category == .build || (intent.category == .rest && intent.risk == .none) {
             roll = RollInfo(die: 0, modifier: 0, dc: 0, stat: intent.stat, outcome: .auto)
         } else {
-            let mod = modifier(state: state, intent: intent, used: used, notes: &notes)
+            var mod = modifier(state: state, intent: intent, used: used, notes: &notes)
+            for ab in abilities where ab.bonus > 0 && ab.helps(intent.category) { mod += ab.bonus }
             var dc = intent.difficulty.dc
             if !missing.isEmpty { dc += 2 }
-            let die = state.d20()
+            var die = state.d20()
+            if die == 1 && state.hero.has("stastlivec") {
+                die = state.d20()
+                notes.append("Šťastlivec: osud dal hrdinovi druhou šanci.")
+            }
             roll = RollInfo(die: die, modifier: mod, dc: dc, stat: intent.stat, outcome: outcome(die: die, total: die + mod, dc: dc))
         }
 
@@ -324,6 +353,8 @@ public enum Rules {
             mandatory.stress -= 5
         default: break
         }
+        if damage > 0 && state.hero.has("otuzily") { damage = damage * 4 / 5 }
+        if state.hero.has("odvazny") && mandatory.stress > 0 { mandatory.stress = (mandatory.stress + 1) / 2 }
         if damage > 0 && hasArmor(state.hero) {
             let absorbed = max(1, damage * 3 / 10)
             damage -= absorbed
@@ -335,7 +366,7 @@ public enum Rules {
             res.newConditions.append(.krvaceni)
             notes.append("Hrdina utrží krvácející ránu – dokud ji neošetří, bude slábnout.")
         }
-        if [.fail, .critFail].contains(roll.outcome) && state.scene == .swamp && state.chance(35) {
+        if [.fail, .critFail].contains(roll.outcome) && state.scene == .swamp && !state.hero.has("otuzily") && state.chance(35) {
             res.newConditions.append(.horecka)
             notes.append("Z bažiny si hrdina odnáší horečku.")
         }
@@ -346,7 +377,7 @@ public enum Rules {
             res.cures.append(.krvaceni)
         }
         if intent.category == .combat && roll.outcome != .impossible {
-            mandatory.stress += 3
+            mandatory.stress += state.hero.has("odvazny") ? 1 : 3
         }
         if intent.category == .rest {
             res.cures.append(.krvaceni)
@@ -376,6 +407,7 @@ public enum Rules {
                     let arrival = rollArrival(state: &state, to: journey.stops[journey.index + 1],
                                               isDestination: journey.index + 1 == journey.stops.count - 1)
                     mandatory = mandatory + arrival.delta
+                    if state.hero.has("vudce") { mandatory.morale += 3 }
                     res.arrival = arrival
                     notes.append("Karavana dorazí do: \(arrival.stop.name) (\(arrival.stop.scene.czechName)). \(arrival.text)")
                 }

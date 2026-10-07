@@ -84,9 +84,13 @@ public final class GameEngine: @unchecked Sendable {
         let heroName = CzechText.collapseSpaces(PromptSanitizer.clean(setup.heroName)).trimmingCharacters(in: .whitespaces)
         var city = CzechText.collapseSpaces(PromptSanitizer.clean(setup.cityName)).trimmingCharacters(in: .whitespaces)
         if city.isEmpty { city = Catalog.defaultCityNames[Int(setup.seed % UInt64(Catalog.defaultCityNames.count))] }
-        let hero = Hero(name: heroName.isEmpty ? "Bezejmenný" : String(heroName.prefix(30)), feminine: setup.feminine,
-                        background: bg.id, attributes: bg.attributes, hp: 100, stress: Catalog.startStress(setup.mode),
+        var hero = Hero(name: heroName.isEmpty ? "Bezejmenný" : String(heroName.prefix(30)), feminine: setup.feminine,
+                        background: bg.id,
+                        attributes: Catalog.startAttributes(background: bg, bonus: setup.bonusPoints, traits: setup.traits),
+                        hp: 100, stress: Catalog.startStress(setup.mode),
                         items: bg.items.map { var i = $0; i.id = UUID().uuidString; return i })
+        hero.traits = Catalog.validTraits(setup.traits)
+        hero.abilities = [bg.ability]
         let settlement = Catalog.startSettlement(mode: setup.mode, name: String(city.prefix(30)), bonusGold: bg.bonusGold)
         var s = GameState(mode: setup.mode, hero: hero, settlement: settlement, location: settlement.name, scene: .town,
                           rngState: setup.seed)
@@ -327,7 +331,8 @@ public final class GameEngine: @unchecked Sendable {
         }
         // nové
         var added: [String] = []
-        for (raw, kind) in o.itemsGained.prefix(Rules.allowedNewItems(outcome)) {
+        let finder = r.intent.category == .explore && [.success, .critSuccess].contains(outcome) && s.hero.has("hledac") ? 1 : 0
+        for (raw, kind) in o.itemsGained.prefix(Rules.allowedNewItems(outcome) + finder) {
             guard let name = Rules.cleanItemName(raw) else { continue }
             if removed.contains(where: { CzechText.fold($0) == CzechText.fold(name) }) { continue }
             if let idx = s.hero.items.firstIndex(where: { CzechText.fold($0.name) == CzechText.fold(name) }) {
@@ -416,7 +421,10 @@ public final class GameEngine: @unchecked Sendable {
                 extra.append(LogEntry(kind: .event, text: c == .krvaceni ? "🩸 Krvácíš. Ošetři ránu, než tě oslabí." : "🤒 Chytil\(s.hero.feminine ? "a" : "") jsi horečku."))
             }
         }
-        if r.intent.category == .rest && r.hours >= 6 { s.hero.awakeHours = 0 }
+        for id in r.usedAbilities {
+            if let i = s.hero.abilities.firstIndex(where: { $0.id == id }) { s.hero.abilities[i].usesLeft = max(0, s.hero.abilities[i].usesLeft - 1) }
+        }
+        if r.intent.category == .rest && r.hours >= 6 { s.hero.awakeHours = 0; s.hero.refreshAbilities() }
         else if r.hours >= 20 { s.hero.awakeHours = max(s.hero.awakeHours, 14) }
         else { s.hero.awakeHours += r.hours }
         if let st = r.roll.stat, r.roll.outcome != .auto && r.roll.outcome != .impossible {
@@ -492,6 +500,7 @@ public final class GameEngine: @unchecked Sendable {
         s.day = max(1, Simulation.daysBetween(s.createdAt, s.worldTime) + 1)
         World.updateWeather(&s)
         s.hero.conditions.removeAll { $0.until <= s.worldTime }
+        if s.day > (playerEntry.day ?? s.day) { s.hero.refreshAbilities() }
         if s.mode == .campaign && s.end == nil {
             if let e = World.expireContract(&s) { s.log.append(e) }
             if r.arrival != nil && !(r.arrival?.isDestination ?? false) && s.chance(55), let e = World.offerContract(&s, at: s.worldTime) {

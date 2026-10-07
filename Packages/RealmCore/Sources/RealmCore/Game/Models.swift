@@ -138,6 +138,9 @@ public struct Hero: Codable, Equatable, Sendable {
     /// Hodiny od posledního spánku (únava).
     public var awakeHours: Double = 0
     public var conditions: [Condition] = []
+    /// Povaha (id vlastností) a zvláštní schopnosti původu.
+    public var traits: [String] = []
+    public var abilities: [Ability] = []
 
     public init(name: String, feminine: Bool = false, background: String, attributes: [Attribute: Int], hp: Int,
                 stress: Int, items: [Item]) {
@@ -561,9 +564,14 @@ public struct NewGameSetup: Sendable {
     public var feminine: Bool
     public var seed: UInt64
     public var premise: String
+    /// Povaha (nejvýš 2 vlastnosti) a volné body do schopností.
+    public var traits: [String]
+    public var bonusPoints: [Attribute: Int]
 
     public init(mode: GameMode, heroName: String, cityName: String, backgroundId: String, feminine: Bool = false,
-                seed: UInt64 = UInt64.random(in: 1...UInt64.max), premise: String = "") {
+                seed: UInt64 = UInt64.random(in: 1...UInt64.max), premise: String = "",
+                traits: [String] = [], bonusPoints: [Attribute: Int] = [:]) {
+        self.traits = traits; self.bonusPoints = bonusPoints
         self.mode = mode; self.heroName = heroName; self.cityName = cityName; self.backgroundId = backgroundId
         self.feminine = feminine; self.seed = seed; self.premise = premise
     }

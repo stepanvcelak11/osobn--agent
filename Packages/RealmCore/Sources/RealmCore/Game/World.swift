@@ -301,7 +301,8 @@ public enum World {
     /// Aktivní stavy včetně únavy spočtené z hodin bez spánku.
     public static func conditions(_ h: Hero, at now: Date) -> [ConditionKind] {
         var out = h.conditions.filter { $0.until > now }.map(\.kind)
-        if h.awakeHours >= 30 { out.append(.vycerpani) } else if h.awakeHours >= 18 { out.append(.unava) }
+        let (tired, exhausted): (Double, Double) = h.has("nespavec") ? (26, 40) : (18, 30)
+        if h.awakeHours >= exhausted { out.append(.vycerpani) } else if h.awakeHours >= tired { out.append(.unava) }
         return out
     }
 

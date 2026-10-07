@@ -6,6 +6,7 @@ import RealmCore
 enum Demo {
     static var mode: String? { ProcessInfo.processInfo.environment["PR_DEMO"] }
     static var sheet: String? { ProcessInfo.processInfo.environment["PR_SHEET"] }
+    static var step: Int? { ProcessInfo.processInfo.environment["PR_STEP"].flatMap(Int.init) }
 
     static func state(_ name: String) -> GameState? {
         let now = Date()
@@ -38,6 +39,8 @@ enum Demo {
             s.day = 2
             s.weather = .mlha
             s.hero.level = 2; s.hero.xp = 95
+            s.hero.traits = ["nocni", "hbity"]
+            s.hero.abilities[0].usesLeft = 1
             s.hero.conditions = [Condition(kind: .krvaceni, until: s.worldTime.addingTimeInterval(8 * 3600))]
             s.hero.awakeHours = 19
             s.characters = [NPC(name: "Stará Jitka", role: "kořenářka", attitude: .neutral, lastSeen: 2)]

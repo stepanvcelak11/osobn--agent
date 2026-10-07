@@ -251,7 +251,7 @@ struct InputBar: View {
 
     var body: some View {
         VStack(spacing: 8) {
-            if !session.state.hero.items.isEmpty && !session.isBusy { itemChips }
+            if !(session.state.hero.items.isEmpty && session.state.hero.abilities.isEmpty) && !session.isBusy { itemChips }
             HStack(alignment: .bottom, spacing: 8) {
                 modePicker
                 TextField("", text: $input, prompt: Text(placeholder).foregroundColor(Theme.dimText), axis: .vertical)
@@ -309,6 +309,20 @@ struct InputBar: View {
     private var itemChips: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 6) {
+                ForEach(session.state.hero.abilities) { ab in
+                    Button {
+                        guard ab.usesLeft > 0 else { return }
+                        input = input.isEmpty ? "Použiju schopnost \(ab.name) a " : input + " (\(ab.name))"
+                        focused.wrappedValue = true
+                    } label: {
+                        Label("\(ab.name) \(ab.usesLeft)/\(ab.maxUses)", systemImage: ab.icon)
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(ab.usesLeft > 0 ? Color.black.opacity(0.8) : Theme.dimText)
+                            .padding(.horizontal, 10).padding(.vertical, 6)
+                            .background(ab.usesLeft > 0 ? AnyShapeStyle(LinearGradient(colors: [Theme.gold, Theme.ember], startPoint: .leading, endPoint: .trailing)) : AnyShapeStyle(Color.white.opacity(0.05)), in: Capsule())
+                    }
+                    .accessibilityLabel("Schopnost \(ab.name), zbývá \(ab.usesLeft) použití")
+                }
                 Text("🎒").font(.caption)
                 ForEach(session.state.hero.items) { item in
                     Button {

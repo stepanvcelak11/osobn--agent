@@ -11,7 +11,7 @@ extension KeyedDecodingContainer {
 
 extension Hero {
     enum CodingKeys: String, CodingKey {
-        case name, feminine, background, attributes, hp, stress, items, xp, level, statUse, awakeHours, conditions
+        case name, feminine, background, attributes, hp, stress, items, xp, level, statUse, awakeHours, conditions, traits, abilities
     }
 
     public init(from decoder: Decoder) throws {
@@ -28,6 +28,8 @@ extension Hero {
         statUse = c.value(.statUse, [:])
         awakeHours = c.value(.awakeHours, 0)
         conditions = c.value(.conditions, [])
+        traits = c.value(.traits, [])
+        abilities = c.value(.abilities, [])
     }
 }
 

@@ -45,6 +45,10 @@ public enum Fallback {
             }
             if stems.contains(where: { f.range(of: "\\b" + $0, options: .regularExpression) != nil }) { used.append(item.name) }
         }
+        for ab in state.hero.abilities {
+            let words = CzechText.fold(ab.name).split(separator: " ").filter { $0.count >= 4 }
+            if words.contains(where: { f.contains(String($0.prefix(5))) }) || f.contains("schopnost") { used.append(ab.name) }
+        }
         let risky: Set<ActionCategory> = [.combat, .stealth, .magic]
         let difficulty: Difficulty
         switch category {

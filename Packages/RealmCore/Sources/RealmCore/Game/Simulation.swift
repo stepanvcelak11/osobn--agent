@@ -240,6 +240,8 @@ public enum Simulation {
             d.pop += born
             notes.append("přibylo \(born) obyvatel")
         }
+        if s.hero.has("vudce") { d.morale += 2 }
+        s.hero.refreshAbilities()
         // Hrdina si odpočine; ranhojič vyléčí horečku i rány
         d.hp += 5 + st.count(.ranhojicstvi) * 5
         d.stress -= 5 + st.count(.kaple) * 5

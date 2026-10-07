@@ -86,6 +86,26 @@ struct InventorySheet: View {
                 Text("\(hero.xp)/\(hi) zk.").font(.caption2).monospacedDigit().foregroundStyle(Theme.dimText)
             }
             Text("Schopnost, kterou používáš nejčastěji, se s každou úrovní zlepší.").font(.caption2).foregroundStyle(Theme.dimText)
+            ForEach(hero.abilities) { ab in
+                HStack(alignment: .top, spacing: 10) {
+                    Image(systemName: ab.icon).foregroundStyle(Theme.gold).frame(width: 24)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("\(ab.name) · \(ab.usesLeft)/\(ab.maxUses) dnes").font(.subheadline.weight(.semibold)).foregroundStyle(Theme.parchment)
+                        Text(ab.detail + " Obnoví se po spánku nebo novým dnem.").font(.caption2).foregroundStyle(Theme.dimText)
+                    }
+                }
+            }
+            if !hero.traits.isEmpty {
+                FlowRow(spacing: 6) {
+                    ForEach(hero.traits.compactMap(Traits.byId)) { t in
+                        Label(t.name, systemImage: t.icon).font(.caption).foregroundStyle(Theme.parchment)
+                            .padding(.horizontal, 9).padding(.vertical, 5)
+                            .background(Theme.ember.opacity(0.13), in: Capsule())
+                    }
+                }
+                Text(hero.traits.compactMap(Traits.byId).map { "\($0.name): \($0.detail)" }.joined(separator: " "))
+                    .font(.caption2).foregroundStyle(Theme.dimText)
+            }
             HStack {
                 ForEach(Attribute.allCases, id: \.self) { a in
                     VStack(spacing: 2) {
@@ -449,6 +469,8 @@ struct HelpView: View {
                 section("Čin, Řeč, Příběh, Pokračuj", "Tlačítkem vlevo od textu přepínáš, jak tah zadáváš. ČIN: co hrdina udělá (posoudí se a hodí kostkou). ŘEČ: co řekne nahlas – postavy odpoví. PŘÍBĚH: sám napíšeš, co se stane, a vypravěč naváže (bez kostek a bez odměn). Prázdné pole a šipka ⏩ = POKRAČUJ: vypravěč vypráví dál a svět jedná sám.")
                 section("Znovu a Vrátit", "Nelíbí se ti vyprávění? „Znovu“ ho převypráví – hod kostkou ale zůstane stejný, osud se přepsat nedá. „Vrátit tah“ vezme poslední tah zpět (jen dokud hra neskončila). Podržením prstu na textu ho zkopíruješ nebo necháš přečíst.")
                 section("🧠 Paměť vypravěče", "V menu si zapiš, co si má vypravěč vždy pamatovat (tajemství, sliby, nepřátele), a poznámku ke stylu („víc hororu“, „černý humor“). Při založení hry můžeš zadat i vlastní zápletku.")
+                section("Tvoje postava", "Vybíráš z 11 původů (Žoldnéř, Stínochod, Bylinkář, Kupec, Vyhnaný rytíř, Lovec, Potulný kněz, Vědmák, Bard, Kovář, Hrobník) – každý má jiné schopnosti, výbavu a zvláštní schopnost. K tomu 2 volné body a 2 vlastnosti povahy (Odvážný, Otužilý, Noční pták, Šťastlivec…).")
+                section("⚡ Zvláštní schopnost", "Každý původ má svou schopnost (Bojový řev, Léčivé ruce, Splynutí se stínem…). Použiješ ji 2× za den: klepni na zlatý čip nad polem pro tah, nebo ji prostě zmiň v textu. Po spánku se obnoví.")
                 section("⭐ Úrovně", "Každý čin dává zkušenosti – úspěch víc, ale i z nezdaru se učíš. Na nové úrovni se zlepší schopnost, kterou používáš nejčastěji, a hrdina nabere síly.")
                 section("🩸 Stavy hrdiny", "Krvácení bere každý tah zdraví, dokud ránu neošetříš (léčivý předmět, odpočinek). Horečka oslabuje. Dlouho bez spánku přijde únava (−1) a vyčerpání (−2) – spánek aspoň 6 hodin pomůže. Skvělý úspěch dodá odhodlání (+1).")
                 section("🌦️ Počasí a roční období", "Každý den má své počasí: mlha pomáhá plížení, bouřka a sníh zdržují cestu, mráz zvedá spotřebu jídla. Rok začíná jarem, každé období trvá 20 dní. Na podzim je nejbohatší úroda, v zimě skoro nic neroste.")

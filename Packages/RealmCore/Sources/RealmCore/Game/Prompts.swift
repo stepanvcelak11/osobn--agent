@@ -92,6 +92,11 @@ public enum Prompts {
         let bg = Catalog.background(h.background).displayName(feminine: h.feminine)
         lines.append("Den \(s.day), \(phaseName(s.phase)), \(s.season.czechName.lowercased()). Počasí: \(s.weather.mood). Místo: \(s.location) (\(s.scene.czechName)).")
         lines.append("Hrdina: \(h.name), \(bg) (\(h.feminine ? "žena" : "muž")), úroveň \(h.level). Zdraví \(h.hp)/100 – \(hpWord(h.hp)); stres \(h.stress)/100 – \(stressWord(h.stress)).")
+        let traits = h.traits.compactMap(Traits.byId).map(\.name)
+        if !traits.isEmpty { lines.append("Povaha: " + traits.joined(separator: ", ") + ".") }
+        if !h.abilities.isEmpty {
+            lines.append("Zvláštní schopnosti: " + h.abilities.map { "\($0.name) – \($0.detail) (zbývá \($0.usesLeft)× do spánku)" }.joined(separator: "; ") + ".")
+        }
         let conds = World.conditions(h, at: s.worldTime)
         if !conds.isEmpty { lines.append("Stav hrdiny: " + conds.map(\.hint).joined(separator: ", ") + ".") }
         lines.append("Schopnosti: " + Attribute.allCases.map { "\($0.czechName) \(signed(h.score($0)))" }.joined(separator: ", ") + ".")
@@ -184,7 +189,7 @@ public enum Prompts {
         stat = sila | obratnost | duvtip | charisma | none (čím se akce zkouší),
         difficulty = trivial (běžná věc bez rizika) | easy | normal | hard | extreme | impossible (fyzicky nemožné v tomto světě),
         risk = none | low | medium | high (jak moc může hrdina utrpět újmu při neúspěchu),
-        items_used = názvy předmětů, které hrdina chce použít (i když je nemá),
+        items_used = názvy předmětů nebo zvláštních schopností, které hrdina chce použít (předměty i když je nemá),
         duration = jak dlouho čin ve světě trvá: moment (pár minut), hour (asi hodinu), hours (několik hodin), day (celý den – např. jízda na koni do další vesnice), days (několik dní – dlouhá výprava).
         """
         if state.mode.hasSettlement { s += "\nbuild = typ stavby, pokud chce stavět, jinak none." }
