@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { effect, newGame, choose, nextLeader, currentCard, preview, fill, tenure, DIRS, cardById, METERS, CARDS, INTRO, PEOPLE, ENDINGS } from '../game.js';
+import { effect, newGame, choose, nextLeader, currentCard, preview, fill, tenure, DIRS, cardById, METERS, CARDS, INTRO, PEOPLE, ENDINGS, KINDS, outcome, bestDir, skip, nudge, ready, CHARGE } from '../game.js';
 
 const meterIds = new Set(METERS.map((m) => m.id));
 const all = [INTRO, ...CARDS];
@@ -146,4 +146,95 @@ test('navazující příběhy opravdu navazují', () => {
   }
   const never = CARDS.filter((c) => !seen.has(c.id)).map((c) => c.id);
   assert.deepEqual(never, [], 'každá karta se někdy objeví');
+});
+
+// ── Typy prezidenta ─────────────────────────────────────
+function onCard(kind, id, meters = {}) {
+  const s = newGame({ kind }, 3);
+  choose(s, 'left'); // pryč z úvodu
+  s.card = id;
+  Object.assign(s.meters, meters);
+  return s;
+}
+
+test('Krizový manažer: krok z krajnosti k rovnováze je dvojnásobný, jinak normální', () => {
+  // stavka.down = „Pošlu policii“: lid −, sil +
+  const o = cardById('stavka').opts.down.e;
+  const dl = effect('lid', o.lid), ds = effect('sil', o.sil);
+  assert.ok(dl < 0 && ds > 0);
+  const plain = onCard('vize', 'stavka', { lid: 85, sil: 50 });
+  const crisis = onCard('krize', 'stavka', { lid: 85, sil: 50 });
+  assert.equal(outcome(plain, 'down').lid, 85 + dl);
+  assert.equal(outcome(crisis, 'down').lid, 85 + 2 * dl, 'z krajnosti dvojnásob');
+  assert.equal(outcome(crisis, 'down').sil, 50 + ds, 'u středu beze změny');
+  // bonus nepřehoupne přes střed
+  assert.equal(outcome(onCard('krize', 'stavka', { lid: 71 }), 'down').lid, Math.max(50, 71 + 2 * dl));
+  // směrem do krajnosti se nic nezdvojuje
+  assert.equal(outcome(onCard('krize', 'stavka', { sil: 75 }), 'down').sil, 75 + ds);
+});
+
+test('Vyčkávač: odložení se nabije po 5 rozhodnutích a nic nezmění', () => {
+  const s = newGame({ kind: 'odklad' }, 9);
+  choose(s, 'left');
+  assert.equal(skip(s), false, 'zatím nenabito');
+  while (!ready(s)) choose(s, bestDir(s));
+  const meters = { ...s.meters }, card = s.card, turn = s.turn;
+  assert.equal(skip(s), true);
+  assert.deepEqual(s.meters, meters);
+  assert.notEqual(s.card, card);
+  assert.equal(s.turn, turn + 1);
+  assert.equal(s.charge, 0);
+  assert.equal(skip(s), false, 'znovu až po dalších 5');
+  const other = newGame({ kind: 'vize' }, 9); other.charge = CHARGE; choose(other, 'left');
+  assert.equal(skip(other), false, 'jiný typ odkládat nemůže');
+});
+
+test('Kormidelník: posun o 15 k rovnováze, nikdy přes střed', () => {
+  const s = newGame({ kind: 'kormidlo' }, 11);
+  s.charge = CHARGE; s.meters.fin = 20;
+  assert.equal(nudge(s, 'fin'), true);
+  assert.equal(s.meters.fin, 35);
+  assert.equal(nudge(s, 'fin'), false, 'vybito');
+  s.charge = CHARGE; s.meters.vir = 58;
+  nudge(s, 'vir');
+  assert.equal(s.meters.vir, 50);
+});
+
+test('Rádce radí z 70 % nejlépe', () => {
+  let ok = 0, n = 0;
+  for (let i = 0; i < 300; i++) {
+    const s = newGame({ kind: 'rada' }, 2000 + i);
+    choose(s, 'left');
+    for (let k = 0; k < 10 && !s.dead; k++) {
+      assert.ok(DIRS.includes(s.advice));
+      if (s.advice === bestDir(s)) ok++;
+      n++;
+      choose(s, DIRS[(i + k) % 4]);
+    }
+  }
+  const rate = ok / n;
+  console.log('rádce trefil', (rate * 100).toFixed(1), '%');
+  assert.ok(rate > 0.63 && rate < 0.77, `rádce radí dobře v ${rate}`);
+  const v = newGame({ kind: 'vize' }, 1); choose(v, 'left');
+  assert.equal(v.advice, null, 'jiný typ rádce nemá');
+});
+
+test('každý typ prezidenta vydrží s rozumnou hrou déle než náhoda', () => {
+  for (const k of KINDS) {
+    const months = [];
+    for (let i = 0; i < 40; i++) {
+      const s = newGame({ kind: k.id }, 3000 + i);
+      let g = 0;
+      while (!s.dead && g++ < 3000) {
+        if (k.id === 'odklad' && ready(s) && s.card !== 'intro') { const m = outcome(s, bestDir(s)); if (Object.values(m).some((v) => v < 15 || v > 85)) { skip(s); continue; } }
+        if (k.id === 'kormidlo' && ready(s)) { const [id] = Object.entries(s.meters).sort((a, b) => Math.abs(b[1] - 50) - Math.abs(a[1] - 50))[0]; nudge(s, id); }
+        choose(s, k.id === 'rada' && s.advice ? s.advice : bestDir(s));
+      }
+      months.push(s.turn);
+    }
+    months.sort((a, b) => a - b);
+    console.log(k.id, 'medián', months[20]);
+    assert.ok(months[20] >= 60, `${k.id}: medián ${months[20]}`);
+    assert.ok(k.m && k.f && k.text && k.icon);
+  }
 });

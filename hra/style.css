@@ -41,7 +41,7 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 h1 { font-family: var(--serif); font-weight: 600; letter-spacing: .12em; color: var(--accent); margin: 0; }
 
 /* ── Úvodní obrazovka ───────────────────── */
-.start { flex: 1; display: flex; flex-direction: column; justify-content: center; gap: 22px; text-align: center; }
+.start { flex: 1; display: flex; flex-direction: column; justify-content: safe center; gap: 22px; text-align: center; overflow-y: auto; padding-bottom: 8px; }
 .start .logo { width: 88px; height: 88px; border-radius: 22px; margin: 0 auto; box-shadow: 0 10px 30px #0008; }
 .start h1 { font-size: 36px; }
 .start p { color: var(--dim); font-family: var(--serif); font-size: 17px; line-height: 1.55; margin: 0; }
@@ -54,6 +54,14 @@ h1 { font-family: var(--serif); font-weight: 600; letter-spacing: .12em; color: 
 .seg button { flex: 1; }
 .seg button.on { border-color: var(--accent); color: var(--accent); background: #e0915a14; }
 .col { display: flex; flex-direction: column; gap: 10px; }
+.label { font-size: 13px; color: var(--dim); letter-spacing: .06em; text-transform: uppercase; margin-top: 8px; text-align: center; }
+.kinds { display: flex; flex-direction: column; gap: 8px; }
+.kind { display: flex; align-items: center; gap: 12px; text-align: left; padding: 11px 14px; background: var(--bg1); }
+.kind > span { font-size: 24px; }
+.kind b { display: block; font-family: var(--serif); font-size: 16px; }
+.kind small { display: block; font-size: 13px; color: var(--dim); line-height: 1.35; margin-top: 2px; }
+.kind.on { border-color: var(--accent); background: #e0915a14; }
+.kind.on b { color: var(--accent); }
 
 /* ── Hlavička ───────────────────────────── */
 .top { position: relative; z-index: 3; display: grid; grid-template-columns: 44px 1fr 44px; align-items: center; min-height: 44px; }
@@ -61,7 +69,20 @@ h1 { font-family: var(--serif); font-weight: 600; letter-spacing: .12em; color: 
 .burger i { display: block; width: 22px; height: 2px; border-radius: 1px; background: var(--text); opacity: .8; }
 .leader { text-align: center; line-height: 1.25; }
 .leader b { display: block; font-family: var(--serif); font-size: 16px; font-weight: 600; }
-.leader span { font-size: 12px; color: var(--dim); letter-spacing: .04em; }
+.leader span { font-size: 12px; color: var(--dim); letter-spacing: .02em; }
+.ability { position: relative; width: 44px; height: 44px; padding: 0; border: 0; background: none; display: grid; place-items: center; font-size: 19px; }
+.ability[hidden] { display: none; }
+.ability svg { position: absolute; inset: 0; transform: rotate(-90deg); }
+.ability circle { fill: none; stroke-width: 2.5; }
+.ability .ring0 { stroke: #ffffff1c; }
+.ability .ring { stroke: var(--dim); stroke-linecap: round; transition: stroke-dasharray .4s; }
+.ability span { opacity: .45; filter: grayscale(1); transition: opacity .3s; }
+.ability.ready .ring { stroke: var(--accent); }
+.ability.ready span { opacity: 1; filter: none; }
+.ability.ready { animation: glow 2.4s ease-in-out infinite; border-radius: 50%; }
+@keyframes glow { 50% { box-shadow: 0 0 14px #e0915a66; } }
+.toast { position: fixed; z-index: 20; left: 50%; top: 42%; transform: translateX(-50%); box-shadow: 0 10px 30px #0008; background: var(--bg2); border: 1px solid var(--line);
+  padding: 10px 16px; border-radius: 14px; font-size: 14px; white-space: nowrap; animation: fade .15s ease-out; }
 
 /* ── Scéna: pozadí v tlumené barvě mluvící postavy ─ */
 body.game { background: var(--scene, var(--bg)); transition: background-color .5s ease; }
@@ -127,6 +148,8 @@ body.game { background: var(--scene, var(--bg)); transition: background-color .5
 .chev.down { bottom: 0; left: 50%; transform: translateX(-50%); }
 .name { flex: none; text-align: center; padding: 2px 0 10px; }
 .name b { display: block; font-family: var(--serif); font-size: 18px; font-weight: 600; }
+.advice { font-size: 14px; color: var(--accent); margin-top: 3px; }
+.advice:empty { display: none; }
 
 /* ── Okno ukazatele ─────────────────────── */
 .pop { position: fixed; inset: 0; z-index: 10; background: #000000a6; display: flex; align-items: flex-end; justify-content: center; animation: fade .15s ease-out; }
@@ -149,6 +172,9 @@ body.game { background: var(--scene, var(--bg)); transition: background-color .5
 .pane dl { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 6px 12px; font-size: 15px; line-height: 1.4; }
 .pane dt { color: var(--dim); }
 .pane dd { margin: 0; }
+.pane-title { font-family: var(--serif); font-size: 19px; }
+.steer { display: flex; flex-direction: column; gap: 8px; }
+.steer button { display: flex; justify-content: space-between; padding: 13px 15px; background: var(--bg2); }
 
 /* ── Nabídka ────────────────────────────── */
 .menu { position: fixed; inset: 0; z-index: 10; background: var(--bg); display: flex; flex-direction: column; justify-content: center;

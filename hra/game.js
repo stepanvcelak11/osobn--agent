@@ -12,6 +12,20 @@ const BY_ID = new Map([[INTRO.id, INTRO], ...CARDS.map((c) => [c.id, c])]);
 
 export function cardById(id) { return BY_ID.get(id); }
 
+/// Typy prezidenta – každý má jednu schopnost.
+export const KINDS = [
+  { id: 'vize', m: 'Vizionář', f: 'Vizionářka', icon: '🔭', text: 'Při tažení vidí, jestli volba ukazatel zvedne, nebo sníží – ale ne o kolik.' },
+  { id: 'krize', m: 'Krizový manažer', f: 'Krizová manažerka', icon: '🧯', text: 'Když je ukazatel v krajnosti (pod 30 % nebo nad 70 %), kroky zpět k rovnováze mají dvojnásobný účinek.' },
+  { id: 'odklad', m: 'Vyčkávač', f: 'Vyčkávačka', icon: '⏭️', text: 'Po každých 5 rozhodnutích může jednu kartu odložit – nic se nestane a jde se dál.' },
+  { id: 'kormidlo', m: 'Kormidelník', f: 'Kormidelnice', icon: '🧭', text: 'Po každých 5 rozhodnutích může jeden ukazatel posunout o 15 bodů k rovnováze.' },
+  { id: 'rada', m: 'Prezident s rádcem', f: 'Prezidentka s rádcem', icon: '🦉', text: 'Rádce mu ke každé kartě poradí. V 7 případech z 10 radí to nejlepší, jinak se mýlí.' },
+];
+export const CHARGE = 5;     // po kolika rozhodnutích se nabije schopnost
+export const NUDGE = 15;     // o kolik posune Kormidelník
+const EXTREME = 20;          // Krizový manažer: krajnost = dál než 20 od středu (pod 30 / nad 70)
+export const ADVICE_OK = 0.7;
+export const kindOf = (state) => KINDS.find((k) => k.id === state.leader.kind) || KINDS[0];
+
 // Deterministický generátor (mulberry32) – stav se ukládá, takže hra jde přesně obnovit.
 export function random(state) {
   let t = (state.seed = (state.seed + 0x6d2b79f5) >>> 0);
@@ -22,12 +36,14 @@ export function random(state) {
 
 function freshMeters() { return Object.fromEntries(METERS.map((m) => [m.id, START])); }
 
-export function newGame({ name = '', female = false } = {}, seed = Date.now() >>> 0) {
+export function newGame({ name = '', female = false, kind = 'vize' } = {}, seed = Date.now() >>> 0) {
   const leaderName = name.trim().slice(0, 30) || (female ? 'Jana Nová' : 'Jan Nový');
   return {
     v: 1,
     seed: seed >>> 0 || 1,
-    leader: { name: leaderName, female: !!female, n: 1 },
+    leader: { name: leaderName, female: !!female, n: 1, kind },
+    charge: 0, // rozhodnutí od posledního použití schopnosti
+    advice: null, // co radí rádce k aktuální kartě
     meters: freshMeters(),
     flags: [],
     queue: [],
@@ -66,6 +82,12 @@ function eligible(state, c) {
   return true;
 }
 
+/** Nová karta na stůl (a rada rádce k ní). */
+function draw(state) {
+  state.card = pickCard(state);
+  state.advice = state.leader.kind === 'rada' ? advise(state) : null;
+}
+
 /** Další karta: nejdřív pokračování příběhu, které je na řadě, jinak náhodná vhodná karta. */
 export function pickCard(state) {
   const due = state.queue.findIndex((q) => q.at <= state.total);
@@ -99,13 +121,75 @@ export function preview(card, dir) {
 
 const clamp = (v) => Math.max(0, Math.min(100, v));
 
+/** Jak se ukazatele po volbě změní (včetně schopnosti Krizového manažera) – bez změny stavu. */
+export function outcome(state, dir) {
+  const card = cardById(state.card) || INTRO;
+  const out = { ...state.meters };
+  const crisis = state.leader.kind === 'krize';
+  for (const [k, v] of Object.entries(card.opts[dir].e || {})) {
+    const from = out[k];
+    let d = effect(k, v);
+    // Krok zpátky ke středu z krajnosti má dvojnásobnou sílu – ale za střed ho bonus nepřehoupne.
+    if (crisis && d && Math.abs(from - START) > EXTREME && Math.sign(d) === Math.sign(START - from)) {
+      const doubled = from + 2 * d;
+      d = d > 0 ? Math.max(d, Math.min(doubled, START) - from) : Math.min(d, Math.max(doubled, START) - from);
+    }
+    out[k] = clamp(from + d);
+  }
+  return out;
+}
+
+/** Nejlepší volba pro tuto chvíli: žádná katastrofa a ukazatele co nejblíž středu. */
+export function bestDir(state) {
+  let best = DIRS[0], bestScore = Infinity;
+  for (const d of DIRS) {
+    const m = outcome(state, d);
+    const vals = Object.values(m).map((v) => Math.abs(v - START));
+    const score = (vals.some((v) => v >= 50) ? 1e6 : 0) + vals.reduce((a, v) => a + v * v, 0) + 2 * Math.max(...vals) ** 2;
+    if (score < bestScore) { bestScore = score; best = d; }
+  }
+  return best;
+}
+
+/** Rada rádce: v 70 % nejlepší volba, jinak jiná. */
+function advise(state) {
+  const best = bestDir(state);
+  if (random(state) < ADVICE_OK) return best;
+  const others = DIRS.filter((d) => d !== best);
+  return others[Math.floor(random(state) * others.length)];
+}
+
+export const ready = (state) => (state.charge ?? 0) >= CHARGE;
+
+/** Vyčkávač: odloží kartu. Měsíc uplyne, ukazatele se nehnou. */
+export function skip(state) {
+  if (state.leader.kind !== 'odklad' || !ready(state) || state.dead || state.card === INTRO.id) return false;
+  state.charge = 0;
+  state.recent = [...state.recent, state.card].slice(-RECENT);
+  state.turn += 1;
+  state.total += 1;
+  draw(state);
+  return true;
+}
+
+/** Kormidelník: posune jeden ukazatel o 15 k rovnováze (nikdy přes střed). */
+export function nudge(state, id) {
+  if (state.leader.kind !== 'kormidlo' || !ready(state) || state.dead) return false;
+  const v = state.meters[id];
+  if (v === START) return false;
+  state.meters[id] = v < START ? Math.min(START, v + NUDGE) : Math.max(START, v - NUDGE);
+  state.charge = 0;
+  return true;
+}
+
 /** Rozhodnutí. Vrací konec vlády (nebo null). */
 export function choose(state, dir) {
   if (state.dead) return state.dead;
   const card = cardById(state.card) || INTRO;
   const o = card.opts[dir];
   if (!o) throw new Error(`neznámý směr ${dir}`);
-  for (const [k, v] of Object.entries(o.e || {})) state.meters[k] = clamp(state.meters[k] + effect(k, v));
+  state.meters = outcome(state, dir);
+  state.charge = Math.min(CHARGE, (state.charge ?? 0) + 1);
   if (o.set && !state.flags.includes(o.set)) state.flags.push(o.set);
   if (o.unset) state.flags = state.flags.filter((f) => f !== o.unset);
   if (o.next) state.queue.push({ id: o.next, at: state.total + 1 + (o.in ?? 3) });
@@ -125,24 +209,25 @@ export function choose(state, dir) {
     state.best = Math.max(state.best, state.turn);
     return state.dead;
   }
-  state.card = pickCard(state);
+  draw(state);
   return null;
 }
 
 /** Nástupce: nový vůdce, ukazatele zpět doprostřed. Svět (příznaky) zůstává. */
-export function nextLeader(state) {
+export function nextLeader(state, kind = state.leader.kind) {
   const female = random(state) < 0.5;
   const names = female ? SUCCESSORS.f : SUCCESSORS.m;
   const used = new Set(state.history.map((h) => h.name));
   const free = names.filter((n) => !used.has(n));
   const list = free.length ? free : names;
   const name = list[Math.floor(random(state) * list.length)];
-  state.leader = { name, female, n: state.leader.n + 1 };
+  state.leader = { name, female, n: state.leader.n + 1, kind };
+  state.charge = 0;
   state.meters = freshMeters();
   state.queue = [];
   state.turn = 0;
   state.dead = null;
-  state.card = pickCard(state);
+  draw(state);
 }
 
 /** „2 roky a 3 měsíce“ */
