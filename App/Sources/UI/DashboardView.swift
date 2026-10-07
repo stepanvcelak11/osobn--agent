@@ -64,6 +64,14 @@ struct DashboardView: View {
                     }
                 }
                 .accessibilityLabel("Postup k cíli \(q?.progress ?? 0) z \(q?.steps ?? 3)")
+                if let q, q.setbacks > 0 {
+                    HStack(spacing: 2) {
+                        ForEach(0..<q.maxSetbacks, id: \.self) { i in
+                            Text("💀").font(.system(size: 9)).opacity(i < q.setbacks ? 1 : 0.18)
+                        }
+                    }
+                    .accessibilityLabel("Nezdary \(q.setbacks) z \(q.maxSetbacks)")
+                }
                 StatPill(icon: "🪙", value: "\(state.settlement.gold)", color: Theme.gold, expand: false)
             }
         }

@@ -296,6 +296,9 @@ public struct QuestInfo: Codable, Equatable, Sendable {
     /// Kolik zdařilých kroků je potřeba ke splnění cíle.
     public var steps: Int
     public var progress: Int = 0
+    /// Nezdary – když dosáhnou maxima, cíl je ztracen.
+    public var setbacks: Int = 0
+    public var maxSetbacks: Int = 4
 }
 
 // MARK: - Hrozby (C)
@@ -409,12 +412,13 @@ public struct LogEntry: Codable, Equatable, Identifiable, Sendable {
 }
 
 public enum GameEnd: String, Codable, Sendable {
-    case death, victory, ruin, abandoned
+    case death, victory, ruin, defeat, abandoned
     public var czechName: String {
         switch self {
         case .death: return "Smrt hrdiny"
         case .victory: return "Vítězství"
         case .ruin: return "Zánik osady"
+        case .defeat: return "Porážka"
         case .abandoned: return "Konec výpravy"
         }
     }

@@ -363,6 +363,9 @@ public final class GameEngine: @unchecked Sendable {
         if let q = s.quest, r.questGain > 0 {
             s.quest?.progress = min(q.steps, q.progress + r.questGain)
         }
+        if let q = s.quest, r.questSetback > 0 {
+            s.quest?.setbacks = min(q.maxSetbacks, q.setbacks + r.questSetback)
+        }
 
         // Počítadla
         if r.intent.category == .combat && [.success, .critSuccess].contains(outcome) { s.stats["combats_won", default: 0] += 1 }
@@ -377,8 +380,13 @@ public final class GameEngine: @unchecked Sendable {
             s.end = .death
         } else if s.mode != .quest && s.settlement.population <= 0 {
             s.end = .ruin
+        } else if s.mode == .quest && r.losesQuest {
+            s.end = .defeat
         } else if s.mode == .quest && r.completesQuest {
             s.end = .victory
+        } else if s.mode != .quest && s.settlement.morale <= 0 {
+            s.end = .defeat
+            extra.append(LogEntry(kind: .event, text: s.mode == .campaign ? "⚔️ Vzpoura! Lidé ztratili víru a karavana se rozpadla." : "⚔️ Povstání! Lid tě svrhl a vyhnal z osady."))
         } else if s.mode == .campaign, r.arrival?.isDestination == true {
             s.end = .victory
         }

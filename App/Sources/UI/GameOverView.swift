@@ -14,6 +14,7 @@ struct GameOverView: View {
         case .death: return "☠️"
         case .victory: return "🏆"
         case .ruin: return "🔥"
+        case .defeat: return "⚔️"
         default: return "⌛"
         }
     }
@@ -23,6 +24,12 @@ struct GameOverView: View {
         case .death: return state.hero.feminine ? "Padla jsi" : "Padl jsi"
         case .victory: return "Vítězství"
         case .ruin: return "Vše je ztraceno"
+        case .defeat:
+            switch state.mode {
+            case .quest: return "Výprava selhala"
+            case .campaign: return "Vzpoura"
+            default: return "Svržen z trůnu"
+            }
         default: return "Konec výpravy"
         }
     }

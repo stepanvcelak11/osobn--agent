@@ -82,7 +82,7 @@ public enum Prompts {
         switch s.mode {
         case .quest:
             if let q = s.quest {
-                lines.append("Cíl výpravy: \(q.objective). Postup k cíli: \(q.progress) z \(q.steps).")
+                lines.append("Cíl výpravy: \(q.objective). Postup k cíli: \(q.progress) z \(q.steps). Nezdary: \(q.setbacks) z \(q.maxSetbacks) (pak je cíl ztracen).")
             }
             lines.append("Zlato: \(st.gold).")
         case .campaign:
@@ -179,7 +179,11 @@ public enum Prompts {
         if m.pop < 0 { must.append("ztráty na lidech (\(m.pop))") }
         if !must.isEmpty { lines.append("Povinné následky, které musíš popsat: " + must.joined(separator: ", ") + ".") }
         lines.append(contentsOf: r.notes)
-        if r.completesQuest {
+        if r.losesQuest {
+            lines.append("TÍMTO TAHEM JE CÍL VÝPRAVY NENÁVRATNĚ ZTRACEN: \(state.quest?.objective ?? ""). Popiš, jak se vše zhroutilo.")
+        } else if r.questSetback > 0, let q = state.quest, q.setbacks + r.questSetback == q.maxSetbacks - 1 {
+            lines.append("Výprava visí na vlásku – ještě jeden nezdar a cíl bude ztracen. Dej to pocítit.")
+        } else if r.completesQuest {
             lines.append("TÍMTO TAHEM HRDINA SPLNÍ CÍL VÝPRAVY: \(state.quest?.objective ?? ""). Popiš vítězné završení.")
         } else if r.questGain > 0, let q = state.quest {
             lines.append("Hrdina se tímto tahem přiblížil k cíli (\(q.progress + r.questGain) z \(q.steps)). Ukaž, že cíl je blíž.")
@@ -226,6 +230,12 @@ public enum Prompts {
         case .death: how = "Hrdina zemřel."
         case .victory: how = state.mode == .campaign ? "Karavana dorazila do Údolí Úsvitu." : (state.mode == .realm ? "Z osady vyrostlo město." : "Hrdina splnil cíl výpravy.")
         case .ruin: how = "Osada / karavana zanikla – nezbyl nikdo."
+        case .defeat:
+            switch state.mode {
+            case .quest: how = "Výprava selhala – cíl je nenávratně ztracen."
+            case .campaign: how = "Karavana se vzbouřila a rozpadla, hrdinu opustili."
+            default: how = "Lid hrdinu svrhl a vyhnal z osady."
+            }
         case .abandoned, .none: how = "Hrdina se rozhodl příběh uzavřít."
         }
         return """

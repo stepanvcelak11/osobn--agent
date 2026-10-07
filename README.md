@@ -28,6 +28,9 @@ Po jednorázovém automatickém stažení vypravěče hraje úplně offline. Ž�
 | **Vláda nad osadou** | dlouhá | Z osady vybuduj město: 100 obyvatel, hradby, tržiště, kaple a kasárna. Sklizeň, daně, růst, hrozby. |
 | **Nekonečná říše** | bez konce | Stav, rozšiřuj, objevuj okolí – hra nekončí (jen smrtí hrdiny nebo zánikem osady). |
 
+**Každý mód jde i prohrát:** smrtí hrdiny, hladem a zánikem karavany či osady, vzpourou nebo svržením,
+když morálka ✊ spadne na nulu, a na výpravě ztrátou cíle po čtyřech nezdarech 💀.
+
 ### Čas běží podle činů
 
 Každý tah trvá tolik herního času, kolik by trval ve skutečnosti – vypravěč odhadne délku činu:

@@ -89,7 +89,9 @@ public enum Fallback {
             if out.itemsGained[0].0 == "Zrezivělý klíč" { out.itemsGained[0].1 = .key }
         }
         if let a = r.arrival { out.location = a.stop.name; out.scene = a.stop.scene }
-        if r.completesQuest {
+        if r.losesQuest {
+            out.narration = out.narration.replacingOccurrences(of: " Co uděláš teď?", with: "") + " A pak je pozdě. Cíl výpravy je nenávratně ztracen."
+        } else if r.completesQuest {
             out.narration = out.narration.replacingOccurrences(of: " Co uděláš teď?", with: "") + " Poslední překážka padá – cíl výpravy je splněn."
         }
         return out
@@ -112,6 +114,7 @@ public enum Fallback {
         switch state.end {
         case .death: return "Píseň o \(h.name) se zpívá potichu, aby ji neslyšeli mrtví. Padl(a) tam, kde jiní utekli – a to se v tomhle kraji počítá."
         case .victory: return "\(h.name) dokázal(a), co mnozí pokládali za nemožné. U ohňů se o tom ještě dlouho bude mluvit – a pokaždé o trochu hrdinštěji."
+        case .defeat: return "Píseň o \(h.name) je krátká a hořká: přišel(a), zaváhal(a), ztratil(a). Ale kraj si pamatuje i ty, kteří prohráli – a někdy se vracejí."
         case .ruin: return "Z \(state.settlement.name) zbyly jen ohořelé trámy a vrány. Jméno \(h.name) si pamatuje už jen vítr."
         default: return "Výprava skončila dřív, než se naplnil její cíl. Ale \(h.name) přežil(a) – a kdo přežije, může to zkusit znovu."
         }

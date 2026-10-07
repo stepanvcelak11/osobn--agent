@@ -186,6 +186,10 @@ public enum Simulation {
     static func checkEnd(_ s: inout GameState) {
         if s.hero.hp <= 0 { s.end = .death }
         else if s.settlement.population <= 0 { s.end = .ruin }
+        else if s.settlement.morale <= 0 {
+            s.end = .defeat
+            s.log.append(LogEntry(kind: .event, text: "⚔️ Povstání! Lid ztratil víru a svrhl tě."))
+        }
     }
 
     static let threatTitles: [ThreatKind: [String]] = [

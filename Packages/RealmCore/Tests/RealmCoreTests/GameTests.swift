@@ -177,6 +177,37 @@ final class GameTests: XCTestCase {
         XCTAssertNil(r2.state.end)
     }
 
+    func testEveryModeCanBeLost() {
+        // Výprava: nezdary vedou ke ztrátě cíle
+        var q = newState(.quest)
+        q.quest?.setbacks = 3
+        var res = Rules.resolve(state: &q, intent: ActionIntent(summary: "x", category: .stealth))
+        res.roll.outcome = .fail; res.questSetback = 1; res.losesQuest = true; res.mandatory = StatDelta()
+        let r = GameEngine.apply(state: q, action: "x", resolution: res, output: NarratorOutput(narration: "…", proposed: StatDelta()), now: t0)
+        XCTAssertEqual(r.state.end, .defeat)
+        // Rules spočítá nezdar sám
+        var q2 = newState(.quest)
+        q2.quest?.setbacks = 3
+        for _ in 0..<60 {
+            let rr = Rules.resolve(state: &q2, intent: ActionIntent(summary: "x", category: .combat, difficulty: .extreme))
+            if rr.roll.outcome == .fail || rr.roll.outcome == .critFail { XCTAssertTrue(rr.losesQuest) }
+        }
+        // Karavana: vzpoura při nulové morálce
+        var c = newState(.campaign)
+        c.settlement.morale = 3
+        var rc = Rules.resolve(state: &c, intent: ActionIntent(summary: "x", category: .other, difficulty: .trivial))
+        rc.mandatory = StatDelta(morale: -5)
+        rc.roll.outcome = .auto
+        let r2 = GameEngine.apply(state: c, action: "x", resolution: rc, output: NarratorOutput(narration: "…", proposed: StatDelta(morale: -5)), now: t0)
+        XCTAssertEqual(r2.state.end, .defeat)
+        // Osada: povstání při nulové morálce
+        var o = newState(.endless)
+        o.settlement.morale = 0
+        o.settlement.food = 0
+        Simulation.advance(&o, to: t0.addingTimeInterval(2 * 24 * 3600))
+        XCTAssertTrue(o.isOver)
+    }
+
     func testQuestProgressFromRolls() {
         var s = newState(.quest)
         s.quest?.progress = 2

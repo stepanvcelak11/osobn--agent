@@ -144,6 +144,9 @@ public struct Resolution: Equatable, Sendable {
     /// Rychlá výprava: o kolik se tah přiblížil k cíli a zda ho dokončí.
     public var questGain = 0
     public var completesQuest = false
+    /// Nezdar na výpravě a zda tím je cíl ztracen.
+    public var questSetback = 0
+    public var losesQuest = false
     /// Herní hodiny, které čin zabere.
     public var hours: Double = 1
 }
@@ -348,6 +351,12 @@ public enum Rules {
             default: break
             }
             res.completesQuest = res.questGain > 0 && q.progress + res.questGain >= q.steps
+            switch roll.outcome {
+            case .critFail: res.questSetback = 2
+            case .fail: res.questSetback = 1
+            default: break
+            }
+            res.losesQuest = res.questSetback > 0 && q.setbacks + res.questSetback >= q.maxSetbacks
         }
 
         res.intent = intent
