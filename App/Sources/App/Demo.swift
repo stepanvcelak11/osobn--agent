@@ -82,7 +82,7 @@ enum Demo {
             s.scene = s.journey!.current.scene
             s.log = [
                 LogEntry(kind: .player, text: "Vyrazíme dál"),
-                LogEntry(kind: .narration, text: "Vozy vrzají v blátě a koně funí. Když dorazíte k \(s.location), z křoví vyletí šípy. Lapkové! Tví žoldáci je zaženou, ale dva lidé zůstanou ležet v trávě a kus nákladu je pryč.",
+                LogEntry(kind: .narration, text: "Vozy vrzají v blátě a koně funí. Když dorazíte na místo zvané \(s.location), z křoví vyletí šípy. Lapkové! Tví žoldáci je zaženou, ale dva lidé zůstanou ležet v trávě a kus nákladu je pryč.",
                          roll: RollInfo(die: 11, modifier: 1, dc: 12, stat: .obratnost, outcome: .partial),
                          delta: StatDelta(pop: -2, gold: -10, food: -19, morale: -8, stress: 10), hours: 24),
             ]

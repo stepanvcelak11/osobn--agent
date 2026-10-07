@@ -33,7 +33,7 @@ struct DashboardView: View {
     private var title: String {
         switch state.mode {
         case .quest: return state.location
-        case .campaign: return "Karavana z \(state.settlement.name)"
+        case .campaign: return "Karavana z města \(state.settlement.name)"
         case .realm, .endless: return state.settlement.name
         }
     }
