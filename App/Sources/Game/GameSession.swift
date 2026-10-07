@@ -6,13 +6,14 @@ import RealmCore
 @MainActor
 final class GameSession: ObservableObject, Identifiable {
     enum Busy: Equatable {
-        case intro, interpreting, rolling, narrating, epilogue, waitingForModel
+        case intro, interpreting, rolling, narrating, settling, epilogue, waitingForModel
         var label: String {
             switch self {
             case .intro: return "Vypravěč rozdmýchává oheň…"
             case .interpreting: return "Vypravěč zvažuje tvůj záměr…"
             case .rolling: return "Kostky padají…"
             case .narrating: return "Vypravěč vypráví…"
+            case .settling: return "Vypravěč zapisuje následky…"
             case .epilogue: return "Píše se legenda…"
             case .waitingForModel: return "Vypravěč se probouzí (načítání modelu)…"
             }
@@ -184,8 +185,27 @@ final class GameSession: ObservableObject, Identifiable {
                 busy = .narrating
             }
         case .narrating(let t):
-            if busy != .narrating && diceOverlay == nil { busy = .narrating }
-            streamingText = t
+            if busy != .narrating && busy != .settling && diceOverlay == nil { busy = .narrating }
+            publishStream(t)
+        case .settling:
+            if diceOverlay == nil { busy = .settling }
+        }
+    }
+
+    // Text se překresluje nejvýš ~8× za sekundu – překreslení celé obrazovky po každém tokenu zbytečně
+    // vytěžuje procesor ve chvíli, kdy ho nejvíc potřebuje vypravěč.
+    private var pendingStream: String?
+    private var streamFlush: Task<Void, Never>?
+
+    private func publishStream(_ t: String) {
+        pendingStream = t
+        guard streamFlush == nil else { return }
+        streamFlush = Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: 120_000_000)
+            guard let self else { return }
+            if self.task != nil, let p = self.pendingStream { self.streamingText = p }
+            self.pendingStream = nil
+            self.streamFlush = nil
         }
     }
 

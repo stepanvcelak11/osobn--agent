@@ -48,6 +48,8 @@ public enum TurnEvent: Sendable {
     case interpreting
     case rolled(RollInfo, ActionIntent)
     case narrating(String)
+    /// Vyprávění je dopsané, model ještě zapisuje následky (zdraví, předměty, místo…).
+    case settling
 }
 
 public struct TurnResult: Sendable {
@@ -137,7 +139,7 @@ public final class GameEngine: @unchecked Sendable {
                                                .init(.user, Prompts.introTask(state: s, hook: hook))])
             let streamer = FieldStreamer(field: "narration", onText: onText)
             if let out = try? await model.generate(prompt: prompt,
-                                                   options: GenerationOptions(maxTokens: 420, temperature: 0.85, topP: 0.95, grammar: Grammars.story),
+                                                   options: GenerationOptions(maxTokens: 360, temperature: 0.7, topP: 0.92, grammar: Grammars.story),
                                                    onToken: { [limit = narrateLimit, started = Date()] in streamer.feed($0); return Self.keepGoing(since: started, limit: limit) }) {
                 text = Self.narration(from: out.text)
             }
@@ -157,10 +159,20 @@ public final class GameEngine: @unchecked Sendable {
         if let v = JSONTools.parseObject(raw), let t = v.nonEmptyString("narration") { return clean(t) }
         let prefix = "{\"narration\":\""
         if let r = raw.range(of: prefix) {
-            let t = JSONTools.decodePartialString(String(raw[r.upperBound...]))
+            // Uříznuto časovým limitem: bez rozepsané poslední věty.
+            let t = completeSentences(JSONTools.decodePartialString(String(raw[r.upperBound...])))
             if t.count > 20 { return clean(t) }
         }
         return nil
+    }
+
+    /// Text do poslední celé věty (když ho limit utne uprostřed).
+    static func completeSentences(_ t: String) -> String {
+        let trimmed = t.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let last = trimmed.last, !".!?…“\"".contains(last) else { return trimmed }
+        guard let end = trimmed.lastIndex(where: { ".!?…".contains($0) }) else { return trimmed }
+        let cut = String(trimmed[...end])
+        return cut.count >= 20 ? cut : trimmed
     }
 
     static func clean(_ t: String) -> String {
@@ -173,7 +185,9 @@ public final class GameEngine: @unchecked Sendable {
     /// Vypravěč nemá jmenovat čísla statistik („stres stoupá o 2“) – ty ukazuje panel. Takové věty vypustíme.
     static func scrubStats(_ text: String) -> String {
         let stat = "(stres|zdrav|zásob|zasob|morál|moral|životy|hp)"
+        let num = "(\\d+|jeden|jednu|jedna|dva|dvě|tři|čtyři|pět|šest|sedm|osm|devět|deset|patnáct|dvacet)"
         let pattern = "(?i)" + stat + "[^.!?]{0,40}\\d|\\d+\\s?%|\\d[^.!?]{0,12}" + stat
+            + "|\\b" + num + "\\s+(\\w+\\s+)?bod" + "|životních bod|\\bstres\\w*\\s+(ti\\s+|se\\s+)*(stoup|klesn|klesá|vzr|zvýš|sníž|dosáh|vznese)"
         guard let re = try? NSRegularExpression(pattern: pattern) else { return text }
         var sentences: [String] = []
         var cur = ""
@@ -277,6 +291,9 @@ public final class GameEngine: @unchecked Sendable {
                                        risk: .none, duration: inputMode == .proceed ? .hour : .moment)
         } else if inputMode == .say && intent == nil {
             finalIntent.category = .social; finalIntent.stat = .charisma
+        } else if inputMode == .act && Fallback.isQuestion(action) {
+            // Otázka na okolí se nevyhodnocuje kostkou a neposouvá výpravu – vypravěč jen popíše, co hrdina ví a vidí.
+            finalIntent = Fallback.question(action)
         }
 
         // 2) Pravidla
@@ -287,7 +304,7 @@ public final class GameEngine: @unchecked Sendable {
         // 3) Vyprávění
         var output: NarratorOutput?
         if let model {
-            let narrTask = Prompts.narratorTask(state: s, resolution: res)
+            let narrTask = Prompts.narratorTask(state: s, resolution: res, action: direct ? nil : Prompts.playerLine(action, inputMode))
             var m: [PromptMessage]
             if direct {
                 m = messages(s, current: Prompts.directTask(state: s, action: action, mode: inputMode, now: now) + "\n\n" + narrTask, budget: ctx - 700)
@@ -297,8 +314,8 @@ public final class GameEngine: @unchecked Sendable {
                 m.append(.init(.user, narrTask))
             }
             let prompt = model.template.render(m)
-            let streamer = FieldStreamer(field: "narration") { onEvent(.narrating($0)) }
-            var no = GenerationOptions(maxTokens: 560, temperature: 0.72, topP: 0.92, grammar: Grammars.narrator(mode: s.mode))
+            let streamer = FieldStreamer(field: "narration", onText: { onEvent(.narrating($0)) }, onClosed: { onEvent(.settling) })
+            var no = GenerationOptions(maxTokens: 420, temperature: 0.6, topP: 0.9, grammar: Grammars.narrator(mode: s.mode))
             no.seed = seed
             let started = Date(), limit = narrateLimit
             if let out = try? await model.generate(prompt: prompt, options: no,
@@ -570,7 +587,7 @@ public final class GameEngine: @unchecked Sendable {
                                                .init(.user, Prompts.epilogueTask(state: s))])
             let streamer = FieldStreamer(field: "narration", onText: onText)
             if let out = try? await model.generate(prompt: prompt,
-                                                   options: GenerationOptions(maxTokens: 360, temperature: 0.85, topP: 0.95, grammar: Grammars.story),
+                                                   options: GenerationOptions(maxTokens: 360, temperature: 0.7, topP: 0.92, grammar: Grammars.story),
                                                    onToken: { [limit = narrateLimit, started = Date()] in streamer.feed($0); return Self.keepGoing(since: started, limit: limit) }) {
                 text = Self.narration(from: out.text)
             }

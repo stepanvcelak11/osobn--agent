@@ -40,7 +40,7 @@ struct GameView: View {
         }
         .background {
             ZStack {
-                SceneBackdrop(scene: state.scene, phase: state.phase, weather: state.weather)
+                SceneBackdrop(scene: state.scene, phase: state.phase, weather: state.weather, paused: session.isBusy)
                 DangerVignette(intensity: dangerIntensity)
             }
         }

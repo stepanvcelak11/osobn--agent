@@ -43,6 +43,8 @@ public final class LlamaEngine: LanguageModel, @unchecked Sendable {
     private let vocab: OpaquePointer
     private let queue = DispatchQueue(label: "cz.osobniagent.llama", qos: .userInitiated)
     private var cachedTokens: [llama_token] = []
+    /// Pole kandidátů pro vzorkování s gramatikou (znovupoužité – Gemma má 262 tisíc tokenů).
+    private var candidates: [llama_token_data] = []
     private let nBatch: Int32 = 512
     private var cancelRequested = false
 
@@ -140,6 +142,8 @@ public final class LlamaEngine: LanguageModel, @unchecked Sendable {
         // Vzorkování
         let sampler = try makeSampler(options)
         defer { llama_sampler_free(sampler) }
+        let grammar = try makeGrammar(options)
+        defer { if let grammar { llama_sampler_free(grammar) } }
 
         let t1 = Date()
         var output = ""
@@ -147,7 +151,7 @@ public final class LlamaEngine: LanguageModel, @unchecked Sendable {
         let stops = template.stopStrings
         for _ in 0..<options.maxTokens {
             if cancelRequested { break }
-            let tok = llama_sampler_sample(sampler, ctx, -1)
+            let tok = sample(sampler, grammar)
             if llama_vocab_is_eog(vocab, tok) { break }
             pendingBytes += piece(tok)
             var text = ""
@@ -172,19 +176,49 @@ public final class LlamaEngine: LanguageModel, @unchecked Sendable {
         return (output, stats)
     }
 
+    private func makeGrammar(_ o: GenerationOptions) throws -> UnsafeMutablePointer<llama_sampler>? {
+        guard let g = o.grammar else { return nil }
+        guard let gs = llama_sampler_init_grammar(vocab, g, "root") else { throw LanguageModelError.grammarInvalid }
+        return gs
+    }
+
+    /// Gramatika „líně“ (jako common_sampler v llama.cpp): nejdřív se vybere token bez ní a jen se ověří.
+    /// Celý slovník (262 tisíc tokenů) se gramatikou filtruje, jen když vybraný token neprojde –
+    /// to šetří desítky milisekund procesoru na každý token (a baterii).
+    private func sample(_ chain: UnsafeMutablePointer<llama_sampler>, _ grammar: UnsafeMutablePointer<llama_sampler>?) -> llama_token {
+        let first = llama_sampler_sample(chain, ctx, -1)
+        guard let grammar else { return first }
+        var one = llama_token_data(id: first, logit: 1, p: 0)
+        let valid = withUnsafeMutablePointer(to: &one) { ptr -> Bool in
+            var arr = llama_token_data_array(data: ptr, size: 1, selected: -1, sorted: false)
+            llama_sampler_apply(grammar, &arr)
+            return arr.data[0].logit.isFinite
+        }
+        var tok = first
+        if !valid, let logits = llama_get_logits_ith(ctx, -1) {
+            let n = Int(llama_vocab_n_tokens(vocab))
+            if candidates.count != n { candidates = [llama_token_data](repeating: llama_token_data(), count: n) }
+            for i in 0..<n { candidates[i] = llama_token_data(id: llama_token(i), logit: logits[i], p: 0) }
+            tok = candidates.withUnsafeMutableBufferPointer { buf -> llama_token in
+                var arr = llama_token_data_array(data: buf.baseAddress, size: n, selected: -1, sorted: false)
+                llama_sampler_apply(grammar, &arr)
+                llama_sampler_apply(chain, &arr)
+                guard arr.selected >= 0, Int(arr.selected) < arr.size else { return first }
+                return arr.data[Int(arr.selected)].id
+            }
+        }
+        llama_sampler_accept(grammar, tok)
+        return tok
+    }
+
     private func makeSampler(_ o: GenerationOptions) throws -> UnsafeMutablePointer<llama_sampler> {
         let chain = llama_sampler_chain_init(llama_sampler_chain_default_params())!
-        if let g = o.grammar {
-            guard let gs = llama_sampler_init_grammar(vocab, g, "root") else {
-                llama_sampler_free(chain)
-                throw LanguageModelError.grammarInvalid
-            }
-            llama_sampler_chain_add(chain, gs)
-        }
         if o.temperature <= 0 {
             llama_sampler_chain_add(chain, llama_sampler_init_greedy())
         } else {
             llama_sampler_chain_add(chain, llama_sampler_init_top_k(40))
+            // Mírný postih za opakování (malé modely rády opakují tytéž obraty).
+            llama_sampler_chain_add(chain, llama_sampler_init_penalties(llama_vocab_n_tokens(vocab), 96, 1.1, 0, 0))
             llama_sampler_chain_add(chain, llama_sampler_init_top_p(o.topP, 1))
             llama_sampler_chain_add(chain, llama_sampler_init_temp(o.temperature))
             llama_sampler_chain_add(chain, llama_sampler_init_dist(o.seed))

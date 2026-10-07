@@ -60,19 +60,40 @@ public final class FieldStreamer: @unchecked Sendable {
     private var buffer = ""
     private let prefix: String
     private let onText: (String) -> Void
+    private let onClosed: () -> Void
+    private var closed = false
     private let lock = NSLock()
 
-    public init(field: String, onText: @escaping (String) -> Void) {
+    /// - onClosed: text pole je celý (model dál vyplňuje ostatní pole JSONu).
+    public init(field: String, onText: @escaping (String) -> Void, onClosed: @escaping () -> Void = {}) {
         self.prefix = "{\"\(field)\":\""
         self.onText = onText
+        self.onClosed = onClosed
     }
 
     public func feed(_ piece: String) {
         lock.lock()
+        if closed { lock.unlock(); return }
         buffer += piece
         let b = buffer
         lock.unlock()
         guard b.hasPrefix(prefix) else { return }
-        onText(JSONTools.decodePartialString(String(b.dropFirst(prefix.count))))
+        let rest = String(b.dropFirst(prefix.count))
+        onText(JSONTools.decodePartialString(rest))
+        if Self.hasClosingQuote(rest) {
+            lock.lock(); closed = true; lock.unlock()
+            onClosed()
+        }
+    }
+
+    /// Neescapovaná uvozovka = konec řetězce.
+    static func hasClosingQuote(_ s: String) -> Bool {
+        var escaped = false
+        for ch in s {
+            if escaped { escaped = false; continue }
+            if ch == "\\" { escaped = true; continue }
+            if ch == "\"" { return true }
+        }
+        return false
     }
 }

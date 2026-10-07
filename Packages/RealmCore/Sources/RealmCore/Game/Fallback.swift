@@ -17,7 +17,23 @@ public enum Fallback {
         (.explore, ["prozkoum", "prohled", "hledam", "rozhlid", "podivam", "zkoumam", "najdu", "vylez", "slezu", "otevr", "jdu", "vstoupim"]),
     ]
 
+    /// „Kde to stojím?“, „Co vidím?“ – otázka na okolí, ne čin. Odpovídá se popisem, bez hodu.
+    public static func isQuestion(_ text: String) -> Bool {
+        let t = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        if t.hasSuffix("?") { return true }
+        let f = CzechText.fold(t)
+        let starts = ["kde ", "kdo ", "kolik ", "proc ", "kam ", "odkud ", "co je ", "co vidim", "co se ", "jak to ", "jaky je ", "jaka je ", "je tu ", "je tady "]
+        return starts.contains { f.hasPrefix($0) }
+    }
+
+    /// Otázka hráče: bez rizika, bez hodu a bez vlivu na cíl výpravy.
+    public static func question(_ text: String) -> ActionIntent {
+        ActionIntent(summary: String(text.prefix(80)), category: .explore, stat: .duvtip, difficulty: .trivial,
+                     risk: .none, duration: .moment, advancesGoal: false)
+    }
+
     public static func interpret(_ text: String, state: GameState) -> ActionIntent {
+        if isQuestion(text) { return question(text) }
         let f = CzechText.fold(text)
         var category: ActionCategory = .other
         for (cat, words) in keywords where words.contains(where: { f.contains(CzechText.fold($0)) }) {

@@ -221,20 +221,19 @@ struct StreamingNarration: View {
     let roll: RollInfo?
     @AppStorage("text.scale") private var textScale = 1.0
     @State private var blink = false
+    @State private var started = Date()
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             if let roll, roll.outcome != .auto, busy != .rolling { RollBadge(roll: roll) }
             if text.isEmpty {
-                HStack(spacing: 10) {
-                    ProgressView().tint(Theme.ember)
-                    Text(busy.label).font(.system(.subheadline, design: .serif)).italic().foregroundStyle(Theme.dimText)
-                }
+                status(busy.label)
             } else {
-                (Text(text) + Text(blink ? " ▍" : "  ").foregroundColor(Theme.ember))
+                (Text(text) + Text(blink && busy != .settling ? " ▍" : "  ").foregroundColor(Theme.ember))
                     .font(.system(size: 17 * textScale, design: .serif))
                     .lineSpacing(5)
                     .foregroundStyle(Theme.parchment)
+                if busy == .settling { status(busy.label) }
             }
         }
         .padding(.leading, 14)
@@ -243,7 +242,20 @@ struct StreamingNarration: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .onAppear {
+            started = Date()
             withAnimation(.easeInOut(duration: 0.5).repeatForever()) { blink = true }
+        }
+    }
+
+    /// Stav s počítadlem sekund – je vidět, že vypravěč pracuje, i když zrovna nepřibývá text.
+    private func status(_ label: String) -> some View {
+        HStack(spacing: 10) {
+            ProgressView().tint(Theme.ember)
+            Text(label).font(.system(.subheadline, design: .serif)).italic().foregroundStyle(Theme.dimText)
+            TimelineView(.periodic(from: started, by: 1)) { tl in
+                Text("\(Int(tl.date.timeIntervalSince(started))) s")
+                    .font(.caption.monospacedDigit()).foregroundStyle(Theme.dimText.opacity(0.7))
+            }
         }
     }
 }

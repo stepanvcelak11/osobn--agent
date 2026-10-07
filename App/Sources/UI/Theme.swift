@@ -74,6 +74,8 @@ struct SceneBackdrop: View {
     var phase: Int
     var weather: Weather? = nil
     var embers = true
+    /// Když vypravěč píše, animace stojí (grafický čip i procesor patří modelu).
+    var paused = false
     @AppStorage("fx.embers") private var embersEnabled = true
 
     var body: some View {
@@ -87,9 +89,9 @@ struct SceneBackdrop: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .clipped()
             if embers && embersEnabled {
-                if let w = weather, scene != .dungeon { WeatherLayer(weather: w) }
+                if let w = weather, scene != .dungeon { WeatherLayer(weather: w, paused: paused) }
                 if weather == nil || ![.dest, .bourka, .snih].contains(weather!) || scene == .dungeon {
-                    EmberField(count: phase == 3 ? 26 : 18)
+                    EmberField(count: phase == 3 ? 26 : 18, paused: paused)
                 }
             }
             RadialGradient(colors: [.clear, .black.opacity(0.7)], center: .center, startRadius: 120, endRadius: 520)
@@ -105,24 +107,25 @@ struct SceneBackdrop: View {
 /// Počasí nad scénou: déšť, sníh, mlha, blesky (jedno plátno, levné).
 struct WeatherLayer: View {
     var weather: Weather
+    var paused = false
     @State private var flash = 0.0
 
     var body: some View {
         ZStack {
             switch weather {
-            case .dest: Rain(count: 70, speed: 900, alpha: 0.22)
+            case .dest: Rain(count: 70, speed: 900, alpha: 0.22, paused: paused)
             case .bourka:
-                Rain(count: 110, speed: 1250, alpha: 0.3)
+                Rain(count: 110, speed: 1250, alpha: 0.3, paused: paused)
                 Color.white.opacity(flash).allowsHitTesting(false)
-            case .snih: Snow(count: 60)
-            case .mlha: Fog()
-            case .mraz: Snow(count: 14)
+            case .snih: Snow(count: 60, paused: paused)
+            case .mlha: Fog(paused: paused)
+            case .mraz: Snow(count: 14, paused: paused)
             default: EmptyView()
             }
         }
         .allowsHitTesting(false)
-        .task(id: weather) {
-            guard weather == .bourka else { return }
+        .task(id: "\(weather.rawValue)\(paused)") {
+            guard weather == .bourka, !paused else { return }
             while !Task.isCancelled {
                 try? await Task.sleep(nanoseconds: UInt64.random(in: 4_000_000_000...9_000_000_000))
                 withAnimation(.easeOut(duration: 0.08)) { flash = 0.35 }
@@ -135,8 +138,9 @@ struct WeatherLayer: View {
 
 private struct Rain: View {
     var count: Int, speed: Double, alpha: Double
+    var paused = false
     var body: some View {
-        TimelineView(.periodic(from: .now, by: 1.0 / 30.0)) { tl in
+        TimelineView(.animation(minimumInterval: 1.0 / 24.0, paused: paused)) { tl in
             Canvas { ctx, size in
                 let t = tl.date.timeIntervalSinceReferenceDate
                 let h = Double(size.height) + 60
@@ -157,8 +161,9 @@ private struct Rain: View {
 
 private struct Snow: View {
     var count: Int
+    var paused = false
     var body: some View {
-        TimelineView(.periodic(from: .now, by: 1.0 / 30.0)) { tl in
+        TimelineView(.animation(minimumInterval: 1.0 / 20.0, paused: paused)) { tl in
             Canvas { ctx, size in
                 let t = tl.date.timeIntervalSinceReferenceDate
                 let h = Double(size.height) + 20
@@ -175,18 +180,22 @@ private struct Snow: View {
     }
 }
 
+/// Mlha: měkké chuchvalce z radiálních přechodů (bez rozmazávacího filtru – ten byl na celou obrazovku drahý).
 private struct Fog: View {
+    var paused = false
     var body: some View {
-        TimelineView(.periodic(from: .now, by: 1.0 / 15.0)) { tl in
+        TimelineView(.animation(minimumInterval: 1.0 / 12.0, paused: paused)) { tl in
             Canvas { ctx, size in
                 let t = tl.date.timeIntervalSinceReferenceDate
-                ctx.addFilter(.blur(radius: 40))
                 for i in 0..<6 {
                     let seed = Double(i) * 1.9
                     let w = Double(size.width) * 0.9
                     let x = ((t * (6 + seed * 2) + seed * 300).truncatingRemainder(dividingBy: Double(size.width) + w)) - w
                     let y = Double(size.height) * (0.25 + 0.12 * Double(i))
-                    ctx.fill(Path(ellipseIn: CGRect(x: x, y: y, width: w, height: 120)), with: .color(.white.opacity(0.09)))
+                    let rect = CGRect(x: x, y: y - 40, width: w, height: 200)
+                    let g = Gradient(colors: [.white.opacity(0.10), .white.opacity(0)])
+                    ctx.fill(Path(ellipseIn: rect),
+                             with: .radialGradient(g, center: CGPoint(x: rect.midX, y: rect.midY), startRadius: 0, endRadius: w / 2))
                 }
             }
         }
@@ -196,8 +205,9 @@ private struct Fog: View {
 /// Stoupající žhavé jiskry (levné: jedno plátno, 20 snímků/s).
 struct EmberField: View {
     var count = 20
+    var paused = false
     var body: some View {
-        TimelineView(.periodic(from: .now, by: 1.0 / 20.0)) { tl in
+        TimelineView(.animation(minimumInterval: 1.0 / 20.0, paused: paused)) { tl in
             Canvas { ctx, size in
                 let t = tl.date.timeIntervalSinceReferenceDate
                 for i in 0..<count {

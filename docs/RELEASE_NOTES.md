@@ -1,8 +1,20 @@
-## Pocket Realm 2.2
+## Pocket Realm 2.3
 
 Temné RPG s AI vypravěčem, který běží celý v iPhonu.
 
-**Novinky ve 2.2**
+**Novinky ve 2.3**
+- **Výrazně méně zátěže pro telefon:** kontrola tvaru odpovědi vypravěče už neprochází u každého slova celý slovník
+  modelu (262 tisíc položek) – ušetří ~20 s plně vytíženého procesoru na každý tah. Model běží na grafickém čipu
+  se dvěma vlákny procesoru, animace pozadí se při psaní vypravěče zastaví, text se překresluje úsporněji.
+- **Kratší a rychlejší vyprávění** (2–4 věty), takže tah trvá kratší dobu.
+- **Je vidět, co se děje:** počítadlo sekund u čekání a nápis „Vypravěč zapisuje následky…“, když je text hotový
+  a model ještě zapisuje zdraví, předměty a místo. Když vyprší časový limit, text končí celou větou.
+- **Vypravěč reaguje na tvůj tah:** na otázku („Kde stojím?“) odpoví popisem, bez hodu kostkou a bez vlivu na výpravu.
+  Výpravu posouvají jen činy, které míří na její aktuální úkol.
+- **Žádné prozrazování:** vypravěč předem neřekne, co máš teprve zjistit (kolik je stráží, kudy vede cesta).
+- **Bez čísel v textu**, ani slovy („ztratíš sedm bodů“, „stres stoupne“) – ty ukazuje panel.
+
+**Ze 2.2**
 - **Více rozehraných her najednou** – seznam na titulní obrazovce, jedním klepnutím přepneš mezi dlouhou a krátkou hrou.
   Osadu jde **zastavit**, když nehraješ (nebo nechat žít ve skutečném čase).
 - **Pojistky:** kontrola stavu po každém tahu, časový limit vypravěče (tah se nikdy nezasekne), záloha uložené hry

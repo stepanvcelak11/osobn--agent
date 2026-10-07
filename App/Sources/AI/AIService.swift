@@ -53,6 +53,10 @@ final class AIService: ObservableObject {
         let path = m.url.path, name = m.displayName
         var opts = LlamaLoadOptions()
         opts.contextLength = contextLength
+        #if !SHOTS
+        // Celý model běží na grafickém čipu; procesoru stačí dvě vlákna (víc jen zbytečně hřeje).
+        opts.threads = 2
+        #endif
         let options = opts
         do {
             #if SHOTS

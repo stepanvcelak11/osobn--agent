@@ -40,6 +40,7 @@ func parse(_ a: String) -> (String, InputMode) {
 
 let scenarios: [Scenario] = [
     Scenario(name: "quest", mode: .quest, background: "stinochod", feminine: true, actions: [
+        "Kde to vlastně stojím?",
         "Rozhlédnu se kolem a hledám stopy, kudy se dá dostat dovnitř.",
         "Potichu se proplížím ke vchodu a poslouchám.",
         "Vytáhnu dýky a zaútočím na první stráž, kterou uvidím.",
@@ -132,6 +133,7 @@ Task {
             let intentBox = Box<ActionIntent?>(nil)
             t = Date()
             let (text, mode) = parse(a)
+            let logBefore = s.log.count
             do {
                 let r = try await engine.playTurn(s, input: text, mode: mode) { ev in
                     if case .rolled(_, let i) = ev { intentBox.v = i }
@@ -153,7 +155,7 @@ Task {
                 if let narr = rec.calls.last(where: { $0.grammarKind == "vypravěč" }) {
                     out("<details><summary>surový JSON vypravěče</summary>\n\n```json\n\(narr.output)\n```\n</details>\n")
                 }
-                for e in s.log.suffix(6) where e.kind == .event || e.kind == .system { out("- 📜 \(e.text)") }
+                for e in s.log.dropFirst(logBefore) where e.kind == .event || e.kind == .system { out("- 📜 \(e.text)") }
                 if !r.usedModel { failures += 1 }
             } catch {
                 out("❌ chyba tahu: \(error)"); failures += 1

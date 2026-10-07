@@ -90,11 +90,15 @@ public struct ActionIntent: Equatable, Sendable {
     public var itemsUsed: [String]
     public var build: BuildingKind?
     public var duration: ActionDuration?
+    /// Rychlá výprava: míří čin přímo na aktuální krok cíle? (nil = nevíme → posuzuje se jen podle hodu)
+    public var advancesGoal: Bool?
 
     public init(summary: String, category: ActionCategory, stat: Attribute? = nil, difficulty: Difficulty = .normal,
-                risk: Risk = .low, itemsUsed: [String] = [], build: BuildingKind? = nil, duration: ActionDuration? = nil) {
+                risk: Risk = .low, itemsUsed: [String] = [], build: BuildingKind? = nil, duration: ActionDuration? = nil,
+                advancesGoal: Bool? = nil) {
         self.summary = summary; self.category = category; self.stat = stat ?? category.defaultStat
         self.difficulty = difficulty; self.risk = risk; self.itemsUsed = itemsUsed; self.build = build; self.duration = duration
+        self.advancesGoal = advancesGoal
     }
 
     /// Z JSON výstupu modelu (tolerantní k chybějícím polím).
@@ -109,7 +113,8 @@ public struct ActionIntent: Equatable, Sendable {
         let summary = v.nonEmptyString("intent") ?? String(fallbackText.prefix(80))
         let duration = v["duration"]?.stringValue.flatMap(ActionDuration.init(rawValue:))
         var i = ActionIntent(summary: summary, category: build != nil ? .build : cat, stat: stat, difficulty: diff,
-                             risk: risk, itemsUsed: Array(items.prefix(3)), build: build, duration: duration)
+                             risk: risk, itemsUsed: Array(items.prefix(3)), build: build, duration: duration,
+                             advancesGoal: v["advances"]?.boolValue)
         if statRaw == "none" && i.category != .build { i.stat = cat.defaultStat }
         return i
     }
@@ -427,7 +432,8 @@ public enum Rules {
 
         // Rychlá výprava: postup k cíli
         // Krok k cíli jen za skutečně odvážný čin (aspoň běžná obtížnost); i skvělý úspěch je jeden krok.
-        if state.mode == .quest, let q = state.quest, questCategories.contains(intent.category) {
+        // Otázky, rozhlížení a vedlejší činy cíl neposouvají ani neohrožují.
+        if state.mode == .quest, let q = state.quest, questCategories.contains(intent.category), intent.advancesGoal != false {
             let bold = ![.trivial, .easy].contains(intent.difficulty)
             if bold && [.success, .critSuccess].contains(roll.outcome) { res.questGain = 1 }
             res.completesQuest = res.questGain > 0 && q.progress + res.questGain >= q.steps

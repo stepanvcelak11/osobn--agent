@@ -2,11 +2,13 @@
 set -euo pipefail
 C="$1"; G="$2"
 "$C" "$G/interpreter_quest.gbnf" \
- '+{"intent":"Prohledá kobku","category":"explore","stat":"duvtip","difficulty":"easy","risk":"low","items_used":[],"duration":"hour"}' \
- '+{"intent":"Útok \"mečem\"","category":"combat","stat":"sila","difficulty":"normal","risk":"medium","items_used":["Těžký meč","Lahev kořalky"],"duration":"hour"}' \
- '-{"intent":"x","category":"travel","stat":"sila","difficulty":"easy","risk":"low","items_used":[],"duration":"hour"}' \
- '-{"intent":"x","category":"combat","stat":"magie","difficulty":"easy","risk":"low","items_used":[],"duration":"hour"}' \
- '-{"intent":"x","category":"combat","stat":"sila","difficulty":"easy","risk":"low","items_used":[],"duration":"hour"} navíc'
+ '+{"intent":"Prohledá kobku","category":"explore","stat":"duvtip","difficulty":"easy","risk":"low","items_used":[],"duration":"hour","advances":true}' \
+ '+{"intent":"Útok \"mečem\"","category":"combat","stat":"sila","difficulty":"normal","risk":"medium","items_used":["Těžký meč","Lahev kořalky"],"duration":"hour","advances":false}' \
+ '-{"intent":"Prohledá kobku","category":"explore","stat":"duvtip","difficulty":"easy","risk":"low","items_used":[],"duration":"hour"}' \
+ '-{"intent":"x","category":"travel","stat":"sila","difficulty":"easy","risk":"low","items_used":[],"duration":"hour","advances":true}' \
+ '-{"intent":"x","category":"combat","stat":"magie","difficulty":"easy","risk":"low","items_used":[],"duration":"hour","advances":true}' \
+ '-{"intent":"x","category":"combat","stat":"sila","difficulty":"easy","risk":"low","items_used":[],"duration":"hour","advances":maybe}' \
+ '-{"intent":"x","category":"combat","stat":"sila","difficulty":"easy","risk":"low","items_used":[],"duration":"hour","advances":true} navíc'
 "$C" "$G/interpreter_campaign.gbnf" \
  '+{"intent":"Pokračují","category":"travel","stat":"obratnost","difficulty":"normal","risk":"low","items_used":[],"duration":"hour"}' \
  '-{"intent":"x","category":"build","stat":"none","difficulty":"easy","risk":"none","items_used":[],"duration":"hour"}'

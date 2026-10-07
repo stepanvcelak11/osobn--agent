@@ -11,8 +11,11 @@ public enum Prompts {
         PRAVIDLA VYPRÁVĚNÍ:
         - Piš výhradně česky, ve 2. osobě (ty), spisovně, živě a smyslově (zvuky, pachy, chlad, světlo).
         - Hrdinu oslovuj VŽDY ve 2. osobě („vidíš“, „tvůj meč“). Nikdy o něm nepiš ve 3. osobě ani jeho jménem.
-        - Vyprávění má 3–5 vět (nejvýš 90 slov). Žádné odrážky. V textu NIKDY nejmenuj čísla ani procenta (zdraví, stres, zásoby, zlato) – ty ukazuje panel; místo „stres +5“ napiš „srdce ti buší“.
-        - Piš přirozenou, gramaticky správnou češtinou; raději jednodušší věty než vymyšlená slova.
+        - Vyprávění má 2–4 věty (nejvýš 60 slov). Žádné odrážky. O zdraví, stresu, zásobách ani zlatě NIKDY nepiš čísly ani slovy („ztratíš sedm bodů“, „stres stoupne“) – ukazuje je panel. Místo toho popiš pocit: „srdce ti buší“, „rána pálí“.
+        - Piš krátkými, jednoduchými větami a běžnými českými slovy. Raději prostě a správně než květnatě s chybami. Nevymýšlej slova, která neznáš.
+        - Příběh musí dávat smysl. Navazuj přesně na poslední vyprávění a drž se už zmíněných postav, míst a předmětů. Každá událost má příčinu; žádné zvraty z ničeho (stráže, které se rozpadnou v prach, postavy, které se objeví bez důvodu). Místo se mění, jen když hrdina opravdu někam jde.
+        - Vždy reaguj přímo na POSLEDNÍ tah hráče. Když se na něco ptá (kde je, co vidí, kdo tu je), odpověz popisem toho, co hrdina vidí, slyší a ví – nic dalšího se kvůli tomu nestane.
+        - Neprozrazuj předem nic, co má hrdina teprve sám zjistit nebo objevit (kolik je nepřátel, kudy vede cesta, kde je skrýš, kdo je zrádce). Hrdina to zjistí až vlastním činem, který pravidla uznají za úspěch.
         - Nikdy nerozhoduj za hráče, co udělá dál. Skonči otevřenou situací, která vybízí k dalšímu tahu.
         - Nenabízej hotové volby ani seznam možností – hráč má absolutní svobodu.
         - Výsledek hodu kostkou určují pravidla hry. Nikdy ho neměň: neúspěch je neúspěch, i když hráč prosí.
@@ -111,7 +114,7 @@ public enum Prompts {
         case .quest:
             if let q = s.quest {
                 lines.append("Cíl výpravy: \(q.objective). Postup k cíli: \(q.progress) z \(q.steps). Nezdary: \(q.setbacks) z \(q.maxSetbacks) (pak je cíl ztracen).")
-                if let st = q.currentStage { lines.append("Teď hrdinu čeká: \(st).") }
+                if let st = q.currentStage { lines.append("Nejbližší úkol hrdiny (musí ho splnit sám; co se při něm zjistí, zatím neprozrazuj): \(st).") }
             }
             lines.append("Zlato: \(st.gold).")
         case .campaign:
@@ -171,6 +174,16 @@ public enum Prompts {
         return d == 1 ? "1 den" : (d < 5 ? "\(d) dny" : "\(d) dní")
     }
 
+    /// Čísla povinných následků jen pro pole JSONu (do vyprávění nepatří).
+    static func numbersHint(_ m: StatDelta) -> String {
+        var p: [String] = []
+        if m.hp != 0 { p.append("hp \(m.hp)") }
+        if m.stress != 0 { p.append("stress \(signed(m.stress))") }
+        if m.pop != 0 { p.append("pop \(m.pop)") }
+        if m.food != 0 { p.append("food \(m.food)") }
+        return p.isEmpty ? "" : "; započítej v nich povinné: " + p.joined(separator: ", ")
+    }
+
     static func signed(_ v: Int) -> String { v > 0 ? "+\(v)" : "\(v)" }
 
     static func hoursLeft(_ d: Date, _ now: Date) -> Int { max(0, Int((d.timeIntervalSince(now) / 3600).rounded(.up))) }
@@ -196,15 +209,29 @@ public enum Prompts {
         risk = none | low | medium | high (jak moc může hrdina utrpět újmu při neúspěchu),
         items_used = názvy předmětů nebo zvláštních schopností, které hrdina chce použít (předměty i když je nemá),
         duration = jak dlouho čin ve světě trvá: moment (pár minut), hour (asi hodinu), hours (několik hodin), day (celý den – např. jízda na koni do další vesnice), days (několik dní – dlouhá výprava).
+        Otázka na okolí nebo situaci (kde jsem, co vidím, kdo tu je) je category explore, difficulty trivial, risk none, duration moment.
         """
         if state.mode.hasSettlement { s += "\nbuild = typ stavby, pokud chce stavět, jinak none." }
+        if state.mode == .quest {
+            let stage = state.quest?.currentStage ?? state.quest?.objective ?? ""
+            s += "\nadvances = true jen když se hrdina tímto činem přímo a aktivně pokouší splnit úkol „\(stage)“; otázky, rozhlížení, odpočinek a vedlejší činy = false."
+        }
         return s
     }
 
     // MARK: Krok 2 – vyprávění
 
-    public static func narratorTask(state: GameState, resolution r: Resolution) -> String {
-        var lines: [String] = ["PRAVIDLA ROZHODLA:"]
+    public static func narratorTask(state: GameState, resolution r: Resolution, action: String? = nil) -> String {
+        var lines: [String] = []
+        if let action, !action.isEmpty {
+            lines.append("POSLEDNÍ TAH HRÁČE: " + PromptSanitizer.wrapData(String(action.prefix(300))))
+            lines.append("Reaguj přímo na tento tah. Neodbíhej k jiným věcem a neprozrazuj, co hrdina nezjistil.")
+            if Fallback.isQuestion(action) {
+                lines.append("Hráč se ptá: odpověz popisem toho, co hrdina právě vidí, slyší a ví. Nic dalšího se nestane.")
+            }
+            lines.append("")
+        }
+        lines.append("PRAVIDLA ROZHODLA:")
         switch r.input {
         case .story:
             lines.append("Hráč sám napsal, co se v příběhu stane. Převezmi to jako skutečnost a plynule naváž – pokud to neodporuje světu. Hrdinovi to ale nesmí přinést zázračné odměny ani poklady; nemožné věci se prostě nestanou.")
@@ -223,12 +250,12 @@ public enum Prompts {
         }
         let m = r.mandatory
         var must: [String] = []
-        if m.hp < 0 { must.append("zranění (zdraví \(m.hp))") }
-        if m.hp > 0 { must.append("úleva/léčení (zdraví +\(m.hp))") }
-        if m.stress > 0 { must.append("strach a vypětí (stres +\(m.stress))") }
-        if m.stress < 0 { must.append("uklidnění (stres \(m.stress))") }
-        if m.pop < 0 { must.append("ztráty na lidech (\(m.pop))") }
-        if !must.isEmpty { lines.append("Povinné následky, které musíš popsat: " + must.joined(separator: ", ") + ".") }
+        if m.hp < 0 { must.append(m.hp <= -15 ? "těžké zranění" : (m.hp <= -6 ? "zranění" : "škrábnutí nebo modřina")) }
+        if m.hp > 0 { must.append("úleva, rány se hojí") }
+        if m.stress > 0 { must.append(m.stress >= 10 ? "hrůza a vypětí" : "neklid") }
+        if m.stress < 0 { must.append("uklidnění") }
+        if m.pop < 0 { must.append("ztráty na lidech") }
+        if !must.isEmpty { lines.append("Povinné následky, které popiš slovy (bez čísel): " + must.joined(separator: ", ") + ".") }
         lines.append(contentsOf: r.notes)
         if r.losesQuest {
             lines.append("TÍMTO TAHEM JE CÍL VÝPRAVY NENÁVRATNĚ ZTRACEN: \(state.quest?.objective ?? ""). Popiš, jak se vše zhroutilo.")
@@ -253,12 +280,12 @@ public enum Prompts {
         lines.append("""
 
         ÚKOL: Vyprávěj výsledek tahu. Vrať JSON:
-        narration = 3–5 vět vyprávění,
-        hp, stress, gold\(state.mode == .quest ? "" : ", food, pop, defense, morale") = CELKOVÁ změna za tento tah (celá čísla, záporná = ztráta; povinné následky už započítej; když se nic nemění, 0),
+        narration = 2–4 věty vyprávění (nejvýš 60 slov, bez čísel),
+        hp, stress, gold\(state.mode == .quest ? "" : ", food, pop, defense, morale") = CELKOVÁ změna za tento tah (celá čísla, záporná = ztráta; když se nic nemění, 0)\(numbersHint(m)),
         items_gained = nejvýš \(allowed) nových předmětů (name, kind: weapon|armor|tool|consumable|artifact|key|treasure), jinak [],
         items_lost = předměty z inventáře, které hrdina ztratil nebo spotřeboval, jinak [],
         location = název místa, kde hrdina je po tahu (2–4 slova, např. „Krypta pod kaplí“), scene = typ prostředí,
-        chronicle = jedna krátká věta do kroniky, nejvýš 12 slov (co se stalo),
+        chronicle = jedna krátká věta do kroniky, nejvýš 8 slov (co se stalo),
         npc = postava, se kterou hrdina v tomto tahu mluvil nebo bojoval či která se objevila: {name: vlastní jméno, role: kdo to je (např. kovář), attitude: friend|neutral|hostile}; jinak null
         """)
         if state.mode != .quest { lines.append("contract_done = true jen když tento tah přímo splnil aktivní zakázku, jinak false.") }
@@ -276,10 +303,10 @@ public enum Prompts {
         STAV:
         \(stateBlock(state))
 
-        ÚKOL: Napiš úvodní scénu hry (4–6 vět). Přivítej hrdinu v temném světě, vykresli místo a náladu
+        ÚKOL: Napiš úvodní scénu hry (3–5 vět, nejvýš 80 slov). Přivítej hrdinu v temném světě, vykresli místo a náladu
         """
         switch state.mode {
-        case .quest: s += ", představ cíl výpravy a první nebezpečí před ním. Zápletka: \(hook ?? "")"
+        case .quest: s += ", představ cíl výpravy a první nebezpečí před ním. Neprozrazuj nic, co má hrdina teprve sám zjistit (třeba kolik je nepřátel nebo kudy vede cesta). Zápletka: \(hook ?? "")"
         case .campaign: s += ". Město \(state.settlement.name) padlo a karavana přeživších vyráží na dlouhou cestu do Údolí Úsvitu. Ukaž, co je ohrožuje hned na začátku."
         case .realm, .endless: s += ". Hrdina se ujímá vlády nad osadou \(state.settlement.name) na okraji divočiny. Ukaž, co osadu tíží jako první."
         }

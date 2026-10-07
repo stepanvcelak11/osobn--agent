@@ -22,6 +22,7 @@ public enum Grammars {
     public static func interpreter(mode: GameMode) -> String {
         var root = #"root ::= "{" ws "\"intent\":" ws short "," ws "\"category\":" ws category "," ws "\"stat\":" ws stat "," ws "\"difficulty\":" ws difficulty "," ws "\"risk\":" ws risk "," ws "\"items_used\":" ws names "," ws "\"duration\":" ws duration"#
         if mode.hasSettlement { root += #" "," ws "\"build\":" ws build"# }
+        if mode == .quest { root += #" "," ws "\"advances\":" ws bool"# }
         root += #" ws "}""#
         var cats = ActionCategory.allCases.map(\.rawValue)
         if !mode.hasSettlement { cats.removeAll { $0 == "build" } }
