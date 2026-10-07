@@ -1,3 +1,14 @@
+## Pocket Realm 3.1
+
+**Opravy podle hraní na iPhonu**
+- **Gemini funguje:** vypnuté „přemýšlení“ modelu (spotřebovalo celý limit a odpověď vyšla prázdná), při přetížení
+  serveru se pokus sám zopakuje a naposledy zkusí lehčí model. Když online vypravěč přesto selže, hra napíše proč
+  a tah vypráví telefon.
+- **Méně opakování:** vypravěč v telefonu má zábranu proti opakování celých obratů (i z předchozích odpovědí)
+  a tvůj tah čte až na konci zadání, aby odpovídal na všechno, co napíšeš.
+- **Ochrana proti přehřátí:** když je telefon horký, vypravěč zpomalí, aby se čip ochladil a hra se nesekala.
+  Celá historie příběhu se přepočítává mnohem méně často.
+
 ## Pocket Realm 3.0
 
 Jednoduchá česká textová hra jako AI Dungeon. Vypravěč běží v telefonu, volitelně i online.

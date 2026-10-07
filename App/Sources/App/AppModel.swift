@@ -38,6 +38,7 @@ final class AppModel: ObservableObject {
             self?.speaker.speak(text)
         }
         s.onTurnFinished = { [weak ai] in ai?.objectWillChange.send() }
+        s.onlineStatus = { [weak ai] in ai?.onlineError }
         return s
     }
 

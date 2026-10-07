@@ -132,6 +132,7 @@ public final class LlamaEngine: LanguageModel, @unchecked Sendable {
         let t0 = Date()
         var pos = common
         while pos < tokens.count {
+            Self.coolDown()
             let end = min(pos + Int(nBatch), tokens.count)
             try decode(Array(tokens[pos..<end]), startPos: pos, logitsForLast: end == tokens.count)
             cachedTokens.append(contentsOf: tokens[pos..<end])
@@ -142,6 +143,11 @@ public final class LlamaEngine: LanguageModel, @unchecked Sendable {
         // Vzorkování
         let sampler = try makeSampler(options)
         defer { llama_sampler_free(sampler) }
+        // Předchozí vyprávění do paměti postihu za opakování – aby model neopakoval tytéž obraty tah co tah.
+        if let avoid = options.avoidRepeating, !avoid.isEmpty, options.temperature > 0,
+           let toks = try? tokenize(avoid, addSpecial: false) {
+            for t in toks.suffix(400) { llama_sampler_accept(sampler, t) }
+        }
         let grammar = try makeGrammar(options)
         defer { if let grammar { llama_sampler_free(grammar) } }
 
@@ -149,8 +155,9 @@ public final class LlamaEngine: LanguageModel, @unchecked Sendable {
         var output = ""
         var pendingBytes: [UInt8] = []
         let stops = template.stopStrings
-        for _ in 0..<options.maxTokens {
+        for i in 0..<options.maxTokens {
             if cancelRequested { break }
+            if i % 4 == 0 { Self.coolDown() }
             let tok = sample(sampler, grammar)
             if llama_vocab_is_eog(vocab, tok) { break }
             pendingBytes += piece(tok)
@@ -217,8 +224,14 @@ public final class LlamaEngine: LanguageModel, @unchecked Sendable {
             llama_sampler_chain_add(chain, llama_sampler_init_greedy())
         } else {
             llama_sampler_chain_add(chain, llama_sampler_init_top_k(40))
-            // Mírný postih za opakování (malé modely rády opakují tytéž obraty).
-            llama_sampler_chain_add(chain, llama_sampler_init_penalties(llama_vocab_n_tokens(vocab), 96, 1.1, 0, 0))
+            // Postih za opakování: jednotlivá slova mírně, celé obraty (DRY) silněji.
+            llama_sampler_chain_add(chain, llama_sampler_init_penalties(llama_vocab_n_tokens(vocab), 256, 1.08, 0, 0))
+            let breakers = ["\n", ":", "\"", "*", "„", "“"].map { strdup($0) }
+            defer { breakers.forEach { free($0) } }
+            var ptrs: [UnsafePointer<CChar>?] = breakers.map { UnsafePointer($0) }
+            if let dry = ptrs.withUnsafeMutableBufferPointer({ llama_sampler_init_dry(vocab, 0.8, 1.75, 2, 512, $0.baseAddress, $0.count) }) {
+                llama_sampler_chain_add(chain, dry)
+            }
             llama_sampler_chain_add(chain, llama_sampler_init_top_p(o.topP, 1))
             llama_sampler_chain_add(chain, llama_sampler_init_temp(o.temperature))
             llama_sampler_chain_add(chain, llama_sampler_init_dist(o.seed))
@@ -261,6 +274,16 @@ public final class LlamaEngine: LanguageModel, @unchecked Sendable {
             n = llama_token_to_piece(vocab, tok, &buf, Int32(buf.count), 0, false)
         }
         return buf.prefix(Int(max(0, n))).map { UInt8(bitPattern: $0) }
+    }
+
+    /// Ochrana proti přehřátí: když je telefon horký, výpočet zpomalí (krátké pauzy mezi kroky),
+    /// aby se čip stihl ochladit a telefon se nesekal. Na chladném telefonu nic nedělá.
+    static func coolDown() {
+        switch ProcessInfo.processInfo.thermalState {
+        case .serious: usleep(25_000)
+        case .critical: usleep(80_000)
+        default: break
+        }
     }
 
     /// Uvolní KV cache (např. po smazání historie).

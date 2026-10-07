@@ -28,8 +28,32 @@ final class RemoteChatModel: ChatModel, @unchecked Sendable {
 
     func chat(system: String, messages: [PromptMessage], options: GenerationOptions,
               onToken: @escaping @Sendable (String) -> Bool) async throws -> (text: String, stats: GenerationStats) {
-        let req = try RemoteAPI.request(config, system: system, messages: messages,
-                                        maxTokens: max(options.maxTokens, 300), temperature: options.temperature)
+        // Přetížený server (časté u bezplatné úrovně Gemini): zkusit znovu, naposledy s lehčím modelem.
+        var cfg = config
+        var noThinking = true
+        var lastError: Error = RemoteError.empty
+        for attempt in 0..<4 {
+            try Task.checkCancellation()
+            do {
+                return try await once(cfg, system: system, messages: messages, options: options, noThinking: noThinking, onToken: onToken)
+            } catch RemoteError.http(let status, let message) {
+                lastError = RemoteError.http(status, message)
+                if noThinking && RemoteAPI.rejectsThinkingConfig(status: status, message: message) { noThinking = false; continue }
+                guard RemoteAPI.isTransient(status: status), attempt < 3 else { throw lastError }
+                if attempt == 2, let lighter = RemoteAPI.lighterModel(cfg) { cfg.model = lighter }
+                try await Task.sleep(nanoseconds: UInt64(attempt + 1) * 1_200_000_000)
+            } catch let e as URLError where e.code == .timedOut || e.code == .networkConnectionLost {
+                lastError = e
+                guard attempt < 1 else { throw e }
+            }
+        }
+        throw lastError
+    }
+
+    private func once(_ cfg: RemoteConfig, system: String, messages: [PromptMessage], options: GenerationOptions, noThinking: Bool,
+                      onToken: @escaping @Sendable (String) -> Bool) async throws -> (text: String, stats: GenerationStats) {
+        let req = try RemoteAPI.request(cfg, system: system, messages: messages,
+                                        maxTokens: max(options.maxTokens, 300), temperature: options.temperature, noThinking: noThinking)
         let started = Date()
         let (bytes, response) = try await session.bytes(for: req)
         let status = (response as? HTTPURLResponse)?.statusCode ?? 0
@@ -39,15 +63,20 @@ final class RemoteChatModel: ChatModel, @unchecked Sendable {
             throw RemoteError.http(status, RemoteAPI.errorMessage(body))
         }
         var text = ""
+        var finish: String?
         var stats = GenerationStats()
         for try await line in bytes.lines {
             try Task.checkCancellation()
-            guard let piece = try RemoteAPI.delta(config.provider, line: line) else { continue }
+            if let f = RemoteAPI.finishReason(cfg.provider, line: line) { finish = f }
+            guard let piece = try RemoteAPI.delta(cfg.provider, line: line) else { continue }
             text += piece
             stats.generatedTokens += 1
             if !onToken(piece) { break }
         }
         stats.generationSeconds = Date().timeIntervalSince(started)
+        if text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            throw finish.map { RemoteError.api("odpověď zastavena (\($0))") } ?? RemoteError.empty
+        }
         return (text, stats)
     }
 

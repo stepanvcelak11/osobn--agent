@@ -74,18 +74,36 @@ public enum RemoteError: Error, CustomStringConvertible, Sendable {
             switch code {
             case 401, 403: return "Online vypravěč: neplatný klíč (\(m))"
             case 429: return "Online vypravěč: vyčerpaný limit nebo kredit (\(m))"
+            case 500, 502, 503, 504, 529: return "Online vypravěč: server je přetížený, zkus to za chvíli (\(m))"
             default: return "Online vypravěč: chyba \(code) (\(m))"
             }
         case .api(let m): return "Online vypravěč: \(m)"
-        case .empty: return "Online vypravěč neodpověděl"
+        case .empty: return "Online vypravěč neodpověděl (prázdná odpověď)"
         }
     }
 }
 
 /// Sestavení požadavků a čtení streamu (SSE) – bez sítě, aby šlo testovat.
 public enum RemoteAPI {
+    /// Přechodná chyba serveru → má smysl to za chvíli zkusit znovu.
+    public static func isTransient(status: Int) -> Bool { [408, 429, 500, 502, 503, 504, 529].contains(status) }
+
+    /// Lehčí model téže služby, když je zvolený přetížený.
+    public static func lighterModel(_ c: RemoteConfig) -> String? {
+        switch c.provider {
+        case .gemini: return c.model == "gemini-flash-lite-latest" ? nil : "gemini-flash-lite-latest"
+        case .anthropic: return c.model == "claude-haiku-4-5-20251001" ? nil : "claude-haiku-4-5-20251001"
+        }
+    }
+
+    /// Model nepodporuje vypnutí „přemýšlení“ – pošle se požadavek bez něj.
+    public static func rejectsThinkingConfig(status: Int, message: String) -> Bool {
+        status == 400 && message.lowercased().contains("thinking")
+    }
+
+    /// - noThinking: u Gemini vypne „přemýšlení“ (jinak spotřebuje limit délky a odpověď vyjde prázdná).
     public static func request(_ c: RemoteConfig, system: String, messages: [PromptMessage],
-                               maxTokens: Int, temperature: Float) throws -> URLRequest {
+                               maxTokens: Int, temperature: Float, noThinking: Bool = true) throws -> URLRequest {
         let body: [String: Any]
         var req: URLRequest
         switch c.provider {
@@ -110,7 +128,7 @@ public enum RemoteAPI {
                 .map { ["category": $0, "threshold": "BLOCK_ONLY_HIGH"] }
             body = ["systemInstruction": ["parts": [["text": system]]],
                     "contents": messages.map { ["role": $0.role == .assistant ? "model" : "user", "parts": [["text": $0.content]]] },
-                    "generationConfig": ["temperature": Double(temperature), "maxOutputTokens": maxTokens],
+                    "generationConfig": generationConfig(c, maxTokens: maxTokens, temperature: temperature, noThinking: noThinking),
                     "safetySettings": safety]
         }
         req.httpMethod = "POST"
@@ -118,6 +136,29 @@ public enum RemoteAPI {
         req.timeoutInterval = 30
         req.httpBody = try JSONSerialization.data(withJSONObject: body)
         return req
+    }
+
+    static func generationConfig(_ c: RemoteConfig, maxTokens: Int, temperature: Float, noThinking: Bool) -> [String: Any] {
+        // Pro neumí přemýšlení vypnout; ostatním ho vypneme. Limit délky je velkorysý, aby se případné
+        // přemýšlení nikdy nesnědlo celé vyprávění (délku hlídají pokyny a hra si text sama zkrátí).
+        let canDisable = !c.model.contains("pro")
+        var g: [String: Any] = ["temperature": Double(temperature),
+                                "maxOutputTokens": (noThinking && canDisable) ? max(maxTokens, 1024) : max(maxTokens, 4096)]
+        if noThinking && canDisable { g["thinkingConfig"] = ["thinkingBudget": 0] }
+        return g
+    }
+
+    /// Proč model přestal psát (Gemini: SAFETY, MAX_TOKENS…; Claude: stop_reason).
+    public static func finishReason(_ p: RemoteProvider, line: String) -> String? {
+        guard line.hasPrefix("data:"), let data = line.dropFirst(5).trimmingCharacters(in: .whitespaces).data(using: .utf8),
+              let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
+        switch p {
+        case .gemini:
+            if let fb = obj["promptFeedback"] as? [String: Any], let r = fb["blockReason"] as? String { return r }
+            return ((obj["candidates"] as? [[String: Any]])?.first?["finishReason"] as? String).flatMap { $0 == "STOP" ? nil : $0 }
+        case .anthropic:
+            return ((obj["delta"] as? [String: Any])?["stop_reason"] as? String).flatMap { $0 == "end_turn" ? nil : $0 }
+        }
     }
 
     /// Jeden řádek streamu → kousek textu (nil = řádek bez textu). Chyba ve streamu se vyhodí.

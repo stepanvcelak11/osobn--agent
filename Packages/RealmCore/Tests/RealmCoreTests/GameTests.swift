@@ -7,6 +7,7 @@ final class ScriptedModel: LanguageModel, @unchecked Sendable {
     var fallback: String
     var prompts: [String] = []
     var grammars: [String?] = []
+    var options: [GenerationOptions] = []
     var templateKind: ChatTemplate = .gemma
     var context = 3072
     init(_ responses: [String], fallback: String = "") { self.responses = responses; self.fallback = fallback }
@@ -14,7 +15,7 @@ final class ScriptedModel: LanguageModel, @unchecked Sendable {
     var template: ChatTemplate { templateKind }
     var contextLength: Int { context }
     func generate(prompt: String, options: GenerationOptions, onToken: @escaping @Sendable (String) -> Bool) async throws -> (text: String, stats: GenerationStats) {
-        prompts.append(prompt); grammars.append(options.grammar)
+        prompts.append(prompt); grammars.append(options.grammar); self.options.append(options)
         let r = responses.isEmpty ? fallback : responses.removeFirst()
         var i = r.startIndex
         while i < r.endIndex {
@@ -219,6 +220,16 @@ final class StoryTests: XCTestCase {
         s = try await engine.play(s, input: "Otevřu dveře", mode: .act).story
         XCTAssertTrue(model.prompts[1].hasPrefix(model.prompts[0] + "Úvod příběhu. Sedíš v hospodě."))
         XCTAssertTrue(model.prompts[2].hasPrefix(model.prompts[1] + "Hostinský přikývne a nalije ti."))
+    }
+
+    func testNarratorAvoidsRepeatingAndReadsPlayerLast() async throws {
+        let model = ScriptedModel(["Sedíš v hospodě a venku prší jako z konve.", "Hostinský ti nalije a podívá se na dveře."])
+        let engine = StoryEngine(model: model)
+        var s = await engine.intro(newStory())
+        s = try await engine.play(s, input: "Objednám si pivo a zeptám se na kováře").story
+        XCTAssertTrue(model.options[1].avoidRepeating?.contains("venku prší jako z konve") ?? false)
+        XCTAssertTrue(model.prompts[1].hasSuffix("Hráč: Objednám si pivo a zeptám se na kováře<end_of_turn>\n<start_of_turn>model\n"))
+        XCTAssertTrue(model.prompts[1].contains("Odpověz na všechno, co hráč napsal"))
     }
 
     func testLongStoryStaysInContext() async throws {
@@ -439,5 +450,22 @@ final class RemoteTests: XCTestCase {
         XCTAssertEqual(try RemoteAPI.delta(.gemini, line: #"data: {"candidates":[{"content":{"parts":[{"text":"Mlha"}],"role":"model"}}]}"#), "Mlha")
         XCTAssertNil(try RemoteAPI.delta(.gemini, line: #"data: {"candidates":[{"content":{"parts":[{"text":"hmm","thought":true}]}}]}"#))
         XCTAssertEqual(RemoteAPI.errorMessage(Data(#"{"error":{"message":"API key not valid"}}"#.utf8)), "API key not valid")
+
+        // Gemini: „přemýšlení“ vypnuté a velkorysý limit délky (jinak vyjde prázdná odpověď)
+        let gc = (gb["generationConfig"] as! [String: Any])
+        XCTAssertEqual((gc["thinkingConfig"] as? [String: Any])?["thinkingBudget"] as? Int, 0)
+        XCTAssertGreaterThanOrEqual(gc["maxOutputTokens"] as! Int, 1024)
+        let pro = try RemoteAPI.request(RemoteConfig(provider: .gemini, model: "gemini-pro-latest", apiKey: "k"), system: "S", messages: msgs, maxTokens: 300, temperature: 0.7)
+        let pc = ((try JSONSerialization.jsonObject(with: pro.httpBody!) as! [String: Any])["generationConfig"] as! [String: Any])
+        XCTAssertNil(pc["thinkingConfig"])
+        XCTAssertGreaterThanOrEqual(pc["maxOutputTokens"] as! Int, 4096)
+        XCTAssertTrue(RemoteAPI.isTransient(status: 503))
+        XCTAssertTrue(RemoteAPI.isTransient(status: 529))
+        XCTAssertFalse(RemoteAPI.isTransient(status: 401))
+        XCTAssertEqual(RemoteAPI.lighterModel(RemoteConfig(provider: .gemini, model: "gemini-flash-latest", apiKey: "k")), "gemini-flash-lite-latest")
+        XCTAssertNil(RemoteAPI.lighterModel(RemoteConfig(provider: .gemini, model: "gemini-flash-lite-latest", apiKey: "k")))
+        XCTAssertTrue(RemoteAPI.rejectsThinkingConfig(status: 400, message: "Thinking budget is not supported for this model"))
+        XCTAssertEqual(RemoteAPI.finishReason(.gemini, line: #"data: {"candidates":[{"finishReason":"SAFETY"}]}"#), "SAFETY")
+        XCTAssertNil(RemoteAPI.finishReason(.gemini, line: #"data: {"candidates":[{"content":{"parts":[{"text":"x"}]},"finishReason":"STOP"}]}"#))
     }
 }

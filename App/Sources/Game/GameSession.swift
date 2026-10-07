@@ -37,6 +37,8 @@ final class GameSession: ObservableObject, Identifiable {
     private var task: Task<Void, Never>?
     var onNarration: ((String) -> Void)?
     var onTurnFinished: (() -> Void)?
+    /// Chyba online vypravěče z posledního tahu (pak vyprávěl telefon).
+    var onlineStatus: (() -> String?)?
 
     init(story: Story, store: SaveStore, model: @escaping () -> LanguageModel?, modelLoading: @escaping () -> Bool) {
         self.story = story
@@ -130,6 +132,7 @@ final class GameSession: ObservableObject, Identifiable {
                 if let roll = r.roll { Haptics.outcome(roll.outcome) }
                 if r.completedStage != nil, !r.story.isOver { toast = "Příběh se posunul" }
                 if let n = r.story.log.last(where: { $0.kind == .narration })?.text { onNarration?(n) }
+                if let e = onlineStatus?() { self.error = e + " – tah vyprávěl vypravěč v telefonu." }
             } catch is CancellationError {
                 toast = "Tah zrušen."
             } catch {

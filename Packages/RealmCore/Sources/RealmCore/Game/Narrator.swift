@@ -96,7 +96,9 @@ public enum NarratorPrompts {
             if input != .story && !question { rules.append("Jen pokud tento tah úkol opravdu splnil, napiš na úplný konec [HOTOVO].") }
         }
         if !s.note.isEmpty { rules.append("Styl: \(PromptSanitizer.clean(String(s.note.prefix(200)))).") }
-        return playerLine(text, input) + "\n[" + rules.joined(separator: " ") + "]"
+        if input == .act || input == .say { rules.append("Odpověz na všechno, co hráč napsal, a nepoužívej znovu obraty z předchozích odpovědí.") }
+        // Tah hráče až na konec – malý model nejvíc dbá na to, co čte naposled.
+        return "[" + rules.joined(separator: " ") + "]\n" + playerLine(text, input)
     }
 
     public static func epilogue(_ s: Story) -> String {
@@ -155,7 +157,7 @@ public struct StoryEngine: Sendable {
     public let model: LanguageModel?
     /// Nejdelší povolená doba jednoho vyprávění (pak se text utne na celé větě).
     public var timeLimit: TimeInterval = 60
-    public static let maxTokens = 200
+    public static let maxTokens = 180
 
     public init(model: LanguageModel?) { self.model = model }
 
@@ -214,7 +216,9 @@ public struct StoryEngine: Sendable {
             m.append(.init(.user, current))
             guard let model, start < pairs.count else { return m }
             if model.countTokens(model.template.render(m)) <= budget { return m }
-            start = min(pairs.count, start + 4)
+            // Odhodit rovnou polovinu starší historie: model pak dlouho jen přidává a celý prompt
+            // přepočítává jen zřídka (to je to nejnáročnější – hřeje telefon).
+            start = min(pairs.count, start + max(4, (pairs.count - start) / 2))
         }
     }
 
@@ -222,11 +226,13 @@ public struct StoryEngine: Sendable {
 
     struct Generated { var raw: String; var stats: GenerationStats? }
 
-    func generate(_ messages: [PromptMessage], seed: UInt32, temperature: Float = 0.5,
+    func generate(_ messages: [PromptMessage], seed: UInt32, temperature: Float = 0.65,
                   onText: @escaping @Sendable (String) -> Void) async -> Generated? {
         guard let model else { return nil }
-        var o = GenerationOptions(maxTokens: Self.maxTokens, temperature: temperature, topP: 0.85, grammar: nil)
+        var o = GenerationOptions(maxTokens: Self.maxTokens, temperature: temperature, topP: 0.9, grammar: nil)
         o.seed = seed
+        // Poslední dvě vyprávění: jejich obraty se nemají opakovat.
+        o.avoidRepeating = messages.filter { $0.role == .assistant }.suffix(2).map(\.content).joined(separator: "\n")
         let started = Date(), limit = timeLimit
         final class Acc: @unchecked Sendable { var text = "" }
         let acc = Acc()
@@ -237,7 +243,7 @@ public struct StoryEngine: Sendable {
         }
         if let chat = model as? ChatModel, let first = messages.first, first.role == .system {
             // Online vypravěč dostane zprávy přímo (a sám si případně sáhne po záloze v telefonu).
-            o.temperature = temperature + 0.2
+            o.temperature = temperature + 0.1
             guard let out = try? await chat.chat(system: first.content, messages: Array(messages.dropFirst()), options: o, onToken: onToken)
             else { return nil }
             return Generated(raw: out.text, stats: out.stats)

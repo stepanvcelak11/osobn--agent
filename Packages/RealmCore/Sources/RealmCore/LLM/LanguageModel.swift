@@ -6,6 +6,9 @@ public struct GenerationOptions: Sendable {
     public var topP: Float = 0.9
     public var grammar: String?
     public var seed: UInt32 = 42
+    /// Text, jehož slovní obraty se nemají opakovat (předchozí vyprávění) – modely v telefonu ho „přečtou“
+    /// do paměti postihu za opakování.
+    public var avoidRepeating: String?
     public init(maxTokens: Int = 384, temperature: Float = 0.2, topP: Float = 0.9, grammar: String? = nil) {
         self.maxTokens = maxTokens; self.temperature = temperature; self.topP = topP; self.grammar = grammar
     }
