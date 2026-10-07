@@ -46,6 +46,13 @@ U osady navíc běží i skutečný čas, když nehraješ (nejvýš 3 dny), tak�
 - **Znovu** převypráví poslední tah (hod kostkou zůstane stejný), **Vrátit tah** ho vezme zpět (ne po konci hry).
 - **Paměť vypravěče** (co si má vždy pamatovat), **poznámka ke stylu** („víc hororu“) a **vlastní zápletka** při založení hry.
 
+### Tvoje postava
+
+- **11 původů** – Žoldnéř, Stínochod, Bylinkář, Kupec, Vyhnaný rytíř, Lovec, Potulný kněz, Vědmák, Bard, Kovář, Hrobník
+  (i v ženské podobě), každý s jinými schopnostmi, výbavou a **zvláštní schopností** (2× denně, obnoví se spánkem).
+- **Povaha** – 2 z 12 vlastností, které ve hře opravdu něco dělají (Odvážný, Otužilý, Noční pták, Šťastlivec, Hledač pokladů,
+  Rozený vůdce, Nespavec, Železná vůle…), a **2 volné body** do Síly, Obratnosti, Důvtipu nebo Charismatu.
+
 ### Hloubka hry
 
 - **Úrovně** – zkušenosti za každý čin; na nové úrovni se zlepší nejpoužívanější schopnost.
