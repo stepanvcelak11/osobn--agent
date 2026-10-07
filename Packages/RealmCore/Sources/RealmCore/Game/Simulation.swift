@@ -212,7 +212,7 @@ public enum Simulation {
         let diff = target - (st.morale + d.morale)
         d.morale += diff > 0 ? min(3, diff) : max(-3, diff)
         // Růst
-        if foodAfter > 0 && Double(foodAfter) / Double(max(1, foodCapacity(st))) >= 0.5 && st.morale >= 60 {
+        if foodAfter > 0 && Double(foodAfter) / Double(max(1, foodCapacity(st))) >= 0.5 && st.morale >= 50 {
             let born = max(1, st.population / 15)
             d.pop += born
             notes.append("přibylo \(born) obyvatel")

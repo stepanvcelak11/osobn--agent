@@ -89,6 +89,12 @@ public enum Fallback {
             if out.itemsGained[0].0 == "Zrezivělý klíč" { out.itemsGained[0].1 = .key }
         }
         if let a = r.arrival { out.location = a.stop.name; out.scene = a.stop.scene }
+        // Bez modelu nelze posoudit splnění cíle – rozhodne štěstí po několika úspěšných tazích.
+        if state.mode == .quest && [.success, .critSuccess].contains(r.roll.outcome) && state.turn >= 4
+            && [.combat, .explore, .stealth, .social, .magic].contains(r.intent.category) && state.chance(40) {
+            out.objectiveDone = true
+            out.narration = out.narration.replacingOccurrences(of: " Co uděláš teď?", with: "") + " Cíl výpravy je na dosah – a tentokrát se ti podaří ho dokončit."
+        }
         out.chronicle = "\(r.intent.summary) – \(r.roll.outcome.czechName.lowercased())."
         return out
     }

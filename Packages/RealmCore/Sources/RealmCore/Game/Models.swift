@@ -207,6 +207,7 @@ public struct Construction: Codable, Equatable, Identifiable, Sendable {
     public var id: String = UUID().uuidString
     public var kind: BuildingKind
     public var finishAt: Date
+    public init(kind: BuildingKind, finishAt: Date) { self.kind = kind; self.finishAt = finishAt }
 }
 
 public struct Settlement: Codable, Equatable, Sendable {
@@ -310,6 +311,9 @@ public struct Threat: Codable, Equatable, Identifiable, Sendable {
     public var title: String
     public var strength: Int
     public var deadline: Date
+    public init(kind: ThreatKind, title: String, strength: Int, deadline: Date) {
+        self.kind = kind; self.title = title; self.strength = strength; self.deadline = deadline
+    }
 }
 
 // MARK: - Deník
@@ -362,6 +366,9 @@ public struct RollInfo: Codable, Equatable, Sendable {
     public var stat: Attribute?
     public var outcome: Outcome
     public var total: Int { die + modifier }
+    public init(die: Int, modifier: Int, dc: Int, stat: Attribute?, outcome: Outcome) {
+        self.die = die; self.modifier = modifier; self.dc = dc; self.stat = stat; self.outcome = outcome
+    }
 }
 
 public struct LogEntry: Codable, Equatable, Identifiable, Sendable {

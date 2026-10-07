@@ -1,0 +1,69 @@
+name: Snímky obrazovky (simulátor)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  shots:
+    runs-on: macos-15
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - name: Xcode
+        run: |
+          XC=$(ls -d /Applications/Xcode_26*.app /Applications/Xcode_16*.app 2>/dev/null | sort -V | tail -1)
+          sudo xcode-select -s "$XC/Contents/Developer"
+          xcodebuild -version
+      - name: XcodeGen
+        run: brew install xcodegen && xcodegen generate
+      - name: Simulátor
+        id: sim
+        run: |
+          xcrun simctl list devices available | grep -E "iPhone" | head -20
+          UDID=$(xcrun simctl list devices available -j | python3 -c '
+          import json,sys
+          d=json.load(sys.stdin)["devices"]
+          c=[x for k,v in d.items() if "iOS" in k for x in v if x["name"].startswith("iPhone") and "Pro" in x["name"] and "Max" not in x["name"]]
+          print(c[-1]["udid"])')
+          echo "udid=$UDID" >> "$GITHUB_OUTPUT"
+          xcrun simctl boot "$UDID"
+          xcrun simctl bootstatus "$UDID" -b
+          xcrun simctl status_bar "$UDID" override --time "21:47" --batteryLevel 100 --cellularBars 4 || true
+      - name: Sestavení pro simulátor
+        run: |
+          set -o pipefail
+          xcodebuild build -project PocketRealm.xcodeproj -scheme PocketRealm -configuration Debug \
+            -destination "id=${{ steps.sim.outputs.udid }}" -derivedDataPath build/dd \
+            CODE_SIGNING_ALLOWED=NO | tee build.log | grep -E "error:|\*\* BUILD" || true
+          test -d build/dd/Build/Products/Debug-iphonesimulator/PocketRealm.app
+      - name: Snímky
+        env:
+          UDID: ${{ steps.sim.outputs.udid }}
+        run: |
+          APP=build/dd/Build/Products/Debug-iphonesimulator/PocketRealm.app
+          xcrun simctl install "$UDID" "$APP"
+          mkdir -p shots
+          shot() {
+            name="$1"; demo="$2"; sheet="$3"
+            SIMCTL_CHILD_PR_DEMO="$demo" SIMCTL_CHILD_PR_SHEET="$sheet" xcrun simctl launch "$UDID" cz.pocketrealm.app
+            sleep 7
+            xcrun simctl io "$UDID" screenshot "shots/$name.png"
+            xcrun simctl terminate "$UDID" cz.pocketrealm.app || true
+            sleep 1
+          }
+          shot 01-title "" ""
+          shot 02-newgame newgame ""
+          shot 03-quest game-quest ""
+          shot 04-realm game-realm ""
+          shot 05-realm-settlement game-realm settlement
+          shot 06-campaign game-campaign ""
+          shot 07-gameover gameover ""
+          shot 08-inventory game-quest inventory
+          ls -la shots
+      - uses: actions/upload-artifact@v4
+        with:
+          name: screenshots
+          path: shots/

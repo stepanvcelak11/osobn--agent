@@ -307,6 +307,14 @@ public enum Rules {
             }
         }
 
+        // Hlad v karavaně
+        if state.mode == .campaign && state.settlement.food + mandatory.food <= 0 {
+            mandatory.pop -= max(1, state.settlement.population / 12)
+            mandatory.morale -= 8
+            mandatory.stress += 6
+            notes.append("HLAD: zásoby došly, lidé umírají a utíkají. Popiš zoufalství karavany.")
+        }
+
         res.intent = intent
         res.roll = roll
         res.mandatory = mandatory

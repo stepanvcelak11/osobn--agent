@@ -19,6 +19,9 @@ struct PocketRealmApp: App {
                 .task {
                     app.models.cleanupPartial()
                     app.refreshSaves()
+                    #if DEBUG
+                    if let d = Demo.mode { app.openDemo(d) }
+                    #endif
                     await app.loadModels()
                 }
                 .onReceive(NotificationCenter.default.publisher(for: UIApplication.didReceiveMemoryWarningNotification)) { _ in

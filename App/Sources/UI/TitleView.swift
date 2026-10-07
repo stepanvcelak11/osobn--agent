@@ -29,6 +29,9 @@ struct TitleView: View {
         }
         .onAppear {
             app.refreshSaves()
+            #if DEBUG
+            if Demo.mode == "newgame" { showNewGame = true }
+            #endif
             withAnimation(.easeInOut(duration: 2.4).repeatForever(autoreverses: true)) { glow = true }
         }
         .fullScreenCover(isPresented: $showNewGame) { NewGameView() }

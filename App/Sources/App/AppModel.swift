@@ -51,6 +51,13 @@ final class AppModel: ObservableObject {
         if state.isOver && state.epilogue == nil { s.generateEpilogue() }
     }
 
+    #if DEBUG
+    func openDemo(_ name: String) {
+        guard let state = Demo.state(name) else { return }
+        session = makeSession(state, hook: nil)
+    }
+    #endif
+
     func closeSession() {
         session?.save()
         speaker.stop()

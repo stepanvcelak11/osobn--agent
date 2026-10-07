@@ -64,7 +64,12 @@ struct GameView: View {
         } message: { Text("Hra skončí a vypravěč napíše epilog. Uložená kronika zůstane.") }
         .sheet(item: $sheet) { kind in sheetView(kind) }
         .onReceive(minuteTimer) { _ in session.refreshSimulation() }
-        .onAppear { session.refreshSimulation() }
+        .onAppear {
+            session.refreshSimulation()
+            #if DEBUG
+            if let s = Demo.sheet { sheet = SheetKind(rawValue: s) }
+            #endif
+        }
     }
 
     // MARK: Příběh
