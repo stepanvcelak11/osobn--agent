@@ -62,6 +62,7 @@ enum SelfTest {
                 s.undo()
                 check(s.state.turn == turn - 1, "\(mode): Vrátit nefunguje")
             }
+            if mode.hasSettlement { s.setLiveWorld(false) }
             s.refreshSimulation()
             let id = s.state.id, turn = s.state.turn
             app.closeSession()
@@ -69,11 +70,15 @@ enum SelfTest {
                 check(loaded.turn == turn, "\(mode): po načtení jiný tah")
                 check(loaded.memory == "Bratr Ondřej má jizvu.", "\(mode): paměť se neuložila")
                 check(loaded.hero.abilities.count == 1 && loaded.hero.traits.count == 2, "\(mode): postava se neuložila")
+                if mode.hasSettlement { check(!loaded.liveWorld, "\(mode): zastavení času se neuložilo") }
             } else { failures.append("\(mode): nejde načíst") }
             app.open(id)
             if let s2 = app.session { await waitIdle(s2, "\(mode) znovuotevření"); app.closeSession() }
             log.append("\(mode.rawValue): \(turn) tahů OK")
         }
+        // Více rozehraných her najednou
+        app.refreshSaves()
+        check(app.saves.filter { $0.end == nil }.count >= 3, "rozehrané hry: \(app.saves.count)")
         // Konec hry a epilog
         app.startNewGame(NewGameSetup(mode: .quest, heroName: "Smrtelník", cityName: "", backgroundId: "zoldner", seed: 7))
         if let s = app.session {
