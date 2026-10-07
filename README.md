@@ -79,6 +79,8 @@ U osady navíc běží i skutečný čas, když nehraješ (nejvýš 3 dny), tak�
 
 ## Instalace
 
+**Podrobný návod krok za krokem: [docs/INSTALACE.md](docs/INSTALACE.md)**
+
 1. V [Releases](../../releases) stáhni `PocketRealm-unsigned.ipa`.
 2. Nainstaluj přes **Sideloadly** nebo **AltStore** (podepíše se tvým Apple ID; bezplatný účet = platnost 7 dní).
 3. Na iPhonu: Nastavení → Obecné → VPN a správa zařízení → důvěřovat svému Apple ID.

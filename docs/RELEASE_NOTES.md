@@ -1,6 +1,15 @@
-## Pocket Realm 2.1
+## Pocket Realm 2.2
 
 Temné RPG s AI vypravěčem, který běží celý v iPhonu.
+
+**Novinky ve 2.2**
+- **Více rozehraných her najednou** – seznam na titulní obrazovce, jedním klepnutím přepneš mezi dlouhou a krátkou hrou.
+  Osadu jde **zastavit**, když nehraješ (nebo nechat žít ve skutečném čase).
+- **Pojistky:** kontrola stavu po každém tahu, časový limit vypravěče (tah se nikdy nezasekne), záloha uložené hry
+  pro případ poškození, čistý restart modelu po chybě.
+- **Vyvážení podle tisíců simulovaných her:** opatrný hráč vyhrává, bezhlavý prohrává; rozumný vládce dovede osadu
+  k městu, líný ji ztratí. Pomalejší úrovně, rychlejší ekonomika osady, férovější nájezdy.
+- **Testy:** zátěžové hry se „šíleným“ modelem, samotest aplikace v simulátoru při každém sestavení.
 
 **Novinky ve 2.1**
 - **Tvorba postavy:** 11 původů (nově Lovec, Potulný kněz, Vědmák, Bard, Kovář, Hrobník), každý se zvláštní schopností
@@ -19,4 +28,4 @@ Temné RPG s AI vypravěčem, který běží celý v iPhonu.
 - Vypravěč se stáhne sám (Gemma 3 4B, ~2,5 GB, ověřeno SHA-256), pak vše offline.
 - Čtyři módy bez limitů tahů; čas běží podle činů; každý mód jde prohrát.
 
-Instalace: stáhni `PocketRealm-unsigned.ipa` a nainstaluj přes Sideloadly / AltStore. Podrobnosti v README.
+Instalace krok za krokem: [docs/INSTALACE.md](https://github.com/stepanvcelak11/osobn--agent/blob/main/docs/INSTALACE.md)
