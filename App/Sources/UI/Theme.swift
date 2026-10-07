@@ -210,4 +210,12 @@ extension StatDelta {
     }
 }
 
+/// Herní čas vždy ve 24h formátu („21:30“).
+func clock(_ d: Date) -> String {
+    let f = DateFormatter()
+    f.locale = Locale(identifier: "cs_CZ")
+    f.dateFormat = "H:mm"
+    return f.string(from: d)
+}
+
 func signed(_ v: Int) -> String { v > 0 ? "+\(v)" : (v < 0 ? "−\(-v)" : "0") }

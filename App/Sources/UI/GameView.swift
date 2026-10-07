@@ -31,9 +31,36 @@ struct GameView: View {
     }
 
     var body: some View {
-        ZStack {
-            SceneBackdrop(scene: state.scene, phase: state.phase)
-            DangerVignette(intensity: dangerIntensity)
+        GeometryReader { geo in
+            ZStack {
+                gameContent
+            }
+            .frame(width: geo.size.width, height: geo.size.height)
+        }
+        .background {
+            ZStack {
+                SceneBackdrop(scene: state.scene, phase: state.phase)
+                DangerVignette(intensity: dangerIntensity)
+            }
+        }
+        .animation(.easeInOut(duration: 0.3), value: session.diceOverlay)
+        .animation(.easeInOut(duration: 0.6), value: state.isOver)
+        .confirmationDialog("Menu", isPresented: $showMenu, titleVisibility: .hidden) { menuButtons }
+        .alert("Ukončit hru?", isPresented: $confirmAbandon) {
+            Button("Ukončit a napsat epilog", role: .destructive) { session.abandon() }
+            Button("Pokračovat ve hře", role: .cancel) {}
+        } message: { Text("Hra skončí a vypravěč napíše epilog. Uložená kronika zůstane.") }
+        .sheet(item: $sheet) { kind in sheetView(kind) }
+        .onReceive(minuteTimer) { _ in session.refreshSimulation() }
+        .onAppear {
+            session.refreshSimulation()
+            #if DEBUG
+            if let s = Demo.sheet { sheet = SheetKind(rawValue: s) }
+            #endif
+        }
+    }
+
+    @ViewBuilder private var gameContent: some View {
             VStack(spacing: 8) {
                 DashboardView(state: state, onMenu: { showMenu = true }, onSettlement: { sheet = state.mode == .quest ? .inventory : .settlement })
                 story
@@ -54,22 +81,6 @@ struct GameView: View {
                     .zIndex(6)
             }
             overlays
-        }
-        .animation(.easeInOut(duration: 0.3), value: session.diceOverlay)
-        .animation(.easeInOut(duration: 0.6), value: state.isOver)
-        .confirmationDialog("Menu", isPresented: $showMenu, titleVisibility: .hidden) { menuButtons }
-        .alert("Ukončit hru?", isPresented: $confirmAbandon) {
-            Button("Ukončit a napsat epilog", role: .destructive) { session.abandon() }
-            Button("Pokračovat ve hře", role: .cancel) {}
-        } message: { Text("Hra skončí a vypravěč napíše epilog. Uložená kronika zůstane.") }
-        .sheet(item: $sheet) { kind in sheetView(kind) }
-        .onReceive(minuteTimer) { _ in session.refreshSimulation() }
-        .onAppear {
-            session.refreshSimulation()
-            #if DEBUG
-            if let s = Demo.sheet { sheet = SheetKind(rawValue: s) }
-            #endif
-        }
     }
 
     // MARK: Příběh

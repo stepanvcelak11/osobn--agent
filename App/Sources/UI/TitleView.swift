@@ -16,7 +16,6 @@ struct TitleView: View {
 
     var body: some View {
         ZStack {
-            SceneBackdrop(scene: .castle, phase: 3)
             VStack(spacing: 0) {
                 Spacer(minLength: 40)
                 logo
@@ -28,6 +27,7 @@ struct TitleView: View {
             .padding(.horizontal, 24)
             .padding(.bottom, 12)
         }
+        .background { SceneBackdrop(scene: .castle, phase: 3) }
         .onAppear {
             app.refreshSaves()
             #if DEBUG

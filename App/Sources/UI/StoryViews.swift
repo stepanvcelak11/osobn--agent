@@ -66,7 +66,7 @@ struct LogEntryView: View {
             HStack(alignment: .top, spacing: 8) {
                 Text(entry.text).font(.footnote).foregroundStyle(Theme.parchment)
                 Spacer(minLength: 0)
-                Text(entry.date, format: .dateTime.hour().minute()).font(.caption2).foregroundStyle(Theme.dimText)
+                Text(clock(entry.date)).font(.caption2).foregroundStyle(Theme.dimText)
             }
             if let d = entry.delta, !d.isZero { DeltaChips(delta: d) }
         }

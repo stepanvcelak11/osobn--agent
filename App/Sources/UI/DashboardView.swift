@@ -32,7 +32,7 @@ struct DashboardView: View {
             Spacer(minLength: 4)
             HStack(spacing: 4) {
                 Image(systemName: Theme.phaseIcon(state.phase))
-                Text("Den \(state.day) · \(state.worldTime.formatted(.dateTime.hour().minute()))")
+                Text("Den \(state.day) · \(clock(state.worldTime))")
                     .monospacedDigit()
             }
             .font(.caption.weight(.semibold))

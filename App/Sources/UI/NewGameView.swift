@@ -15,7 +15,6 @@ struct NewGameView: View {
 
     var body: some View {
         ZStack {
-            SceneBackdrop(scene: step == 2 ? .town : (step == 1 ? .camp : .road), phase: step == 0 ? 2 : 3)
             VStack(spacing: 0) {
                 header
                 TabView(selection: $step) {
@@ -28,6 +27,7 @@ struct NewGameView: View {
                 footer
             }
         }
+        .background { SceneBackdrop(scene: step == 2 ? .town : (step == 1 ? .camp : .road), phase: step == 0 ? 2 : 3) }
         .onTapGesture { focus = false }
     }
 

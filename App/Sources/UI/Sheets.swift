@@ -124,7 +124,7 @@ struct SettlementSheet: View {
                 let prod = 8 + st.count(.farma) * 15 + st.population / 4
                 row("🌾", "Bilance jídla / den", signed(prod - st.population))
                 row("💰", "Příjem zlata / den", signed(5 + st.count(.trziste) * 12 + st.population / 10))
-                row("🕰️", "Herní čas", "Den \(state.day), \(state.worldTime.formatted(.dateTime.hour().minute()))")
+                row("🕰️", "Herní čas", "Den \(state.day), \(clock(state.worldTime))")
             }
         }
         .padding(14).panel()
