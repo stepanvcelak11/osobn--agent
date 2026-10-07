@@ -29,7 +29,8 @@ struct GameOverView: View {
 
     var body: some View {
         ZStack {
-            Color.black.opacity(0.75).ignoresSafeArea()
+            Rectangle().fill(.ultraThinMaterial).ignoresSafeArea()
+            Theme.bg0.opacity(0.88).ignoresSafeArea()
             ScrollView {
                 VStack(spacing: 18) {
                     Text(icon).font(.system(size: 64)).scaleEffect(appear ? 1 : 0.4)

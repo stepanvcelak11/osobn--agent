@@ -80,12 +80,16 @@ struct SceneBackdrop: View {
             LinearGradient(colors: Theme.sky(phase), startPoint: .top, endPoint: .bottom)
             Theme.sceneTint(scene).opacity(0.35).blendMode(.overlay)
             Image(systemName: scene.icon)
-                .font(.system(size: 280, weight: .ultraLight))
+                .font(.system(size: 240, weight: .ultraLight))
                 .foregroundStyle(.white.opacity(0.045))
                 .offset(y: 140)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .clipped()
             if embers && embersEnabled { EmberField(count: phase == 3 ? 26 : 18) }
             RadialGradient(colors: [.clear, .black.opacity(0.7)], center: .center, startRadius: 120, endRadius: 520)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .clipped()
         .ignoresSafeArea()
         .animation(.easeInOut(duration: 1.2), value: phase)
         .animation(.easeInOut(duration: 1.2), value: scene)

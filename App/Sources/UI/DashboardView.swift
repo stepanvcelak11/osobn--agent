@@ -51,10 +51,13 @@ struct DashboardView: View {
         let left = (state.quest?.turnLimit ?? 0) - state.turn
         return HStack(spacing: 8) {
             Text("🎯").font(.callout)
-            Text(state.quest?.objective ?? "").font(.caption).foregroundStyle(Theme.parchment).lineLimit(2)
-            Spacer(minLength: 4)
-            StatPill(icon: "🪙", value: "\(state.settlement.gold)", color: Theme.gold)
-            StatPill(icon: "⏳", value: "\(max(0, left))", color: left <= 3 ? Theme.blood : Theme.parchment)
+            Text(state.quest?.objective ?? "").font(.caption).foregroundStyle(Theme.parchment).lineLimit(3)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            VStack(spacing: 4) {
+                StatPill(icon: "🪙", value: "\(state.settlement.gold)", color: Theme.gold, expand: false)
+                StatPill(icon: "⏳", value: "\(max(0, left))", color: left <= 3 ? Theme.blood : Theme.parchment, expand: false)
+            }
         }
     }
 
@@ -104,6 +107,7 @@ struct StatPill: View {
     var icon: String
     var value: String
     var color: Color
+    var expand = true
     var body: some View {
         HStack(spacing: 3) {
             Text(icon).font(.caption)
@@ -112,7 +116,8 @@ struct StatPill: View {
                 .monospacedDigit()
         }
         .padding(.horizontal, 7).padding(.vertical, 5)
-        .frame(maxWidth: .infinity)
+        .frame(maxWidth: expand ? .infinity : nil)
+        .frame(minWidth: expand ? 0 : 62)
         .background(Color.white.opacity(0.06), in: Capsule())
         .animation(.spring(duration: 0.5), value: value)
     }
