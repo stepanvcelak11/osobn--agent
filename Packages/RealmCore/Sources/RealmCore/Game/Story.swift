@@ -171,6 +171,10 @@ public struct Roll: Codable, Equatable, Sendable {
     public var target: Int
     public var outcome: Outcome
     public var total: Int { die + bonus }
+
+    public init(attribute: Attribute, die: Int, bonus: Int, target: Int, outcome: Outcome) {
+        self.attribute = attribute; self.die = die; self.bonus = bonus; self.target = target; self.outcome = outcome
+    }
 }
 
 // MARK: - Deník
