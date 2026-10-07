@@ -4,8 +4,18 @@ import AgentCore
 /// Karta akce agenta: co vytvořil / změnil, s tlačítky Potvrdit / Upravit / Zpět.
 struct ActionCardView: View {
     @EnvironmentObject var app: AppModel
-    var action: ActionRecord
+    /// Počáteční stav; aktuální se vždy čte z deníku akcí (po potvrzení / zpět se karta překreslí).
+    private let initial: ActionRecord
     @State private var editing = false
+
+    init(action: ActionRecord) { self.initial = action }
+
+    private var action: ActionRecord {
+        _ = app.dataVersion
+        return (try? app.store?.action(id: initial.id)) ?? initial
+    }
+
+    private var isClock: Bool { action.tool == "set_alarm" || action.tool == "set_timer" || action.tool == "cancel_alarm" }
 
     private var kind: EntityKind? { action.entity?.kind }
     private var snapshot: JSONValue? { action.after ?? action.before }
@@ -14,6 +24,12 @@ struct ActionCardView: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 10) {
                 if let kind { KindBadge(kind: kind) }
+                else if isClock {
+                    Image(systemName: action.tool == "set_timer" ? "timer" : "alarm")
+                        .font(.body.weight(.semibold)).foregroundStyle(.purple)
+                        .frame(width: 34, height: 34)
+                        .background(Color.purple.opacity(0.15), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                }
                 VStack(alignment: .leading, spacing: 2) {
                     Text(header).font(.caption.weight(.semibold)).foregroundStyle(headerColor)
                     Text(title).font(.headline).strikethrough(action.status == .undone || action.status == .rejected)
@@ -62,7 +78,11 @@ struct ActionCardView: View {
         case .applied:
             HStack(spacing: 10) {
                 if !isDelete && action.entity != nil { Button("Upravit") { editing = true }.buttonStyle(.bordered) }
-                Button("Zpět") { app.undo(action.id) }.buttonStyle(.bordered)
+                if action.tool != "cancel_alarm" { Button("Zpět") { app.undo(action.id) }.buttonStyle(.bordered) }
+                if kind == .note, let snap = snapshot, let n = snap.decode(Note.self) {
+                    Button { app.sendToAppleNotes(n) } label: { Label("Do Poznámek Apple", systemImage: "square.and.arrow.up") }
+                        .buttonStyle(.bordered)
+                }
             }
             .controlSize(.small)
         case .undone, .rejected:
@@ -79,6 +99,9 @@ struct ActionCardView: View {
         case .rejected: return "ZRUŠENO"
         case .applied:
             switch action.tool {
+            case "set_alarm": return "BUDÍK NASTAVEN"
+            case "set_timer": return "MINUTKA SPUŠTĚNA"
+            case "cancel_alarm": return "ZRUŠENO"
             case "delete_item": return "SMAZÁNO"
             case "complete_task": return "SPLNĚNO"
             case "update_item", "user_edit": return "UPRAVENO"
@@ -91,12 +114,13 @@ struct ActionCardView: View {
         switch action.status {
         case .pending: return .orange
         case .undone, .rejected: return .secondary
-        case .applied: return isDelete ? .red : Theme.color(for: kind ?? .note)
+        case .applied: return isDelete ? .red : (isClock ? .purple : Theme.color(for: kind ?? .note))
         }
     }
 
     private var title: String {
-        snapshot?["title"]?.stringValue.flatMap { $0.isEmpty ? nil : $0 }
+        if isClock { return action.summary }
+        return snapshot?["title"]?.stringValue.flatMap { $0.isEmpty ? nil : $0 }
             ?? snapshot?["body"]?.stringValue.map { String($0.prefix(80)) }
             ?? action.summary
     }

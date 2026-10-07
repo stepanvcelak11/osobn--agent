@@ -19,6 +19,7 @@ struct HomeView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
                     header
+                    quickActions
                     if app.isJailbroken {
                         Label("Zařízení vypadá jako jailbreaknuté – šifrování nemusí data spolehlivě chránit.", systemImage: "exclamationmark.octagon.fill")
                             .font(.footnote).foregroundStyle(.red)
@@ -54,8 +55,7 @@ struct HomeView: View {
     }
 
     private func reload() {
-        guard let store = app.store else { return }
-        let b = OverviewBuilder(store: store, calendar: app.calendar, now: Date())
+        guard let b = app.overviewBuilder() else { return }
         overview = try? b.overview()
         summary = (try? b.deterministicSummary(evening: isEvening)) ?? ""
     }
@@ -70,6 +70,32 @@ struct HomeView: View {
         case 12..<18: return "Dobré odpoledne"
         default: return "Dobrý večer"
         }
+    }
+
+    /// Rychlé akce na dosah palce.
+    private var quickActions: some View {
+        HStack(spacing: 10) {
+            quickButton("Nahrát", "waveform.badge.mic", .red) { app.showRecording = true }
+            quickButton("Hodiny", "alarm", .purple) { app.showClock = true }
+            quickButton("Zachytit", "bolt.fill", .orange) { app.requestCapture() }
+            quickButton("Napsat", "keyboard", Theme.accent) {
+                app.tab = .chat
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { NotificationCenter.default.post(name: .focusChatInput, object: nil) }
+            }
+        }
+    }
+
+    private func quickButton(_ title: String, _ icon: String, _ color: Color, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            VStack(spacing: 6) {
+                Image(systemName: icon).font(.title3.weight(.semibold)).foregroundStyle(color)
+                Text(title).font(.caption).foregroundStyle(.primary)
+            }
+            .frame(maxWidth: .infinity, minHeight: 64)
+            .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(title)
     }
 
     private var header: some View {
@@ -235,11 +261,13 @@ struct HomeView: View {
             }
         }
         if let loc = item.location { parts.append(loc) }
+        if let src = item.source { parts.append(src) }
         return parts.joined(separator: " · ")
     }
 
     private func itemRow(_ item: AgendaItem, showRelative: Bool) -> some View {
         Button {
+            guard !item.isExternal else { return }
             if let snap = try? app.store?.snapshot(item.ref) { editing = EditTarget(ref: item.ref, snapshot: snap) }
         } label: {
             HStack(spacing: 12) {

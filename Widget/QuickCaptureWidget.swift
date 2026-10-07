@@ -46,7 +46,6 @@ struct CaptureWidgetView: View {
     }
 }
 
-@main
 struct QuickCaptureWidget: Widget {
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: "QuickCapture", provider: CaptureProvider()) { _ in

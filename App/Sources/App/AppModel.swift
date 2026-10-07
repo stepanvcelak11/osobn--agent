@@ -34,7 +34,15 @@ final class AppModel: ObservableObject {
     let notifications = NotificationService.shared
     let recorder = AudioRecorder()
     let speaker = Speaker()
+    let clock = AppClockService()
+    let apple = AppleIntegration()
+    let longRecorder = LongRecorder()
+    let processor = RecordingProcessor()
+    @Published var showRecording = false
+    @Published var showClock = false
     private(set) var semantic: SemanticSearch?
+    /// Krátké „předání“ do jiné aplikace (Zkratky) – po návratu není nutné znovu Face ID.
+    private var handoffUntil: Date?
     var calendar: Calendar { CzechFormat.calendar() }
 
     private var lastActivity = Date()
@@ -126,10 +134,14 @@ final class AppModel: ObservableObject {
             agentSettings = st
         }
         let engine = AgentEngine(store: s, model: ai.llm, calendar: calendar, settings: agentSettings)
+        engine.executor.clockService = clock
+        let apple = self.apple
+        engine.executor.externalEvents = { from, to in apple.externalEvents(from: from, to: to, store: s) }
         agent = engine
         s.onChange = { [weak self] in
             Task { @MainActor in self?.dataDidChange() }
         }
+        s.onEntityChange = { ref in apple.entityChanged(ref, store: s) }
         models.attach(store: s)
         models.cleanupPartial()
         phase = .unlocked
@@ -167,6 +179,11 @@ final class AppModel: ObservableObject {
     func lock() {
         guard phase == .unlocked else { return }
         changeTask?.cancel()
+        // Dlouhé nahrávání pokračuje (zvuk je šifrovaný), zpracování se ale přeruší – potřebuje odemčená data.
+        if processor.isRunning { processor.cancel() }
+        showRecording = false
+        showClock = false
+        handoffUntil = nil
         agent?.clearPending()
         recorder.cancel()
         speaker.stop()
@@ -194,9 +211,11 @@ final class AppModel: ObservableObject {
         case .active:
             shieldVisible = false
             consumePendingCaptureFlag()
-            if let b = backgroundedAt, phase == .unlocked, Date().timeIntervalSince(b) >= TimeInterval(lockAfterBackground) {
-                lock()
+            if let b = backgroundedAt, phase == .unlocked {
+                let grace = handoffUntil.map { $0.timeIntervalSince(b) } ?? 0
+                if Date().timeIntervalSince(b) >= TimeInterval(lockAfterBackground) + max(0, grace) { lock() }
             }
+            handoffUntil = nil
             backgroundedAt = nil
             lastActivity = Date()
             if phase == .unlocked, let s = store {
@@ -209,6 +228,7 @@ final class AppModel: ObservableObject {
         case .background:
             shieldVisible = true
             backgroundedAt = Date()
+            if let h = handoffUntil, h > Date() { break }   // vědomé předání do Zkratek
             if lockAfterBackground == 0 { lock() }
         @unknown default:
             shieldVisible = true
@@ -288,11 +308,40 @@ final class AppModel: ObservableObject {
         if !t.isDone, let last = try? store?.lastAppliedAction() { toast = Toast(text: "Splněno: \(t.title)", undoActionId: last.id) }
     }
 
+    // MARK: - Propojení s aplikacemi Apple
+
+    /// Pošle poznámku do Poznámek Apple přes zkratku (na 2 minuty se nezamyká, než se vrátíš).
+    func sendToAppleNotes(_ n: Note) {
+        handoffUntil = Date().addingTimeInterval(120)
+        if !apple.sendToAppleNotes(title: n.title, body: n.body) {
+            handoffUntil = nil
+            toast = Toast(text: "Zkratku se nepodařilo spustit.")
+        }
+    }
+
+    func bumpData() { dataVersion += 1 }
+
+    func syncAppleNow() {
+        if let s = store { apple.syncAll(store: s) }
+    }
+
+    func overviewBuilder(now: Date = Date()) -> OverviewBuilder? {
+        guard let s = store else { return nil }
+        let apple = self.apple
+        return OverviewBuilder(store: s, calendar: calendar, now: now,
+                               external: { from, to in apple.externalEvents(from: from, to: to, store: s) })
+    }
+
     // MARK: - Odkazy a rychlé zachycení
 
     func handleURL(_ url: URL) {
         guard url.scheme == "osobniagent" else { return }
-        if url.host == "capture" { requestCapture() }
+        switch url.host {
+        case "capture": requestCapture()
+        case "record": if phase == .unlocked { showRecording = true }
+        case "clock": if phase == .unlocked { showClock = true }
+        default: break   // „returned“ – návrat ze Zkratek
+        }
     }
 
     /// Zkratka (App Intent) nastaví příznak – zpracujeme ho po návratu do popředí.

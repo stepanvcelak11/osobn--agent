@@ -11,6 +11,8 @@ struct QuickCaptureView: View {
     @State private var text = ""
     @State private var result: AgentReply?
     @State private var autoStarted = false
+    @AppStorage("input.preferTyping") private var preferTyping = false
+    @FocusState private var textFocused: Bool
 
     var body: some View {
         NavigationStack {
@@ -42,8 +44,9 @@ struct QuickCaptureView: View {
                     }
                     Spacer()
                     HStack {
-                        TextField("…nebo napiš", text: $text)
+                        TextField(preferTyping ? "Napiš myšlenku" : "…nebo napiš", text: $text)
                             .textFieldStyle(.roundedBorder)
+                            .focused($textFocused)
                             .submitLabel(.done)
                             .onSubmit { Task { await sendText() } }
                         Button("Uložit") { Task { await sendText() } }
@@ -62,8 +65,10 @@ struct QuickCaptureView: View {
             .animation(.easeOut(duration: 0.15), value: recorder.level)
         }
         .task {
-            // Ze widgetu rovnou začneme nahrávat
-            if !autoStarted && app.models.active(.speech) != nil {
+            // Ze widgetu rovnou začneme nahrávat (nebo psát, když uživatel dává přednost psaní)
+            if preferTyping || app.models.active(.speech) == nil {
+                textFocused = true
+            } else if !autoStarted {
                 autoStarted = true
                 try? await recorder.start()
             }

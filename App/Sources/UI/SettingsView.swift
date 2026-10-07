@@ -12,6 +12,7 @@ struct SettingsView: View {
     @AppStorage("tts.voice") private var voiceId = ""
     @AppStorage("tts.rate") private var ttsRate: Double = 0.5
     @AppStorage("notif.showContent") private var showContent = false
+    @AppStorage("input.preferTyping") private var preferTyping = false
     @State private var lockBackground = 0
     @State private var lockIdle = 120
     @State private var wipeAfter = 0
@@ -102,6 +103,15 @@ struct SettingsView: View {
                     Button("Vyzkoušet hlas") { app.speaker.speak("Dobrý den, jsem tvůj osobní asistent. Vše běží přímo v telefonu.") }
                 } header: { Text("Hlas") } footer: {
                     Text("Čtení nahlas používá hlasy iOS uložené v telefonu. Kvalitnější český hlas stáhneš v Nastavení iOS → Zpřístupnění → Předčítání obsahu → Hlasy → Čeština.")
+                }
+
+                Section {
+                    Toggle("Preferuji psaní", isOn: $preferTyping)
+                    NavigationLink { IntegrationsView() } label: { Label("Kalendář, Připomínky a Poznámky Apple", systemImage: "link") }
+                    NavigationLink { ClockView() } label: { Label("Hodiny – budíky, minutky, stopky", systemImage: "alarm") }
+                    Button { app.showRecording = true } label: { Label("Nahrát a shrnout přednášku / poradu", systemImage: "waveform.badge.mic") }
+                } header: { Text("Ovládání a propojení") } footer: {
+                    Text("„Preferuji psaní“: hlavní tlačítko i rychlý záznam začínají klávesnicí. Diktovat jde dál podržením tlačítka.")
                 }
 
                 Section("Lokální AI") {

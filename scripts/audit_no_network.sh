@@ -30,7 +30,11 @@ done
 # Info.plist: žádné výjimky ATS, žádné background režimy, sdílení souborů vypnuto
 PL="$APP/Info.plist"
 if /usr/libexec/PlistBuddy -c 'Print NSAppTransportSecurity' "$PL" >/dev/null 2>&1; then echo "!! NSAppTransportSecurity výjimka"; FAIL=1; fi
-if /usr/libexec/PlistBuddy -c 'Print UIBackgroundModes' "$PL" >/dev/null 2>&1; then echo "!! UIBackgroundModes"; FAIL=1; fi
+# Povolený je jen režim „audio“ (nahrávání přednášky při zamčeném telefonu)
+MODES="$(/usr/libexec/PlistBuddy -c 'Print UIBackgroundModes' "$PL" 2>/dev/null | grep -vE '^(Array \{|\})$' | tr -d ' ' || true)"
+for m in $MODES; do
+  if [ "$m" != "audio" ]; then echo "!! nepovolený UIBackgroundModes: $m"; FAIL=1; fi
+done
 if [ "$(/usr/libexec/PlistBuddy -c 'Print UIFileSharingEnabled' "$PL" 2>/dev/null)" = "true" ]; then echo "!! UIFileSharingEnabled"; FAIL=1; fi
 
 if [ $FAIL -ne 0 ]; then echo "AUDIT SELHAL"; exit 1; fi

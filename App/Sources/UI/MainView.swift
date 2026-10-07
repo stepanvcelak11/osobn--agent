@@ -63,6 +63,7 @@ final class ChatController: ObservableObject {
 struct MainView: View {
     @EnvironmentObject var app: AppModel
     @EnvironmentObject var recorder: AudioRecorder
+    @EnvironmentObject var longRecorder: LongRecorder
     @StateObject private var chat = ChatController()
 
     var body: some View {
@@ -100,6 +101,23 @@ struct MainView: View {
         .animation(.easeOut(duration: 0.15), value: recorder.isRecording)
         .sheet(isPresented: $app.showCapture) {
             QuickCaptureView().environmentObject(chat)
+        }
+        .sheet(isPresented: $app.showRecording) { RecordingView() }
+        .sheet(isPresented: $app.showClock) { NavigationStack { ClockView() } }
+        .overlay(alignment: .top) {
+            if longRecorder.isActive && !app.showRecording {
+                Button { app.showRecording = true } label: {
+                    HStack(spacing: 8) {
+                        Circle().fill(longRecorder.state == .recording ? Color.red : Color.orange).frame(width: 9, height: 9)
+                        Text(longRecorder.state == .recording ? "Nahrává se \(CzechDuration.clock(longRecorder.elapsed))" : "Nahrávání pozastaveno")
+                            .font(.footnote.weight(.semibold).monospacedDigit())
+                    }
+                    .padding(.horizontal, 14).padding(.vertical, 7)
+                    .background(.thinMaterial, in: Capsule())
+                }
+                .buttonStyle(.plain)
+                .padding(.top, 4)
+            }
         }
         .alert("Chyba", isPresented: Binding(get: { chat.error != nil }, set: { if !$0 { chat.error = nil } })) {
             Button("OK", role: .cancel) {}
@@ -150,6 +168,7 @@ struct BottomBar: View {
 struct MicButton: View {
     @EnvironmentObject var app: AppModel
     @EnvironmentObject var recorder: AudioRecorder
+    @AppStorage("input.preferTyping") private var preferTyping = false
     @ObservedObject var chat: ChatController
     var mode: AgentMode = .chat
     var size: CGFloat = 66
@@ -167,7 +186,7 @@ struct MicButton: View {
             if chat.busy || chat.transcribing {
                 ProgressView().tint(.white)
             } else {
-                Image(systemName: recorder.isRecording ? "waveform" : "mic.fill")
+                Image(systemName: recorder.isRecording ? "waveform" : (preferTyping && mode == .chat ? "keyboard" : "mic.fill"))
                     .font(.system(size: size * 0.38, weight: .semibold))
                     .foregroundStyle(.white)
             }
@@ -206,8 +225,8 @@ struct MicButton: View {
                     }
                 }
         )
-        .accessibilityLabel("Mluvit s agentem")
-        .accessibilityHint("Podrž a mluv, pusť pro odeslání. Klepnutím otevřeš psaní.")
+        .accessibilityLabel(preferTyping ? "Napsat agentovi" : "Mluvit s agentem")
+        .accessibilityHint("Klepnutím otevřeš psaní. Podrž a mluv, pusť pro odeslání.")
         .accessibilityAddTraits(.isButton)
     }
 }

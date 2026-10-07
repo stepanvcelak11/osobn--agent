@@ -29,6 +29,10 @@ struct OsobniAgentApp: App {
                 .environmentObject(app.recorder)
                 .environmentObject(app.speaker)
                 .environmentObject(app.notifications)
+                .environmentObject(app.clock)
+                .environmentObject(app.apple)
+                .environmentObject(app.longRecorder)
+                .environmentObject(app.processor)
                 .preferredColorScheme(AppearanceMode(rawValue: appearance)?.scheme)
                 .dynamicTypeSize(textScale < 0 ? DynamicTypeSize.xSmall...DynamicTypeSize.accessibility5
                                  : TextScale.sizes[min(textScale, TextScale.sizes.count - 1)]...TextScale.sizes[min(textScale, TextScale.sizes.count - 1)])
