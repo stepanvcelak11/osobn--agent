@@ -94,3 +94,34 @@ Orientačně: správné rozhodnutí ≥ 85 % = dobrý model. Rychlost generován
 - Špatné heslo → „Špatné heslo nebo poškozený soubor“.
 - Nastavení → Zabezpečení → „Smazat data po neúspěšných pokusech“ (volitelné).
 - Nastavení → Zabezpečení → „Změnit nouzové heslo“.
+
+---
+
+## Verze 1.1 – nové funkce a jak je vyzkoušet
+
+### Psaní místo mluvení
+- Nastavení → Ovládání a propojení → **Preferuji psaní**. Hlavní tlačítko dole pak ukazuje klávesnici: klepnutím píšeš, podržením můžeš dál diktovat.
+- Na přehledu je rychlá akce **Napsat**. Rychlý záznam z widgetu začne klávesnicí místo mikrofonu.
+
+### Budíky, minutky a stopky
+- „**Vzbuď mě zítra v 6:30**“, „**budík každý pracovní den v 6:15**“, „**minutka 10 minut na těstoviny**“, „**spusť stopky**“, „**zastav stopky**“, „**jaké mám budíky?**“, „**zruš budík**“. Rušení budíku se potvrzuje, minutka se zruší rovnou.
+- Na **iOS 26** jsou to skutečné budíky Apple: zvoní i v tichém režimu, mají tlačítko **Odložit** (9 min) a minutka běží na zamčené obrazovce a v Dynamic Islandu. Při prvním použití povol „Budíky a časovače“.
+- Na starším iOS chodí jako notifikace (tichý režim nepřebijí).
+- Přehled → **Hodiny**: stopky s mezičasy, rychlé minutky (1–60 min), seznam a přidání budíků.
+
+### Kalendář, Připomínky a Poznámky Apple
+- Nastavení → **Kalendář, Připomínky a Poznámky Apple**. Všechno je ve výchozím stavu vypnuté.
+- **Zapisovat události do Kalendáře**: vyber kalendář. Pro čistě lokální uložení zvol kalendář „Na iPhonu“, iCloud kalendář se synchronizuje do cloudu. Zkus „v pátek ve 14 schůzka s Petrem“ → událost je v aplikaci Kalendář. „Zpět“ ji zase smaže.
+- **Zobrazovat události z Kalendáře v přehledu**: tvé ostatní události se objeví v Přehledu a agent je zná („co mám zítra?“).
+- **Připomínky a úkoly**: zkopírují se do aplikace Připomínky, splnění i smazání se propíše.
+- **Poznámky Apple**: v aplikaci Zkratky vytvoř zkratku **„Uložit do Poznámek“** (akce *Vytvořit poznámku* s obsahem *Vstup zkratky*; v podrobnostech zkratky zapni *Přijímat: Text*). U karty poznámky pak klepni na **Do Poznámek Apple**.
+- Notifikace dál posílá jen tato aplikace, kopie v Kalendáři a Připomínkách jsou bez upozornění, aby nechodily dvakrát.
+
+### Nahrávání a shrnutí přednášky / porady
+1. Přehled → **Nahrát** (nebo Nastavení → Nahrát a shrnout).
+2. Zvol typ (Přednáška / Porada / Rozhovor) a nahrávej. **Můžeš telefon zamknout**, nahrávání běží dál. Nahoře v aplikaci je červený pruh s časem. Telefonní hovor nahrávání pozastaví a po hovoru pokračuje.
+3. **Konec** → **Přepsat a uložit**. Přepis běží offline (Whisper) po 5minutových částech a pak lokální model napíše název, shrnutí, hlavní body a úkoly. Hodina záznamu se zpracuje zhruba za 5–15 minut, nech přitom aplikaci otevřenou.
+4. Výsledek se uloží jako **poznámka** (shrnutí + celý přepis s časovými značkami, jde v ní hledat). **Navržené úkoly** čekají na tvé potvrzení.
+5. Jde zpracovat i **hotový zvukový soubor** (např. z Diktafonu): „Vybrat zvukový soubor…“.
+- Rozlišení mluvčích („kdo co řekl“) offline zatím neumí.
+- Nahrávej jen se souhlasem ostatních.

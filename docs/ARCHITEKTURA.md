@@ -52,7 +52,13 @@ vstup (text / přepis řeči)
           → vykonavatel (ToolExecutor) → karta akce → případně další krok (max. 4)
 ```
 
-Nástroje: `create_note`, `create_task`, `create_reminder`, `create_event`, `complete_task`, `update_item`, `delete_item`, `list_agenda`, `list_tasks`, `search_notes`, `undo_last`.
+Nástroje: `create_note`, `create_task`, `create_reminder`, `create_event`, `complete_task`, `update_item`, `delete_item`, `list_agenda`, `list_tasks`, `search_notes`, `undo_last`, `set_timer`, `set_alarm`, `cancel_alarm`, `list_alarms`, `stopwatch`.
+
+### Verze 1.1
+- **Budíky/minutky:** jádro rozhoduje, aplikace plánuje přes protokol `ClockService` (`AppClockService`). Na iOS 26+ používá AlarmKit (budík zvoní i v tichém režimu, má odložení, Live Activity ve widgetu), na starším iOS lokální notifikace. Čas budíku má vlastní režim parseru: „v 6“ = 6:00, ne 18:00.
+- **Kalendář/Připomínky Apple (EventKit):** zdrojem pravdy zůstává šifrovaná DB. `DataStore.onEntityChange` hlásí každou změnu položky a `AppleIntegration` ji zrcadlí do vybraného kalendáře nebo seznamu (tabulka `external_links` drží vazby). Proto fungují úpravy, smazání i „Zpět“. Čtení Kalendáře Apple jde volitelně do přehledu i k agentovi přes `ExternalAgendaItem`.
+- **Poznámky Apple:** přes zkratku uživatele (`shortcuts://x-callback-url/run-shortcut`) s návratem do aplikace. Na 2 minuty se kvůli tomu neaktivuje zámek.
+- **Nahrávky:** `LongRecorder` (režim `audio` na pozadí) ukládá 16kHz zvuk do dočasného souboru šifrovaného AES-GCM klíčem jen v paměti. `RecordingProcessor` přepisuje po 5 minutách (whisper.cpp), `TranscriptSummarizer` shrnuje po částech (map → reduce) kvůli malému kontextu a výsledek uloží jako poznámku. Úkoly ze shrnutí jsou jen návrhy (`ToolExecutor.propose`).
 
 ### Pravidla vynucená v kódu (ne jen v promptu)
 - **Mazání vždy čeká na potvrzení** uživatelem (karta „Smazat / Zrušit“). Model ho provést nemůže.

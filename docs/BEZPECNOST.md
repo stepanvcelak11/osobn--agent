@@ -61,11 +61,26 @@ Stav k verzi 1.0.0. U každého bodu je uvedeno, **jak je to ověřené**: autom
 | Agent má přístup jen k vlastním datům | ✅ | Nemá žádné nástroje pro kontakty, kalendář iOS, soubory, síť ani polohu. Aplikace tato oprávnění ani nežádá (jen mikrofon, Face ID a notifikace). |
 | Vratnost | ✅ | Deník akcí se stavem před a po. „Zpět“ funguje i na ruční úpravy (testy). |
 
+## 5b. Verze 1.1 – nová propojení a jejich dopad
+
+| Funkce | Co to znamená pro soukromí | Opatření |
+|---|---|---|
+| Zápis do Kalendáře / Připomínek Apple | Kopie položek opouští šifrovanou DB aplikace. Pokud je kalendář nebo seznam v iCloudu, synchronizuje se do cloudu Apple. | Ve výchozím stavu **vypnuto**. Jde zvolit lokální kalendář „Na iPhonu“. Kopie jsou bez upozornění, takže titulky nejsou na zamčené obrazovce. |
+| Čtení Kalendáře Apple | Agent vidí tvé ostatní události (jen lokálně v telefonu). | Samostatný přepínač, ve výchozím stavu vypnutý. |
+| Poznámky Apple přes Zkratky | Text poznámky se předá aplikaci Zkratky a ta ho uloží do Poznámek (případně iCloud). | Jen na tvé klepnutí u konkrétní poznámky. Kvůli přepnutí aplikací je dvouminutová výjimka ze zámku a mezitím je obsah v přepínači aplikací skrytý. |
+| Budíky (AlarmKit) | Popisek budíku nebo minutky („Těstoviny“) zobrazuje iOS na zamčené obrazovce. | Popisek je jen krátký text, který zadáš. Výchozí je „Budík“ / „Minutka“. |
+| Nahrávání na pozadí | Aplikace má režim `UIBackgroundModes = audio`, jinak by se nahrávání po zamčení zastavilo. | Používá se jen během nahrávání. Síťový audit v CI povoluje jen tento jeden režim. Zvuk je v dočasném souboru šifrovaném AES-256-GCM klíčem, který existuje **jen v paměti**, takže po ukončení aplikace je soubor nečitelný. Po zpracování se smaže. Data aplikace se při zamčení dál zamykají jako dřív. |
+| Přepis a shrnutí nahrávky | Probíhá jen v telefonu (whisper.cpp + lokální model). | Výsledná poznámka je v šifrované DB. Navržené úkoly se vytvoří až po potvrzení. |
+
+Nová oprávnění: **Kalendář** a **Připomínky** (plný přístup, jen po zapnutí v Nastavení), **Budíky a časovače** (AlarmKit, iOS 26+) a Live Activities.
+
 ## 6. Oprávnění aplikace
 - **Face ID** (`NSFaceIDUsageDescription`) – odemčení klíče.
 - **Mikrofon** (`NSMicrophoneUsageDescription`) – jen při držení tlačítka nebo v rychlém záznamu.
 - **Notifikace** – lokální připomínky.
-- Žádná další oprávnění: poloha, kontakty, fotky, kalendář, Bluetooth ani síť na pozadí. Žádné `UIBackgroundModes`.
+- **Kalendář, Připomínky** – jen když zapneš propojení (Nastavení → Kalendář, Připomínky a Poznámky Apple).
+- **Budíky a časovače** (iOS 26+) – při prvním budíku nebo minutce.
+- Žádná další oprávnění: poloha, kontakty, fotky, Bluetooth ani síť. Z `UIBackgroundModes` jen `audio` kvůli nahrávání přednášek.
 
 ## 7. Závislosti (kompletní seznam)
 
@@ -96,4 +111,7 @@ Vše ostatní jsou frameworky Apple: SwiftUI, CryptoKit, Security, LocalAuthenti
 11. **Siri:** zkratka „Rychlý záznam“ jde spustit hlasem přes Siri. Pak frázi zpracuje Siri (podle nastavení iOS i na serverech Apple). Samotný obsah záznamu ale Siri nedostane – diktuje se až v aplikaci. Kdo to nechce, spouští zkratku přes widget nebo klepnutím na zadní stranu.
 12. **Ověření modelu bez známého hashe** závisí na tom, že uživatel hash opravdu porovná. Proto doporučuji vždy vložit SHA-256 z Hugging Face před importem.
 13. **Mazání z disku:** SQLite přepisuje smazaná data (`secure_delete`), ale flash paměť může mít kopie ve volných blocích. Ty jsou ovšem šifrované klíčem, který se při „smazat vše“ zničí.
-14. **Kód nebyl nezávisle auditován** třetí stranou a aplikace zatím nebyla spuštěna na skutečném zařízení. Doporučuji projít milníky podle `docs/INSTALACE.md`.
+14. **Propojení s aplikacemi Apple** posílá kopie dat mimo šifrovanou databázi (do Kalendáře, Připomínek a Poznámek, případně do iCloudu). Zapínej jen to, co opravdu chceš.
+15. **Budíky na iOS < 26** jsou jen notifikace a v tichém režimu nezazvoní.
+16. **Nahrávky:** pokud aplikace během nahrávání spadne, šifrovaný dočasný soubor zůstane do dalšího spuštění (kdy se smaže), ale bez klíče z paměti je nečitelný. Nahrávat jiné lidi smíš jen s jejich souhlasem.
+17. **Kód nebyl nezávisle auditován** třetí stranou a aplikace zatím nebyla spuštěna na skutečném zařízení. Doporučuji projít milníky podle `docs/INSTALACE.md`.

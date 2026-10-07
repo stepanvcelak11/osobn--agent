@@ -105,6 +105,8 @@ final class LongRecorder: ObservableObject {
     private let target = AVAudioFormat(commonFormat: .pcmFormatFloat32, sampleRate: 16_000, channels: 1, interleaved: false)!
 
     var isActive: Bool { state == .recording || state == .paused }
+    /// Probíhá dlouhé nahrávání? (diktování a čtení nahlas ho nesmí přerušit)
+    nonisolated(unsafe) static var busy = false
 
     func start() async throws {
         guard state == .idle || state == .finished else { return }
@@ -144,6 +146,7 @@ final class LongRecorder: ObservableObject {
         try engine.start()
         startedAt = Date()
         state = .recording
+        Self.busy = true
         startTimer()
         observeInterruptions()
     }
@@ -172,6 +175,7 @@ final class LongRecorder: ObservableObject {
         try? AVAudioSession.sharedInstance().setActive(false, options: [.notifyOthersOnDeactivation])
         level = 0
         state = .finished
+        Self.busy = false
     }
 
     /// Zahodí nahrávku (smaže šifrovaný soubor).

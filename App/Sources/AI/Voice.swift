@@ -71,6 +71,7 @@ final class AudioRecorder: ObservableObject {
 
     func start() async throws {
         guard !isRecording else { return }
+        guard !LongRecorder.busy else { throw SpeechError.busy }
         guard await Self.requestPermission() else { throw SpeechError.micDenied }
         let session = AVAudioSession.sharedInstance()
         try session.setCategory(.playAndRecord, mode: .measurement, options: [.defaultToSpeaker])
@@ -134,7 +135,7 @@ final class Speaker: NSObject, ObservableObject, AVSpeechSynthesizerDelegate {
     }
 
     func speak(_ text: String) {
-        guard !text.isEmpty else { return }
+        guard !text.isEmpty, !LongRecorder.busy else { return }
         stop()
         let u = AVSpeechUtterance(string: text)
         let preferred = UserDefaults.standard.string(forKey: "tts.voice")

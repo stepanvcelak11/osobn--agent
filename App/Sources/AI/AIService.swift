@@ -125,12 +125,14 @@ enum SpeechError: LocalizedError {
     case noModel
     case micDenied
     case tooShort
+    case busy
 
     var errorDescription: String? {
         switch self {
         case .noModel: return "Není nahraný model pro rozpoznávání řeči (Nastavení → Modely)."
         case .micDenied: return "Aplikace nemá přístup k mikrofonu (Nastavení iOS → Osobní agent)."
         case .tooShort: return "Nahrávka je příliš krátká."
+        case .busy: return "Právě běží nahrávání přednášky – diktování teď nejde. Napiš to prosím."
         }
     }
 }
