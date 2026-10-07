@@ -20,7 +20,7 @@ final class AppModel: ObservableObject {
         }
     }
 
-    var latestUnfinished: SaveSummary? { saves.first { $0.end == nil } }
+    var running: [SaveSummary] { saves.filter { $0.end == nil } }
 
     func refreshSaves() { saves = store.list() }
 
@@ -28,66 +28,58 @@ final class AppModel: ObservableObject {
         await ai.loadLLM(models.active(.llm))
     }
 
-    private func makeSession(_ state: GameState, hook: String?) -> GameSession {
+    private func makeSession(_ story: Story) -> GameSession {
         let ai = self.ai
-        let s = GameSession(state: state, store: store, hook: hook,
-                            model: { ai.llm }, modelLoading: { if case .loading = ai.llmState { return true } else { return false } })
+        let s = GameSession(story: story, store: store,
+                            model: { ai.narrator() },
+                            modelLoading: { if case .loading = ai.llmState, OnlineSettings.config == nil { return true } else { return false } })
         s.onNarration = { [weak self] text in
             guard UserDefaults.standard.bool(forKey: "tts.enabled") else { return }
             self?.speaker.speak(text)
         }
+        s.onTurnFinished = { [weak ai] in ai?.objectWillChange.send() }
         return s
     }
 
-    func startNewGame(_ setup: NewGameSetup) {
+    func startNewGame(_ setup: NewStory) {
         ai.resetContext()
-        let (state, hook) = GameEngine.newGame(setup)
-        try? store.save(state)
-        let s = makeSession(state, hook: hook)
-        withAnimation(.easeInOut(duration: 0.5)) { session = s }
+        let story = StoryEngine.newStory(setup)
+        try? store.save(story)
+        let s = makeSession(story)
+        session = s
         s.runIntro()
         refreshSaves()
     }
 
     func open(_ id: String) {
-        guard let state = try? store.load(id) else { refreshSaves(); return }
+        guard let story = try? store.load(id) else { refreshSaves(); return }
         ai.resetContext()
-        let s = makeSession(state, hook: nil)
-        withAnimation(.easeInOut(duration: 0.5)) { session = s }
-        if s.needsIntro { s.runIntro() }
-        s.refreshSimulation()
-        if state.isOver && state.epilogue == nil { s.generateEpilogue() }
+        let s = makeSession(story)
+        session = s
+        if story.needsIntro { s.runIntro() }
+        if story.isOver && story.epilogue == nil { s.generateEpilogue() }
     }
 
     #if DEBUG
     func openDemo(_ name: String) {
-        guard let state = Demo.state(name) else { return }
-        session = makeSession(state, hook: nil)
+        guard let story = Demo.story(name) else { return }
+        session = makeSession(story)
     }
     #endif
 
     func closeSession() {
         session?.save()
         speaker.stop()
-        withAnimation(.easeInOut(duration: 0.4)) { session = nil }
+        session = nil
         refreshSaves()
     }
 
     func delete(_ id: String) {
         store.delete(id)
-        Task { await RealmNotifications.cancel(gameId: id) }
         refreshSaves()
     }
 
     func deleteAllSaves() {
         for s in store.list() { delete(s.id) }
-    }
-
-    /// Úspěchy napříč všemi hrami.
-    func unlockedAchievements() -> Set<String> {
-        var set = Set<String>()
-        for s in saves { if let g = try? store.load(s.id) { set.formUnion(g.achievements) } }
-        if let cur = session?.state { set.formUnion(cur.achievements) }
-        return set
     }
 }

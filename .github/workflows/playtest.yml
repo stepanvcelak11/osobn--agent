@@ -4,9 +4,9 @@ on:
   workflow_dispatch:
     inputs:
       scenarios:
-        description: "Scénáře oddělené čárkou (quest,campaign,realm,endless); prázdné = všechny"
+        description: "Scénáře oddělené čárkou (quest,custom,realm); prázdné = všechny"
         required: false
-        default: "quest,campaign"
+        default: ""
 
 permissions:
   contents: write

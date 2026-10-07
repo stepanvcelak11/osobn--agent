@@ -1,3 +1,22 @@
+## Pocket Realm 3.0
+
+Jednoduchá česká textová hra jako AI Dungeon. Vypravěč běží v telefonu, volitelně i online.
+
+**Co je nového – celá hra je zjednodušená, aby základ fungoval dobře**
+- **Rychlejší a chladnější telefon:** jedno volání vypravěče na tah místo dvou, obyčejný text místo JSONu,
+  kratší odpovědi a model přepočítává jen nové tahy. Žádné animace na pozadí. Tah trvá zhruba 10–15 s.
+- **Příběh drží pohromadě:** vypravěč má v paměti doslovně poslední tahy, krátká jasná pravidla s ukázkou,
+  reaguje na to, co napíšeš, na otázky („Kde jsem?“) odpoví popisem a nic nevymýšlí bez příčiny.
+- **Klidný úvod:** nejdřív zjistíš, kde jsi a co se děje, k problému se dostáváš postupně.
+- **5 postav** (Válečník, Zloděj, Čaroděj, Bard, Lovec) s vlastní výbavou – bard už nemá meč.
+  Vlastnosti mění šanci u riskantních činů.
+- **Pryč:** zdraví, stres, předměty, čas akcí, počasí, ekonomika osady, úrovně, úspěchy, oznámení a nápovědy.
+  Zůstal jen postup k cíli a nezdary.
+- **Vlastní téma** se opravdu použije (dřív se vybíral pořád stejný příběh).
+- **Nový vzhled:** tmavý, bez animací, velké čitelné písmo (nastavitelné), šetrný k baterii i očím.
+- **Online vypravěč navrch (nepovinné):** Claude nebo Gemini s vlastním klíčem; bez signálu hraje hned offline.
+- Rozehrané hry ze 2.x se převedou (jméno, postava, mód, celý deník).
+
 ## Pocket Realm 2.3
 
 Temné RPG s AI vypravěčem, který běží celý v iPhonu.

@@ -39,11 +39,31 @@ final class AIService: ObservableObject {
     private var whisperReleaseTask: Task<Void, Never>?
 
     var contextLength: Int {
-        get { UserDefaults.standard.object(forKey: "llm.context") as? Int ?? 4096 }
+        get { UserDefaults.standard.object(forKey: "llm.context") as? Int ?? 3072 }
         set { UserDefaults.standard.set(newValue, forKey: "llm.context") }
     }
 
     var isLLMReady: Bool { if case .ready = llmState { return true } else { return false } }
+
+    // MARK: Online vypravěč (volitelný, navrch)
+
+    private var hybrid: HybridModel?
+    private var hybridConfig: RemoteConfig?
+    private weak var hybridBackup: LlamaEngine?
+
+    /// Kdo bude vyprávět: online vypravěč se zálohou v telefonu, nebo jen model v telefonu.
+    func narrator() -> LanguageModel? {
+        guard let cfg = OnlineSettings.config else { return llm }
+        if let h = hybrid, hybridConfig == cfg, hybridBackup === llm { return h }
+        let h = HybridModel(primary: RemoteChatModel(config: cfg), backup: llm)
+        hybrid = h; hybridConfig = cfg; hybridBackup = llm
+        return h
+    }
+
+    /// Vyprávěl poslední tah online vypravěč?
+    var lastTurnOnline: Bool { OnlineSettings.config != nil && (hybrid?.lastWasOnline ?? false) }
+    var onlineError: String? { OnlineSettings.config != nil ? hybrid?.lastError : nil }
+    var onlineActive: Bool { OnlineSettings.config != nil }
 
     func loadLLM(_ m: InstalledModel?) async {
         guard let m else { llm = nil; llmState = .none; return }

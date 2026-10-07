@@ -2,37 +2,31 @@ import Foundation
 import SwiftUI
 import RealmCore
 
-/// Jedna rozehraná hra: drží stav, volá engine, ukládá.
+/// Jedna rozehraná hra: drží příběh, volá vypravěče, ukládá.
 @MainActor
 final class GameSession: ObservableObject, Identifiable {
     enum Busy: Equatable {
-        case intro, interpreting, rolling, narrating, settling, epilogue, waitingForModel
+        case intro, narrating, epilogue, waitingForModel
         var label: String {
             switch self {
-            case .intro: return "Vypravěč rozdmýchává oheň…"
-            case .interpreting: return "Vypravěč zvažuje tvůj záměr…"
-            case .rolling: return "Kostky padají…"
-            case .narrating: return "Vypravěč vypráví…"
-            case .settling: return "Vypravěč zapisuje následky…"
+            case .intro: return "Vypravěč začíná příběh…"
+            case .narrating: return "Vypravěč píše…"
             case .epilogue: return "Píše se legenda…"
-            case .waitingForModel: return "Vypravěč se probouzí (načítání modelu)…"
+            case .waitingForModel: return "Vypravěč se probouzí…"
             }
         }
     }
 
-    @Published private(set) var state: GameState
+    @Published private(set) var story: Story
     @Published private(set) var busy: Busy?
     @Published private(set) var streamingText = ""
     @Published private(set) var pendingAction: String?
     @Published private(set) var pendingMode: InputMode = .act
-    @Published private(set) var liveRoll: RollInfo?
-    @Published var diceOverlay: RollInfo?
+    @Published private(set) var liveRoll: Roll?
     @Published var toast: String?
-    @Published var achievement: Achievement?
     @Published var error: String?
-    @Published private(set) var lastStats: GenerationStats?
-    /// Stav před posledním tahem (pro „Vrátit“ a „Znovu“) a jak byl tah zadán.
-    @Published private(set) var undoState: GameState?
+    /// Příběh před posledním tahem (pro „Vrátit“ a „Znovu“).
+    @Published private(set) var undoStory: Story?
     private var lastInput: (text: String, mode: InputMode)?
     private var variation: UInt32 = 0
 
@@ -41,41 +35,26 @@ final class GameSession: ObservableObject, Identifiable {
     private let modelProvider: () -> LanguageModel?
     private let modelLoading: () -> Bool
     private var task: Task<Void, Never>?
-    var hook: String?
     var onNarration: ((String) -> Void)?
+    var onTurnFinished: (() -> Void)?
 
-    init(state: GameState, store: SaveStore, hook: String? = nil,
-         model: @escaping () -> LanguageModel?, modelLoading: @escaping () -> Bool) {
-        self.state = state
-        self.id = state.id
+    init(story: Story, store: SaveStore, model: @escaping () -> LanguageModel?, modelLoading: @escaping () -> Bool) {
+        self.story = story
+        self.id = story.id
         self.store = store
-        self.hook = hook
         self.modelProvider = model
         self.modelLoading = modelLoading
     }
 
-    var needsIntro: Bool { state.log.isEmpty }
     var isBusy: Bool { busy != nil }
 
-    /// Paměť vypravěče a poznámka ke stylu (upravuje hráč kdykoli během hry).
     func setMemory(_ memory: String, note: String) {
-        state.memory = String(memory.prefix(500))
-        state.authorsNote = String(note.prefix(300))
+        story.memory = String(memory.prefix(500))
+        story.note = String(note.prefix(200))
         save()
     }
 
-    /// Zastaví / pustí čas osady, když hráč nehraje.
-    func setLiveWorld(_ on: Bool) {
-        state.liveWorld = on
-        state.lastRealTime = Date()
-        save()
-        let s = state
-        Task { if on { await RealmNotifications.reschedule(for: s) } else { await RealmNotifications.cancel(gameId: s.id) } }
-    }
-
-    func save() {
-        try? store.save(state)
-    }
+    func save() { try? store.save(story) }
 
     private func waitForModel() async {
         var waited = 0
@@ -89,59 +68,48 @@ final class GameSession: ObservableObject, Identifiable {
     // MARK: Úvod
 
     func runIntro() {
-        guard needsIntro, task == nil else { return }
-        if hook == nil, let q = state.quest { hook = Catalog.quests.first { $0.objective == q.objective }?.hook }
+        guard story.needsIntro, task == nil else { return }
         task = Task {
             await waitForModel()
             busy = .intro
             streamingText = ""
-            let engine = GameEngine(model: modelProvider())
-            let s = await engine.intro(state, hook: hook) { t in Task { @MainActor in self.streamingText = t } }
-            state = s
-            busy = nil
-            streamingText = ""
+            let engine = StoryEngine(model: modelProvider())
+            let s = await engine.intro(story) { t in Task { @MainActor in self.publishStream(t) } }
+            story = s
+            finishTask()
             save()
-            if let text = s.log.last?.text { onNarration?(text) }
-            task = nil
-            // Dotaz na oznámení nesmí blokovat hru (hráč může psát, i když na něj ještě neodpověděl).
-            if s.mode.hasSettlement {
-                Task {
-                    await RealmNotifications.requestPermission()
-                    await RealmNotifications.reschedule(for: s)
-                }
-            }
+            if let text = s.log.last(where: { $0.kind == .narration })?.text { onNarration?(text) }
         }
     }
 
     // MARK: Tah
 
-    var canUndo: Bool { undoState != nil && task == nil && !state.isOver }
+    var canUndo: Bool { undoStory != nil && task == nil && !story.isOver }
     var canRetry: Bool { canUndo && lastInput != nil }
 
-    /// Vrátí poslední tah (jako „Undo“ v AI Dungeon). Konec hry vrátit nejde.
     func undo() {
-        guard canUndo, let prev = undoState else { return }
-        state = prev
-        undoState = nil
+        guard canUndo, let prev = undoStory else { return }
+        story = prev
+        undoStory = nil
         lastInput = nil
         save()
         toast = "Tah vrácen."
     }
 
-    /// Nové vyprávění téhož tahu. Hod kostkou zůstává stejný – osud se přepsat nedá.
+    /// Nové vyprávění téhož tahu. Kostka zůstává stejná.
     func retry() {
-        guard canRetry, let prev = undoState, let last = lastInput else { return }
-        state = prev
-        undoState = nil
+        guard canRetry, let prev = undoStory, let last = lastInput else { return }
+        story = prev
+        undoStory = nil
         variation &+= 1
         send(last.text, mode: last.mode, variation: variation)
     }
 
     func send(_ raw: String, mode: InputMode = .act, variation: UInt32 = 0) {
         let text = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty || mode == .proceed, task == nil, !state.isOver else { return }
+        guard !text.isEmpty || mode == .proceed, task == nil, !story.isOver else { return }
         if variation == 0 { self.variation = 0 }
-        let before = state
+        let before = story
         pendingAction = mode == .proceed ? nil : text
         pendingMode = mode
         streamingText = ""
@@ -149,51 +117,48 @@ final class GameSession: ObservableObject, Identifiable {
         error = nil
         task = Task {
             await waitForModel()
-            busy = .interpreting
-            let engine = GameEngine(model: modelProvider())
+            busy = .narrating
+            let engine = StoryEngine(model: modelProvider())
             do {
-                let result = try await engine.playTurn(state, input: text, mode: mode, variation: variation, now: Date()) { ev in
+                let r = try await engine.play(story, input: text, mode: mode, variation: variation) { ev in
                     Task { @MainActor in self.handle(ev) }
                 }
-                undoState = before
+                undoStory = before
                 lastInput = (text, mode)
-                finish(result)
+                story = r.story
+                save()
+                if let roll = r.roll { Haptics.outcome(roll.outcome) }
+                if r.completedStage != nil, !r.story.isOver { toast = "Příběh se posunul" }
+                if let n = r.story.log.last(where: { $0.kind == .narration })?.text { onNarration?(n) }
             } catch is CancellationError {
                 toast = "Tah zrušen."
             } catch {
                 self.error = (error as? GameError)?.description ?? "Vypravěč zaváhal: \(error)"
             }
-            busy = nil
-            pendingAction = nil
-            streamingText = ""
-            liveRoll = nil
-            task = nil
+            finishTask()
+            onTurnFinished?()
+            if story.isOver { generateEpilogue() }
         }
     }
 
     private func handle(_ ev: TurnEvent) {
         guard task != nil else { return }
         switch ev {
-        case .interpreting:
-            busy = .interpreting
-        case .rolled(let roll, _):
-            liveRoll = roll
-            if roll.outcome != .auto && roll.outcome != .impossible {
-                busy = .rolling
-                diceOverlay = roll
-            } else {
-                busy = .narrating
-            }
-        case .narrating(let t):
-            if busy != .narrating && busy != .settling && diceOverlay == nil { busy = .narrating }
-            publishStream(t)
-        case .settling:
-            if diceOverlay == nil { busy = .settling }
+        case .rolled(let roll): liveRoll = roll
+        case .narrating(let t): publishStream(t)
         }
     }
 
-    // Text se překresluje nejvýš ~8× za sekundu – překreslení celé obrazovky po každém tokenu zbytečně
-    // vytěžuje procesor ve chvíli, kdy ho nejvíc potřebuje vypravěč.
+    private func finishTask() {
+        busy = nil
+        pendingAction = nil
+        streamingText = ""
+        pendingStream = nil
+        liveRoll = nil
+        task = nil
+    }
+
+    // Text se překresluje nejvýš ~8× za sekundu – šetří procesor, který potřebuje vypravěč.
     private var pendingStream: String?
     private var streamFlush: Task<Void, Never>?
 
@@ -209,73 +174,29 @@ final class GameSession: ObservableObject, Identifiable {
         }
     }
 
-    private func finish(_ r: TurnResult) {
-        let before = state
-        state = r.state
-        lastStats = r.stats
-        save()
-        if r.delta.hp < -10 { Haptics.impact(.heavy) }
-        if let a = r.newAchievements.first { achievement = a }
-        else if let lvl = r.state.log.suffix(8).last(where: { $0.kind == .event && $0.text.hasPrefix("⭐") }),
-                !before.log.contains(where: { $0.id == lvl.id }) {
-            achievement = Achievement(id: "level", title: "Úroveň \(r.state.hero.level)", detail: lvl.text, icon: "star.fill")
-            Haptics.outcome(.critSuccess)
-        }
-        if let n = r.state.log.last(where: { $0.kind == .narration }), r.state.log.count > before.log.count {
-            onNarration?(n.text)
-        }
-        if r.state.mode.hasSettlement { Task { await RealmNotifications.reschedule(for: r.state) } }
-        if r.state.isOver { generateEpilogue() }
-    }
-
-    func cancel() {
-        task?.cancel()
-    }
-
-    // MARK: Živý simulátor
-
-    /// Dožene čas (při otevření, návratu do aplikace a každou minutu).
-    func refreshSimulation() {
-        guard state.mode.hasSettlement, !state.isOver, task == nil else { return }
-        var s = state
-        let report = Simulation.syncRealTime(&s, now: Date())
-        guard s != state else { return }
-        let hadEvents = !report.isEmpty
-        state = s
-        save()
-        if hadEvents {
-            toast = report.days > 0 ? "Mezitím uplynulo \(report.days) \(report.days == 1 ? "den" : report.days < 5 ? "dny" : "dní") – podívej se do deníku." : "V osadě se něco stalo."
-            Haptics.impact(.light)
-        }
-        Task { await RealmNotifications.reschedule(for: s) }
-        if s.isOver { generateEpilogue() }
-    }
+    func cancel() { task?.cancel() }
 
     // MARK: Konec
 
     func abandon() {
         task?.cancel()
-        state = GameEngine.abandon(state)
+        story = StoryEngine.abandon(story)
         save()
-        Task { await RealmNotifications.cancel(gameId: state.id) }
         generateEpilogue()
     }
 
     func generateEpilogue() {
-        guard state.isOver, state.epilogue == nil else { return }
+        guard story.isOver, story.epilogue == nil else { return }
         let start = { [weak self] in
             guard let self else { return }
             self.task = Task {
                 self.busy = .epilogue
                 self.streamingText = ""
-                let engine = GameEngine(model: self.modelProvider())
-                let s = await engine.epilogue(self.state) { t in Task { @MainActor in self.streamingText = t } }
-                self.state = s
-                self.busy = nil
-                self.streamingText = ""
+                let engine = StoryEngine(model: self.modelProvider())
+                let s = await engine.epilogue(self.story) { t in Task { @MainActor in self.publishStream(t) } }
+                self.story = s
+                self.finishTask()
                 self.save()
-                self.task = nil
-                Task { await RealmNotifications.cancel(gameId: s.id) }
             }
         }
         if task == nil { start() } else {

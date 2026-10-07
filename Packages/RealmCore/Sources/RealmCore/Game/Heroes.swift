@@ -1,106 +1,59 @@
 import Foundation
 
-// MARK: - Zvláštní schopnosti
-
-/// Schopnost původu: použije se v textu tahu („použiju Bojový řev“), má omezený počet použití za den.
-public struct Ability: Codable, Equatable, Identifiable, Sendable {
-    public var id: String
-    public var name: String
-    public var detail: String
-    public var icon: String
-    /// Bonus k hodu (jen u uvedených druhů činu; prázdné = u všech).
-    public var bonus: Int
-    public var categories: [ActionCategory]
-    public var heal: Int
-    public var stressRelief: Int
-    /// Vyléčí krvácení a horečku.
-    public var cures: Bool
-    public var maxUses: Int
-    public var usesLeft: Int
-
-    public init(id: String, name: String, detail: String, icon: String, bonus: Int = 0, categories: [ActionCategory] = [],
-                heal: Int = 0, stressRelief: Int = 0, cures: Bool = false, maxUses: Int = 2) {
-        self.id = id; self.name = name; self.detail = detail; self.icon = icon; self.bonus = bonus
-        self.categories = categories; self.heal = heal; self.stressRelief = stressRelief; self.cures = cures
-        self.maxUses = maxUses; self.usesLeft = maxUses
-    }
-
-    public func helps(_ c: ActionCategory) -> Bool { categories.isEmpty || categories.contains(c) }
-}
-
-// MARK: - Povaha (vlastnosti)
-
-public struct Trait: Identifiable, Equatable, Sendable {
+/// Pět základních postav. Každá má jinou výbavu (vypravěč ji zná) a jiné silné a slabé stránky.
+public struct HeroClass: Identifiable, Equatable, Sendable {
     public let id: String
-    public let name: String
-    public let detail: String
+    public let male: String
+    public let female: String
     public let icon: String
-    /// +1 k této schopnosti při tvorbě postavy.
-    public let attribute: Attribute?
-}
+    public let summary: String
+    /// Výbava – jen tohle hrdina na začátku má.
+    public let gear: String
+    /// Vlastnosti od −1 do +3. Do hodu se počítají dvojnásobně.
+    public let scores: [Attribute: Int]
+    public let names: (male: String, female: String)
 
-public enum Traits {
-    public static let maxPicked = 2
-    public static let freePoints = 2
-    /// Nejvyšší hodnota schopnosti při tvorbě postavy (bez povahy).
-    public static let startCap = 4
+    public static func == (a: HeroClass, b: HeroClass) -> Bool { a.id == b.id }
 
-    public static let all: [Trait] = [
-        Trait(id: "silak", name: "Silák", detail: "+1 Síla.", icon: "figure.strengthtraining.traditional", attribute: .sila),
-        Trait(id: "hbity", name: "Hbitý", detail: "+1 Obratnost.", icon: "hare.fill", attribute: .obratnost),
-        Trait(id: "bystry", name: "Bystrý", detail: "+1 Důvtip.", icon: "lightbulb.fill", attribute: .duvtip),
-        Trait(id: "vyrecny", name: "Výřečný", detail: "+1 Charisma.", icon: "bubble.left.and.bubble.right.fill", attribute: .charisma),
-        Trait(id: "odvazny", name: "Odvážný", detail: "Boje a nezdary ti přidají jen polovinu stresu.", icon: "flame.fill", attribute: nil),
-        Trait(id: "otuzily", name: "Otužilý", detail: "Zranění o pětinu slabší, horečka se tě nechytí.", icon: "snowflake", attribute: nil),
-        Trait(id: "nocni", name: "Noční pták", detail: "V noci +1 ke všem hodům místo postihu.", icon: "moon.stars.fill", attribute: nil),
-        Trait(id: "stastlivec", name: "Šťastlivec", detail: "Když padne 1, kostka se jednou přehodí.", icon: "suit.club.fill", attribute: nil),
-        Trait(id: "hledac", name: "Hledač pokladů", detail: "Úspěšný průzkum přinese o jeden nález víc.", icon: "sparkle.magnifyingglass", attribute: nil),
-        Trait(id: "vudce", name: "Rozený vůdce", detail: "+1 k jednání; lidé tě rádi následují (morálka roste).", icon: "flag.fill", attribute: nil),
-        Trait(id: "nespavec", name: "Nespavec", detail: "Únava přijde až po 26 hodinách bez spánku, vyčerpání po 40.", icon: "eye.fill", attribute: nil),
-        Trait(id: "zelezna_vule", name: "Železná vůle", detail: "Vysoký stres ti nezhoršuje hody.", icon: "brain.head.profile", attribute: nil),
+    public func name(feminine: Bool) -> String { feminine ? female : male }
+    public func defaultName(feminine: Bool) -> String { feminine ? names.female : names.male }
+
+    public var best: Attribute { Attribute.allCases.max { (scores[$0] ?? 0) < (scores[$1] ?? 0) } ?? .sila }
+    public var worst: Attribute { Attribute.allCases.min { (scores[$0] ?? 0) < (scores[$1] ?? 0) } ?? .sila }
+
+    public static let all: [HeroClass] = [
+        HeroClass(id: "valecnik", male: "Válečník", female: "Válečnice", icon: "shield.lefthalf.filled",
+                  summary: "Voják z povolání. Nejlépe vyřeší věci mečem.",
+                  gear: "dlouhý meč, dřevěný štít a kroužková košile",
+                  scores: [.sila: 3, .obratnost: 1, .duvtip: -1, .charisma: 0], names: ("Bořek", "Radka")),
+        HeroClass(id: "zlodej", male: "Zloděj", female: "Zlodějka", icon: "eye.slash.fill",
+                  summary: "Stín z městských uliček. Projde tam, kam jiní nemohou.",
+                  gear: "dvě dýky, sada paklíčů a tmavý plášť s kápí",
+                  scores: [.sila: -1, .obratnost: 3, .duvtip: 1, .charisma: 0], names: ("Vít", "Alena")),
+        HeroClass(id: "carodej", male: "Čaroděj", female: "Čarodějka", icon: "sparkles",
+                  summary: "Učenec tajných nauk. Kouzla mají vždycky svou cenu.",
+                  gear: "dubová hůl, kniha kouzel a váček bylin",
+                  scores: [.sila: -1, .obratnost: 0, .duvtip: 3, .charisma: 1], names: ("Kryštof", "Dobromila")),
+        HeroClass(id: "bard", male: "Bard", female: "Bardka", icon: "music.note",
+                  summary: "Potulný pěvec. Slovem otevře dveře i srdce.",
+                  gear: "loutna, krátká dýka a pestrý cestovní plášť",
+                  scores: [.sila: -1, .obratnost: 1, .duvtip: 0, .charisma: 3], names: ("Jiřík", "Libuše")),
+        HeroClass(id: "lovec", male: "Lovec", female: "Lovkyně", icon: "scope",
+                  summary: "Stopař z hlubokých lesů. Zná divočinu jako vlastní dlaň.",
+                  gear: "dlouhý luk, toulec šípů a lovecký nůž",
+                  scores: [.sila: 1, .obratnost: 2, .duvtip: 1, .charisma: -1], names: ("Ctibor", "Vlasta")),
     ]
 
-    public static func byId(_ id: String) -> Trait? { all.first { $0.id == id } }
-}
+    public static func byId(_ id: String) -> HeroClass { all.first { $0.id == id } ?? all[0] }
 
-extension Hero {
-    public func has(_ trait: String) -> Bool { traits.contains(trait) }
-
-    /// Schopnost podle jména z textu modelu nebo hráče.
-    public func ability(named name: String) -> Ability? {
-        let n = CzechText.fold(name).trimmingCharacters(in: .whitespaces)
-        guard n.count >= 3 else { return nil }
-        return abilities.first { CzechText.fold($0.name) == n }
-            ?? abilities.first { CzechText.similarity($0.name, name) >= 0.6 }
-            ?? abilities.first { CzechText.fold($0.name).contains(n) || n.contains(CzechText.fold($0.name)) }
-    }
-
-    /// Spánek nebo nový den obnoví schopnosti.
-    mutating func refreshAbilities() {
-        for i in abilities.indices { abilities[i].usesLeft = abilities[i].maxUses }
-    }
-}
-
-extension Catalog {
-    /// Výsledné schopnosti postavy: původ + volné body (nejvýš do startCap) + povaha.
-    public static func startAttributes(background bg: Background, bonus: [Attribute: Int], traits: [String]) -> [Attribute: Int] {
-        var a = bg.attributes
-        var left = Traits.freePoints
-        for attr in Attribute.allCases {
-            let want = max(0, bonus[attr] ?? 0)
-            let can = min(want, left, max(0, Traits.startCap - (a[attr] ?? 0)))
-            a[attr] = (a[attr] ?? 0) + can
-            left -= can
+    /// Staré postavy z verze 2 (11 původů) → nejbližší z pěti.
+    public static func fromLegacy(_ background: String) -> String {
+        switch background {
+        case "stinochod", "hrobnik": return "zlodej"
+        case "bylinkar", "knez", "vedma": return "carodej"
+        case "bard", "kupec": return "bard"
+        case "lovec": return "lovec"
+        default: return "valecnik"
         }
-        for t in validTraits(traits) {
-            if let attr = Traits.byId(t)?.attribute { a[attr] = min(World.maxAttribute, (a[attr] ?? 0) + 1) }
-        }
-        return a
-    }
-
-    public static func validTraits(_ ids: [String]) -> [String] {
-        var out: [String] = []
-        for id in ids where Traits.byId(id) != nil && !out.contains(id) { out.append(id) }
-        return Array(out.prefix(Traits.maxPicked))
     }
 }

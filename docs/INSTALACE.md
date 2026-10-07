@@ -88,8 +88,8 @@ a nainstaluj ho přes Sideloadly **stejně jako poprvé a se stejným Apple ID**
 | Aplikace spadne hned po otevření | Zapni Režim pro vývojáře (krok 5.2). Nebo vypršel 7denní podpis – krok 7. |
 | Chyba přihlášení v Sideloadly | Zkontroluj heslo; u účtů s dvoufázovým ověřením zadej kód z telefonu. |
 | Stahování vypravěče stojí | Zkontroluj Wi-Fi a volné místo (aspoň 4 GB), na titulní obrazovce klepni na „Zkusit znovu“. |
-| Tah trvá dlouho | První tah po spuštění načítá model do paměti (desítky sekund). Pak bývá tah 10–25 s; text se píše průběžně. |
-| Zasekl se tah | Klepni na ⏹ vpravo dole. Po 100 s se vyprávění ukončí samo a hra pokračuje. |
+| Tah trvá dlouho | První tah po spuštění načítá model do paměti (desítky sekund). Pak bývá tah 10–15 s; text se píše průběžně. |
+| Zasekl se tah | Klepni na ⏹ vpravo dole. Po 60 s se vyprávění ukončí samo a hra pokračuje. |
 
 **Alternativa k Sideloadly:** AltStore (https://altstore.io) – nainstaluj AltServer do počítače, přes něj AltStore
 do iPhonu a pak v AltStoru otevři soubor `.ipa` (např. z aplikace Soubory).

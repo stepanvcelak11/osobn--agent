@@ -58,17 +58,15 @@ jobs:
           shot 01-title "" ""
           shot 02-newgame newgame ""
           SIMCTL_CHILD_PR_STEP=1 shot 02b-hero newgame ""
-          SIMCTL_CHILD_PR_STEP=2 shot 02c-traits newgame ""
+          SIMCTL_CHILD_PR_STEP=2 shot 02c-story newgame ""
           shot 03-quest game-quest ""
           shot 04-realm game-realm ""
-          shot 05-realm-settlement game-realm settlement
-          shot 06-campaign game-campaign ""
-          shot 07-gameover gameover ""
-          shot 08-inventory game-quest inventory
-          shot 09-endless game-endless ""
-          shot 10-help game-quest help
-          shot 11-world game-realm world
-          shot 12-memory game-campaign memory
+          shot 05-campaign game-campaign ""
+          shot 06-gameover gameover ""
+          shot 07-hero game-quest story
+          shot 08-memory game-campaign memory
+          shot 09-help game-quest help
+          shot 10-settings settings ""
           ls -la shots
       - name: Samotest aplikace (všechny módy, Znovu/Vrátit, uložení a načtení)
         env:

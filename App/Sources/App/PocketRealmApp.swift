@@ -45,9 +45,7 @@ struct PocketRealmApp: App {
             switch phase {
             case .background:
                 app.session?.save()
-                if let s = app.session?.state { Task { await RealmNotifications.reschedule(for: s) } }
             case .active:
-                app.session?.refreshSimulation()
                 app.downloader.startIfNeeded(models: app.models)
             default: break
             }
@@ -64,10 +62,8 @@ struct RootView: View {
             if let s = app.session {
                 GameView(session: s)
                     .id(s.id)
-                    .transition(.opacity.combined(with: .scale(scale: 1.03)))
             } else {
                 TitleView()
-                    .transition(.opacity)
             }
         }
     }
