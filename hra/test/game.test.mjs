@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { effect, newGame, choose, nextLeader, currentCard, preview, fill, tenure, DIRS, cardById, METERS, CARDS, INTRO, PEOPLE, ENDINGS, KINDS, outcome, bestDir, skip, nudge, ready, CHARGE, activeLaws, optionOf, taskProgress, upgrade, SPECIAL, TASKS, AGES, AGE_LEN, ENDINGS_PAST, hasElections, leaderTitle, lawAllowed , reformLaw, choosePerk, offerPerks, newBlitz, newRun, daily, toElection, PERKS, CRISES, TERM, VOTE_MIN, RESCUE, seals } from '../game.js';
+import { effect, newGame, choose, nextLeader, currentCard, preview, fill, tenure, DIRS, cardById, METERS, CARDS, INTRO, PEOPLE, ENDINGS, KINDS, outcome, bestDir, skip, nudge, ready, CHARGE, activeLaws, optionOf, taskProgress, upgrade, SPECIAL, TASKS, AGES, AGE_LEN, ENDINGS_PAST, hasElections, leaderTitle, lawAllowed, touches , reformLaw, choosePerk, offerPerks, newBlitz, newRun, daily, toElection, PERKS, CRISES, TERM, VOTE_MIN, RESCUE, seals } from '../game.js';
 
 const meterIds = new Set(METERS.map((m) => m.id));
 const all = [INTRO, ...CARDS];
@@ -145,7 +145,7 @@ test('navazující příběhy opravdu navazují', () => {
   for (const id of ['vrana2', 'ork2', 'ork3', 'prorok2', 'fed2', 'fed3', 'stin2', 'hlad', 'epidemie', 'vakcina', 'nula2', 'vrana_dluh', 'pristav2', 'vlci', 'intro2']) {
     assert.ok(seen.has(id), `pokračování ${id} se nikdy neobjevilo`);
   }
-  const never = CARDS.filter((c) => !seen.has(c.id)).map((c) => c.id);
+  const never = CARDS.filter((c) => !c.generated && !seen.has(c.id)).map((c) => c.id);
   assert.deepEqual(never, [], 'každá karta se někdy objeví');
 });
 
@@ -534,4 +534,40 @@ test('Dějiny: volby až od moderní doby, zákony podle doby, oslovení podle d
   const normal = newGame({}, 3);
   assert.equal(normal.age, 7);
   assert.equal(currentCard(normal).id, 'intro');
+});
+
+test('rozzlobený člověk se ozve a mluví jinak, věrný se odvděčí', () => {
+  // pravěký lovec: na čem mu záleží (síla), toho se dotkneme
+  const s = newGame({ mode: 'dejiny' }, 8);
+  choose(s, 'left');
+  s.rel.lov = -2;
+  s.card = 'p_mamut';
+  choose(s, 'left'); // Lovit všichni: síla dolů → lovkyně se zlobí
+  assert.equal(s.rel.lov, -3);
+  assert.ok(s.news.some((n) => n.kind === 'enemy' && /Lovkyně/.test(n.text)), 'zpráva o nepříteli');
+  s.card = 'p_vlci';
+  assert.ok(/^(Bez pozdravu|Chladně|Nevraživě|Úsečně): „/.test(currentCard(s).text), 'nepřátelský tón');
+  let met = false;
+  for (let i = 0; i < 200 && !met; i++) { s.dead = null; s.meters = Object.fromEntries(Object.keys(s.meters).map((k) => [k, 50])); choose(s, bestDir(s)); met = s.card === 'zloba_lov'; if (s.dead) nextLeader(s); s.rel.lov = -3; }
+  assert.ok(met, 'rozzlobená lovkyně přijde s výčitkami');
+  const z = cardById('zloba_lov');
+  assert.equal(z.age, 1);
+  assert.ok(cardById('vdek_lov') && cardById('vdek_tech') && !cardById('zloba_gen'), 'postavy s vlastními kartami se nezdvojují');
+});
+
+test('karta pod kartou: každý vidí, kdo přijde, Prorok i co ovlivní', () => {
+  const s = newGame({ kind: 'vize' }, 4);
+  choose(s, 'left');
+  assert.ok(s.peek, 'předpověď má každý');
+  const t = touches(s, s.peek);
+  assert.ok(t.length >= 1 && t.every((k) => ['fin', 'lid', 'sil', 'ved', 'pri', 'vir', 'dip'].includes(k)));
+});
+
+test('karty se tolik neopakují', () => {
+  const s = newGame({ mode: 'dejiny' }, 12);
+  choose(s, 'left');
+  const seen = [];
+  for (let i = 0; i < 20; i++) { seen.push(s.card); choose(s, bestDir(s)); if (s.dead) nextLeader(s); }
+  const uniq = new Set(seen).size;
+  assert.ok(uniq >= 14, `ve 20 kartách jen ${uniq} různých`);
 });

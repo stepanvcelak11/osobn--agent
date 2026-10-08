@@ -64,7 +64,7 @@ export const SPECIAL = {
 export const PERKS = {
   tlumic: { name: 'Tlumič', text: 'Všechny změny ukazatelů jsou o pětinu menší.' },
   brzda: { name: 'Brzda', text: 'Žádný ukazatel se jedním rozhodnutím nepohne o víc než 12 bodů.' },
-  nahled: { name: 'Zvědové', text: 'Vidíš, kdo za tebou přijde příště.' },
+  nahled: { name: 'Zvědové', text: 'Vidíš, které ukazatele ovlivní další karta.' },
   smer: { name: 'Čtení lidí', text: 'Při tažení vidíš, kterým směrem se ukazatele pohnou.' },
   sance: { name: 'Druhá šance', text: 'Jednou tě ukazatel na kraji nesesadí – odrazí se na 15, nebo 85 %.' },
   sarm: { name: 'Šarm', text: 'Vztahy s lidmi se zlepšují dvakrát rychleji.' },

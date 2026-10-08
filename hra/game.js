@@ -3,9 +3,17 @@ import { METERS, CARDS as BASE, INTRO, ENDINGS, SUCCESSORS, PEOPLE } from './car
 import { EXTRA, LAWS, TASKS, ERAS, SPECIAL, CARES, REL_MAX, REL_LOYAL, PERKS, CRISES, ELECTION } from './world.js';
 import { AGES, AGE_LEN, AGE_PEOPLE, AGE_CARES, AGE_NAMES, AGE_CARDS, ENDINGS_PAST } from './ages.js';
 
+import { bondCards } from './bonds.js';
+import { AGE_CARDS_MORE } from './ages_more.js';
+
 Object.assign(PEOPLE, AGE_PEOPLE);
 Object.assign(CARES, AGE_CARES);
-const CARDS = [...BASE, ...EXTRA, ...AGE_CARDS];
+// Kdo žije ve které době (podle karet) – karty vztahů se objeví jen tam.
+const PERSON_AGE = {};
+for (const c of [...AGE_CARDS, ...AGE_CARDS_MORE]) PERSON_AGE[c.who] ??= c.age;
+const OWN_BONDS = [...new Set(EXTRA.filter((c) => c.rel).map((c) => c.who))];
+const BONDS = bondCards(CARES, PERSON_AGE, OWN_BONDS, REL_LOYAL);
+const CARDS = [...BASE, ...EXTRA, ...AGE_CARDS, ...AGE_CARDS_MORE, ...BONDS];
 
 export const DIRS = ['left', 'right', 'up', 'down'];
 export const START = 50;
@@ -27,7 +35,7 @@ export const KINDS = [
   { id: 'rada', short: 'Rádce', m: 'Prezident s rádcem', f: 'Prezidentka s rádcem', icon: '🦉', text: 'Rádce mu ke každé kartě poradí. V 7 případech z 10 radí to nejlepší, jinak se mýlí.' },
   { id: 'zachrance', short: 'Zachránce', m: 'Zachránce', f: 'Zachránkyně', icon: '🛟', text: 'Jednou za vládu ho ukazatel na nule ani na maximu nesesadí – odrazí se zpátky na 15, nebo 85 %.' },
   { id: 'charisma', short: 'Charismatik', m: 'Charismatik', f: 'Charismatička', icon: '⭐', text: 'Vztahy s lidmi se mu mění dvakrát rychleji. Věrné spojence získá snadno – nepřátele taky.' },
-  { id: 'prorok', short: 'Prorok', m: 'Prorok', f: 'Prorokyně', icon: '🔮', text: 'Vidí, kdo za ním přijde příště, a může se na to připravit.' },
+  { id: 'prorok', short: 'Prorok', m: 'Prorok', f: 'Prorokyně', icon: '🔮', text: 'Vidí dopředu, které ukazatele ovlivní další karta – a může se na to připravit.' },
   { id: 'byro', short: 'Byrokrat', m: 'Byrokrat', f: 'Byrokratka', icon: '🗂️', text: 'Každé rozhodnutí má jen tři čtvrtiny účinku, ale zákony působí dvakrát silněji.' },
   { id: 'hazard', short: 'Hazardér', m: 'Hazardér', f: 'Hazardérka', icon: '🎲', text: 'Účinek každé volby je náhodně poloviční až jedenapůlnásobný. Za splněný úkol dostane dvě pečetě.' },
   { id: 'reform', short: 'Reformátor', m: 'Reformátor', f: 'Reformátorka', icon: '📜', text: 'Po každých 5 rozhodnutích může zavést, nebo zrušit libovolný zákon.' },
@@ -46,6 +54,7 @@ export const kindOf = (state) => KINDS.find((k) => k.id === state.leader.kind) |
 export const has = (state, perk) => (state.perks ?? []).includes(perk);
 /** Vidí vůdce směr změn / další kartu? (typ, nebo výhoda) */
 export const seesDirection = (state) => state.leader.kind === 'vize' || has(state, 'smer');
+/** Kdo přijde příště, vidí každý (karta pod kartou). Prorok a výhoda Zvědové navíc vidí, co další karta ovlivní. */
 export const seesAhead = (state) => state.leader.kind === 'prorok' || has(state, 'nahled');
 
 // Deterministický generátor (mulberry32) – stav se ukládá, takže hra jde přesně obnovit.
@@ -112,9 +121,28 @@ export function fill(text, leader) {
     .replaceAll('{ty}', leader.name);
 }
 
+const MOOD_BAD = ['Bez pozdravu', 'Chladně', 'Nevraživě', 'Úsečně'];
+const MOOD_GOOD = ['S úsměvem', 'Přátelsky', 'Srdečně'];
 export function currentCard(state) {
   const c = cardById(state.card) || INTRO;
-  return { ...c, person: PEOPLE[c.who], text: fill(c.text, state.leader) };
+  let text = fill(c.text, state.leader);
+  // Rozzlobení a věrní lidé mluví jinak.
+  const r = state.rel?.[c.who] ?? 0;
+  if (!c.rel && c.who !== 'tajemnik') {
+    const h = [...c.id].reduce((x, ch) => x + ch.charCodeAt(0), 0);
+    if (r <= -REL_LOYAL) text = `${MOOD_BAD[h % MOOD_BAD.length]}: „${text}“`;
+    else if (r >= REL_LOYAL) text = `${MOOD_GOOD[h % MOOD_GOOD.length]}: „${text}“`;
+  }
+  return { ...c, person: PEOPLE[c.who], text };
+}
+
+/** Které ukazatele ovlivní karta (kterákoli volba) – pro Proroka. */
+export function touches(state, id) {
+  const c = cardById(id);
+  if (!c) return [];
+  const out = new Set();
+  for (const d of DIRS) for (const [k, v] of Object.entries(optionOf(state, c, d)?.e ?? {})) if (v) out.add(k);
+  return METERS.map((m) => m.id).filter((k) => out.has(k));
 }
 
 function eligible(state, c) {
@@ -139,7 +167,7 @@ function eligible(state, c) {
 function draw(state) {
   state.card = pickCard(state);
   state.luck = state.leader.kind === 'hazard' ? 0.5 + Math.round(random(state) * 10) / 10 : 1;
-  state.peek = seesAhead(state) ? peekCard(state) : null;
+  state.peek = peekCard(state);
   state.advice = state.leader.kind === 'rada' ? advise(state) : null;
 }
 
@@ -149,7 +177,11 @@ function peekCard(state) {
   if (due) return due.id;
   const pool = CARDS.filter((c) => c.id !== state.card && eligible(state, c));
   if (!pool.length) return null;
-  return pool[Math.floor(random(state) * pool.length)].id;
+  const seen = state.seen ?? {};
+  const w = pool.map((c) => (c.weight ?? 1) * (c.req ? 2 : 1) * (c.rel ? 3 : 1) / (1 + 0.8 * (seen[c.id] ?? 0)));
+  let r = random(state) * w.reduce((x, y) => x + y, 0);
+  for (let i = 0; i < pool.length; i++) { r -= w[i]; if (r <= 0) return pool[i].id; }
+  return pool[pool.length - 1].id;
 }
 
 /** Další karta: nejdřív pokračování příběhu, které je na řadě, jinak náhodná vhodná karta. */
@@ -172,7 +204,10 @@ export function pickCard(state) {
     state.recent = state.recent.slice(-4);
     pool = CARDS.filter((c) => eligible(state, c));
   }
-  const weights = pool.map((c) => (c.weight ?? 1) * (c.req ? 2 : 1) * (c.rel ? 3 : 1));
+  // Méně viděné karty mají přednost (méně opakování); rozzlobení lidé chodí častěji.
+  const seen = state.seen ?? {};
+  const weights = pool.map((c) => (c.weight ?? 1) * (c.req ? 2 : 1) * (c.rel ? 3 : 1) / (1 + 0.8 * (seen[c.id] ?? 0))
+    * ((state.rel?.[c.who] ?? 0) <= -REL_LOYAL ? 1.5 : 1));
   let r = random(state) * weights.reduce((a, b) => a + b, 0);
   for (let i = 0; i < pool.length; i++) {
     r -= weights[i];
@@ -294,6 +329,7 @@ export function choosePerk(state, id) {
   (state.perks ??= []).push(id);
   state.perkOffer = null;
   if (id === 'nahled' && !state.peek) state.peek = peekCard(state);
+
   return true;
 }
 
@@ -323,6 +359,7 @@ export function choose(state, dir) {
   relate(state, card, o);
   if (card.crisis) crisisStep(state, card, o);
   if (card.once && !state.used.includes(card.id)) state.used.push(card.id);
+  (state.seen ??= {})[card.id] = (state.seen[card.id] ?? 0) + 1;
   state.recent = [...state.recent, card.id].slice(-RECENT);
   state.total += 1;
   if (o.end) return endReign(state, { special: o.end, ...SPECIAL[o.end] }, `x.${o.end}`);
@@ -343,7 +380,11 @@ function relate(state, card, o) {
   const k = state.leader.kind === 'charisma' ? 2 : 1;
   const add = (who, n) => {
     const m = n * k * (n > 0 && has(state, 'sarm') ? 2 : 1);
-    state.rel[who] = Math.max(-REL_MAX, Math.min(REL_MAX, (state.rel[who] ?? 0) + m));
+    const before = state.rel[who] ?? 0;
+    state.rel[who] = Math.max(-REL_MAX, Math.min(REL_MAX, before + m));
+    const name = PEOPLE[who]?.name ?? who;
+    if (before > -REL_LOYAL && state.rel[who] <= -REL_LOYAL) news(state, 'enemy', `${name}: teď je to tvůj nepřítel. Však on si to vybere.`);
+    if (before < REL_LOYAL && state.rel[who] >= REL_LOYAL) news(state, 'friend', `${name}: teď stojí věrně při tobě.`);
   };
   const cares = CARES[card.who];
   const raw = cares ? (o.e?.[cares] ?? 0) : 0;
@@ -593,6 +634,7 @@ export function upgrade(state) {
   state.crisis ??= null;
   state.tally ??= { elections: 0, crises: 0 };
   state.luck ??= 1;
+  state.seen ??= {};
   state.mode ??= 'normal';
   state.age ??= 7;
   state.ageStart ??= 0;

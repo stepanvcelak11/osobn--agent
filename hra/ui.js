@@ -1,6 +1,6 @@
 // Rovnováha – zobrazení a ovládání (tažení karty do čtyř stran, šipky, klávesy, uložení hry).
 import { portrait, meterIcon, glyph, icon, mood, mix } from './art.js';
-import { newGame, newBlitz, newRun, daily, ageOf, leaderTitle, hasElections, lawAllowed, AGES, AGE_LEN, choose, nextLeader, currentCard, cardById, preview, outcome, optionOf, unlocked, skip, nudge, reformLaw, choosePerk, ready, tenure, timeLabel, danger, kindOf, upgrade, activeLaws, seals, taskById, taskProgress, seesDirection, toElection, support, KINDS, ACTIVE, CHARGE, NUDGE, METERS, ENDINGS, LAWS, TASKS, ERAS, SPECIAL, PEOPLE, REL_LOYAL, PERKS, CRISES, ELECTION, VOTE_MIN, BLITZ_START, BLITZ_BONUS, BLITZ_FALL } from './game.js';
+import { newGame, newBlitz, newRun, daily, touches, seesAhead, ageOf, leaderTitle, hasElections, lawAllowed, AGES, AGE_LEN, choose, nextLeader, currentCard, cardById, preview, outcome, optionOf, unlocked, skip, nudge, reformLaw, choosePerk, ready, tenure, timeLabel, danger, kindOf, upgrade, activeLaws, seals, taskById, taskProgress, seesDirection, toElection, support, KINDS, ACTIVE, CHARGE, NUDGE, METERS, ENDINGS, LAWS, TASKS, ERAS, SPECIAL, PEOPLE, REL_LOYAL, PERKS, CRISES, ELECTION, VOTE_MIN, BLITZ_START, BLITZ_BONUS, BLITZ_FALL } from './game.js';
 
 const SAVE = 'rovnovaha.save';
 const app = document.getElementById('app');
@@ -191,7 +191,7 @@ function startScreen() {
           <button class="ghost" id="daily">${icon('sun', 'ico sm')}<span><b>Denní výzva</b><small>${dailyLabel()}</small></span></button>
           <button class="ghost" id="blitz">${icon('timer', 'ico sm')}<span><b>Bleskovka</b><small>3 minuty na čas</small></span></button>
         </div>
-        <div class="row2"><button class="ghost" id="stats">${icon('stats', 'ico sm')} Statistiky</button><button class="ghost" id="help">Jak hrát</button></div>
+        <div class="row2"><button class="ghost" id="stats">${icon('stats', 'ico sm')} Statistiky</button><button class="ghost" id="help">${icon('help', 'ico sm')} Jak hrát</button></div>
       </div>
     </div>`;
   $('#help').onclick = () => helpScreen(startScreen);
@@ -312,11 +312,12 @@ function gameScreen() {
     <div class="question" id="q"><p></p></div>
     <section class="stage">
       ${['up', 'left', 'right', 'down'].map((d) => `<button class="chev ${d}" data-dir="${d}" aria-label="Volba ${d}">${{ up: '▲', down: '▼', left: '◀', right: '▶' }[d]}</button>`).join('')}
-      <div class="deck"><div class="card" id="card"></div></div>
+      <div class="deck"><div class="card next" id="nextcard"></div><div class="card" id="card"></div></div>
     </section>
     <div class="name"><b><span id="person"></span><span id="mood"></span></b><div class="advice" id="adv"></div></div>`;
   ui = {
     card: $('#card'),
+    next: $('#nextcard'),
     q: $('#q'),
     person: $('#person'),
     icons: Object.fromEntries(METERS.map((m) => [m.id, app.querySelector(`.meter:nth-child(${METERS.indexOf(m) + 1}) .micon`)])),
@@ -391,7 +392,8 @@ function render(enter) {
   if (c0.crisis) chips.push(`<span class="warn">${icon('crisis', 'ico sm')} ${CRISES[c0.crisis].name} · krok ${CRISES[c0.crisis].steps.indexOf(c0.id) + 1} z ${CRISES[c0.crisis].steps.length}</span>`);
   else if (state.crisis) chips.push(`${icon('crisis', 'ico sm')} Probíhá: ${CRISES[state.crisis.id].name}`);
   if (state.turn > 0 && toElection(state) <= 6) chips.push(`${icon('vote', 'ico sm')} Volby za ${toElection(state)} m. · podpora <b class="${support(state) >= VOTE_MIN ? 'ok' : 'bad'}">${support(state)} %</b>`);
-  if (state.peek && cardById(state.peek)) chips.push(`${icon('prorok', 'ico sm')} Příště: <b>${esc(PEOPLE[cardById(state.peek).who].name)}</b>`);
+  const nx = state.peek && cardById(state.peek);
+  if (nx && seesAhead(state)) chips.push(`${icon('prorok', 'ico sm')} Příště ovlivní: ${touches(state, state.peek).map((k) => glyph(k, 'glyph sm')).join('')}`);
   $('#adv').innerHTML = chips.map((x) => `<span>${x}</span>`).join('');
   for (const m of METERS) {
     const v = state.meters[m.id], d = danger(v);
@@ -406,6 +408,11 @@ function render(enter) {
   ui.q.firstElementChild.textContent = c.text;
   ui.person.textContent = c.person.name;
   $('#mood').innerHTML = mood(state.rel?.[c.who] ?? 0, REL_LOYAL);
+  // Pod kartou leží další: je vidět, kdo přijde (při tažení se odkryje celá).
+  const np = nx ? PEOPLE[nx.who] : null;
+  ui.next.parentElement.classList.remove('dragging');
+  ui.next.className = 'card next' + (enter ? ' rise' : '');
+  ui.next.innerHTML = np ? `${portrait(np)}<div class="nextname">${esc(np.name)}</div>` : '';
   const card = ui.card;
   card.className = 'card' + (enter ? ' enter' : '');
   card.style.transform = '';
@@ -491,6 +498,7 @@ function commit(dir) {
   const card = ui.card;
   const far = { left: 'translate(-150%, 30px) rotate(-16deg)', right: 'translate(150%, 30px) rotate(16deg)', up: 'translate(0, -140%)', down: 'translate(0, 140%)' }[dir];
   sfx('swipe'); vibrate(8);
+  ui.card.parentElement.classList.add('dragging');
   card.className = 'card fly';
   card.style.transform = far;
   card.style.opacity = '0';
@@ -532,6 +540,7 @@ function setupDrag(card) {
     active = true; sx = e.clientX; sy = e.clientY; dx = dy = 0; t0 = performance.now();
     selected = null;
     card.className = 'card';
+    card.parentElement.classList.add('dragging');
     card.setPointerCapture(e.pointerId);
   });
   card.addEventListener('pointermove', (e) => {
@@ -547,6 +556,7 @@ function setupDrag(card) {
     const speed = dist / Math.max(1, performance.now() - t0); // px/ms – rychlé švihnutí stačí i na kratší vzdálenost
     if (dist > 90 || (dist > 40 && speed > 0.6)) { commit(dirOf()); return; }
     card.className = 'card back';
+    card.parentElement.classList.remove('dragging');
     card.style.transform = '';
     highlight(null, 0);
   };
@@ -602,7 +612,7 @@ function nextToast() {
   if (!m) return;
   const t = document.createElement('div');
   t.className = `toast ${m.kind}`;
-  const ic = { law: 'law', task: 'task', era: 'era', crisis: 'crisis', crisisLost: 'crisis', election: 'vote', electionSoon: 'vote', rescue: 'rescue', perk: 'perk', fall: 'crisis', ach: 'trophy', sun: 'sun', age: 'era' }[m.kind];
+  const ic = { law: 'law', task: 'task', era: 'era', crisis: 'crisis', crisisLost: 'crisis', election: 'vote', electionSoon: 'vote', rescue: 'rescue', perk: 'perk', fall: 'crisis', ach: 'trophy', sun: 'sun', age: 'era', enemy: 'crisis', friend: 'people' }[m.kind];
   t.innerHTML = (ic ? icon(ic, 'ico sm') : '') + `<span>${esc(m.text)}</span>`;
   document.body.appendChild(t);
   setTimeout(() => { t.remove(); toasts.shift(); nextToast(); }, m.kind ? 2800 : 1800);
@@ -771,22 +781,30 @@ function menu() {
   const m = document.createElement('div');
   m.className = 'menu';
   const bl = state.mode === 'blitz';
+  const item = (a, ic, label, sub = '') => `<button class="mi" data-a="${a}">${icon(ic, 'ico')}<span><b>${label}</b>${sub ? `<small>${sub}</small>` : ''}</span>${a === 'sound' ? `<i class="sw${soundOn ? ' on' : ''}"></i>` : icon('chev', 'ico chev')}</button>`;
   m.innerHTML = `
-    <button class="primary" data-a="back">${bl ? 'Pokračovat (čas stojí)' : 'Zpět do hry'}</button>
-    <button data-a="realm">Stav republiky</button>
-    ${bl ? '' : '<button data-a="chron">Kronika a konce</button><button data-a="stats">Statistiky a hodnocení</button>'}
-    <button data-a="help">Jak hrát</button>
-    <button class="ghost" data-a="sound">${soundOn ? 'Zvuk: zapnutý' : 'Zvuk: vypnutý'}</button>
-    ${bl ? '<button class="ghost" data-a="endblitz">Ukončit bleskovku</button>' : '<button class="ghost" data-a="start">Hlavní nabídka</button>'}
-    ${state.mode === 'daily' ? '<div class="small">Denní výzva se ukládá zvlášť – můžeš ji kdykoli dohrát.</div>' : ''}
-    <div class="small">${bl ? 'Bleskovka se neukládá. Tvoje hlavní hra zůstává, jak byla.' : 'Hra se ukládá sama po každém rozhodnutí.'}</div>`;
+    <div class="sheetmenu" role="dialog" aria-label="Nabídka">
+      <div class="grab"></div>
+      <div class="mhead"><img src="icons/icon-192.png" alt=""><div><b>${esc(state.leader.name)}</b><small>${state.leader.n}. ${leaderTitle(state)}${state.mode === 'dejiny' ? ` · ${ageOf(state).name}` : ''}</small></div></div>
+      <button class="primary mplay" data-a="back">${icon('play', 'ico')} ${bl ? 'Pokračovat (čas stojí)' : 'Zpět do hry'}</button>
+      <div class="mlist">
+        ${item('realm', 'globe', 'Stav republiky', 'úkol, zákony, lidé, volby')}
+        ${bl ? '' : item('chron', 'book', 'Kronika a konce', 'vůdci a odemčené konce')}
+        ${bl ? '' : item('stats', 'trophy', 'Statistiky a úspěchy', 'hodnocení a rekordy')}
+        ${item('help', 'help', 'Jak hrát')}
+        ${item('sound', soundOn ? 'sound' : 'mute', 'Zvuk a vibrace')}
+        ${bl ? item('endblitz', 'timer', 'Ukončit bleskovku') : item('start', 'home', 'Hlavní nabídka')}
+      </div>
+      <div class="small mnote">${bl ? 'Bleskovka se neukládá. Tvoje hlavní hra zůstává, jak byla.' : state.mode === 'daily' ? 'Denní výzva se ukládá zvlášť – můžeš ji kdykoli dohrát.' : 'Hra se ukládá sama po každém rozhodnutí.'}</div>
+    </div>`;
   m.onclick = (e) => {
-    const a = e.target.dataset?.a;
+    const b = e.target.closest('button'), a = b?.dataset.a;
     if (!a && e.target !== m) return;
     if (a === 'sound') {
       soundOn = !soundOn;
       try { localStorage.setItem(SOUND, soundOn ? '1' : '0'); } catch { /* nic */ }
-      e.target.textContent = soundOn ? 'Zvuk: zapnutý' : 'Zvuk: vypnutý';
+      b.querySelector('.sw').classList.toggle('on', soundOn);
+      b.querySelector('.ico').outerHTML = icon(soundOn ? 'sound' : 'mute', 'ico');
       sfx('good');
       return;
     }
