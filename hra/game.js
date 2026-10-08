@@ -5,6 +5,7 @@ import { AGES, AGE_LEN, AGE_PEOPLE, AGE_CARES, AGE_NAMES, AGE_CARDS, ENDINGS_PAS
 
 import { bondCards } from './bonds.js';
 import { AGE_CARDS_MORE } from './ages_more.js';
+import { AGE_CARDS_EXTRA } from './ages_extra.js';
 import { SEASON_CARDS, STATE_CARDS, RIVAL_CARDS, TRAITOR_CARDS } from './events.js';
 import { BRANCH_CARDS, WONDERS, WONDER_CARDS } from './history_more.js';
 import { FACTION_CARDS, RUMOR_CARDS, ECHO_CARDS } from './depth.js';
@@ -52,10 +53,10 @@ const WONDER_BY_ID = Object.fromEntries(WONDERS.map((w) => [w.id, w]));
 Object.assign(CARES, AGE_CARES);
 // Kdo žije ve které době (podle karet) – karty vztahů se objeví jen tam.
 const PERSON_AGE = {};
-for (const c of [...AGE_CARDS, ...AGE_CARDS_MORE]) PERSON_AGE[c.who] ??= c.age;
+for (const c of [...AGE_CARDS, ...AGE_CARDS_MORE, ...AGE_CARDS_EXTRA]) PERSON_AGE[c.who] ??= c.age;
 const OWN_BONDS = [...new Set(EXTRA.filter((c) => c.rel).map((c) => c.who))];
 const BONDS = bondCards(CARES, PERSON_AGE, OWN_BONDS, REL_LOYAL);
-const CARDS = [...BASE, ...EXTRA, ...AGE_CARDS, ...AGE_CARDS_MORE, ...BONDS, ...SEASON_CARDS, ...STATE_CARDS, ...RIVAL_CARDS, ...TRAITOR_CARDS, ...BRANCH_CARDS, ...WONDER_CARDS, ...FACTION_CARDS, ...RUMOR_CARDS, ...ECHO_CARDS, ...PROJECT_CARDS,
+const CARDS = [...BASE, ...EXTRA, ...AGE_CARDS, ...AGE_CARDS_MORE, ...AGE_CARDS_EXTRA, ...BONDS, ...SEASON_CARDS, ...STATE_CARDS, ...RIVAL_CARDS, ...TRAITOR_CARDS, ...BRANCH_CARDS, ...WONDER_CARDS, ...FACTION_CARDS, ...RUMOR_CARDS, ...ECHO_CARDS, ...PROJECT_CARDS,
   ...ARC_CARDS, ...REP_CARDS, ...SOK_CARDS, ...SEASON2_CARDS, ...PACK_CARDS, ...HEIR_CARDS];
 export { PROJECTS, PROJECT_MONTHS, ARCS, PACKS, REPS, TRAITS, EDU, AMBITIONS, TITLES, COUNCIL_MAX, COUNCIL_MIN_REL, CARES };
 /** Album postav: kdo se v které době může objevit (postavy z karet i zástupné postavy podle doby). */
