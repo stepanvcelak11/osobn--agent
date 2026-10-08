@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { effect, newGame, choose, nextLeader, currentCard, preview, fill, tenure, DIRS, cardById, METERS, CARDS, INTRO, PEOPLE, ENDINGS, KINDS, outcome, bestDir, skip, nudge, ready, CHARGE, activeLaws, optionOf, taskProgress, upgrade, SPECIAL, TASKS , reformLaw, choosePerk, offerPerks, newBlitz, newRun, daily, toElection, PERKS, CRISES, TERM, VOTE_MIN, RESCUE, seals } from '../game.js';
+import { effect, newGame, choose, nextLeader, currentCard, preview, fill, tenure, DIRS, cardById, METERS, CARDS, INTRO, PEOPLE, ENDINGS, KINDS, outcome, bestDir, skip, nudge, ready, CHARGE, activeLaws, optionOf, taskProgress, upgrade, SPECIAL, TASKS, AGES, AGE_LEN, ENDINGS_PAST, hasElections, leaderTitle, lawAllowed , reformLaw, choosePerk, offerPerks, newBlitz, newRun, daily, toElection, PERKS, CRISES, TERM, VOTE_MIN, RESCUE, seals } from '../game.js';
 
 const meterIds = new Set(METERS.map((m) => m.id));
 const all = [INTRO, ...CARDS];
@@ -133,10 +133,10 @@ test('náhodný hráč vládne krátce, rozumný dlouho', () => {
 test('navazující příběhy opravdu navazují', () => {
   const seen = new Set();
   for (let i = 0; i < 300; i++) {
-    const s = newGame({}, 500 + i);
+    const s = newGame({ mode: i % 3 === 0 ? 'dejiny' : 'normal' }, 500 + i);
     let g = 0;
     // Napůl rozumná hra, ať se svět dostane i do pozdějších ér a k tajným příběhům.
-    while (g++ < 900) {
+    while (g++ < (s.mode === 'dejiny' ? 1200 : 900)) {
       seen.add(s.card);
       choose(s, Math.random() < 0.5 ? randomDir(s) : wise(s));
       if (s.dead) nextLeader(s);
@@ -474,4 +474,64 @@ test('denní výzva: stejný den = stejná hra, jiný den jinak', () => {
   const s1 = newRun({ kind: a.kind }, a.seed, 'daily'), s2 = newRun({ kind: a.kind }, a.seed, 'daily');
   assert.equal(s1.card, s2.card);
   assert.equal(s1.mode, 'daily');
+});
+
+test('Dějiny lidstva: od pravěku přes přelomy až do budoucnosti', () => {
+  const s = newGame({ mode: 'dejiny', female: true, kind: 'vize' }, 21);
+  assert.equal(s.card, 'dej_intro');
+  assert.equal(s.age, 1);
+  assert.equal(leaderTitle(s), 'náčelnice');
+  assert.ok(!/prezident/.test(currentCard(s).text));
+  choose(s, 'left');
+  assert.equal(s.turn, 0, 'úvod se nepočítá');
+  const seenAges = new Set();
+  let g = 0, prelomSeen = 0;
+  while (s.age < 7 && g++ < 5000) {
+    const c = cardById(s.card);
+    seenAges.add(s.age);
+    if (c.age) assert.equal(c.age, s.age, `${c.id} nepatří do doby ${s.age}`);
+    else if (!['dej_intro'].includes(c.id)) assert.fail(`karta budoucnosti ${c.id} v době ${s.age}`);
+    if (c.milestone) {
+      prelomSeen++;
+      // nejdřív odmítnout – objev se vrátí, pak přijmout
+      const no = DIRS.find((d) => !c.opts[d].advance), yes = DIRS.find((d) => c.opts[d].advance);
+      const before = s.age;
+      choose(s, prelomSeen % 2 ? no : yes);
+      if (s.dead) nextLeader(s);
+      if (prelomSeen % 2) assert.equal(s.age, before); else assert.equal(s.age, before + 1);
+      continue;
+    }
+    choose(s, bestDir(s));
+    if (s.dead) {
+      if (s.dead.meter) assert.equal(s.dead.title, ENDINGS_PAST[s.dead.meter][s.dead.side].title, 'konce dávných dob');
+      assert.ok(!s.dead.election, 'v pravěku se nevolí');
+      nextLeader(s);
+    }
+  }
+  assert.equal(s.age, 7);
+  assert.deepEqual([...seenAges].sort(), [1, 2, 3, 4, 5, 6]);
+  assert.equal(leaderTitle(s), s.leader.female ? 'prezidentka' : 'prezident');
+  assert.ok(s.news.some((n) => n.kind === 'age'));
+  // v budoucnosti běží hlavní hra a éry se počítají od příchodu
+  assert.equal(s.era, 1);
+  for (let i = 0; i < 30 && !s.dead; i++) choose(s, bestDir(s));
+  assert.ok(!cardById(s.card).age, 'v budoucnosti už jen karty Nové republiky');
+});
+
+test('Dějiny: volby až od moderní doby, zákony podle doby, oslovení podle doby', () => {
+  const s = newGame({ mode: 'dejiny' }, 3);
+  assert.equal(hasElections(s), false);
+  assert.equal(lawAllowed(s, 'robotizace'), false);
+  s.age = 2;
+  assert.equal(lawAllowed(s, 'brannost'), true);
+  s.age = 5;
+  assert.equal(hasElections(s), true);
+  for (const a of AGES) {
+    assert.ok(a.name && a.when && a.text && a.title.length === 2 && a.osl.length === 2);
+    if (a.n < 7) assert.ok(cardById(`prelom${a.n}`)?.milestone, `přelom doby ${a.n}`);
+    if (a.n < 7) assert.ok(CARDS.filter((c) => c.age === a.n && !c.milestone).length >= 9, `karty doby ${a.n}`);
+  }
+  const normal = newGame({}, 3);
+  assert.equal(normal.age, 7);
+  assert.equal(currentCard(normal).id, 'intro');
 });

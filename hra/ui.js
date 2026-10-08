@@ -1,6 +1,6 @@
 // Rovnováha – zobrazení a ovládání (tažení karty do čtyř stran, šipky, klávesy, uložení hry).
 import { portrait, meterIcon, glyph, icon, mood, mix } from './art.js';
-import { newGame, newBlitz, newRun, daily, choose, nextLeader, currentCard, cardById, preview, outcome, optionOf, unlocked, skip, nudge, reformLaw, choosePerk, ready, tenure, timeLabel, danger, kindOf, upgrade, activeLaws, seals, taskById, taskProgress, seesDirection, toElection, support, KINDS, ACTIVE, CHARGE, NUDGE, METERS, ENDINGS, LAWS, TASKS, ERAS, SPECIAL, PEOPLE, REL_LOYAL, PERKS, CRISES, ELECTION, VOTE_MIN, BLITZ_START, BLITZ_BONUS, BLITZ_FALL } from './game.js';
+import { newGame, newBlitz, newRun, daily, ageOf, leaderTitle, hasElections, lawAllowed, AGES, AGE_LEN, choose, nextLeader, currentCard, cardById, preview, outcome, optionOf, unlocked, skip, nudge, reformLaw, choosePerk, ready, tenure, timeLabel, danger, kindOf, upgrade, activeLaws, seals, taskById, taskProgress, seesDirection, toElection, support, KINDS, ACTIVE, CHARGE, NUDGE, METERS, ENDINGS, LAWS, TASKS, ERAS, SPECIAL, PEOPLE, REL_LOYAL, PERKS, CRISES, ELECTION, VOTE_MIN, BLITZ_START, BLITZ_BONUS, BLITZ_FALL } from './game.js';
 
 const SAVE = 'rovnovaha.save';
 const app = document.getElementById('app');
@@ -105,6 +105,8 @@ const ACH = [
   { id: 'krize5', name: 'Ostřílený', text: 'Zvládni 5 krizí.', ok: () => stats.crises >= 5 },
   { id: 'vyhoda', name: 'Výhodný obchod', text: 'Vyber si výhodu za splněný úkol.', ok: (s) => (s.perks ?? []).length >= 1 },
   { id: 'pecete', name: 'Pět pečetí', text: 'Získej 5 pečetí.', ok: (s) => seals(s) >= 5 },
+  { id: 'zemedelci', name: 'Zemědělci', text: 'V Dějinách lidstva přiveď kmen do starověku.', ok: (s) => s.mode === 'dejiny' && (s.age ?? 7) >= 2 },
+  { id: 'dejiny', name: 'Od pazourku ke hvězdám', text: 'Proveď lid všemi dobami až do budoucnosti.', ok: (s) => s.mode === 'dejiny' && (s.age ?? 7) >= 7 },
   { id: 'era3', name: 'Nové hranice', text: 'Doveď svět do třetí éry.', ok: (s) => (s.era ?? 1) >= 3 },
   { id: 'dynastie', name: 'Dynastie', text: 'Doveď republiku k 10. vůdci.', ok: (s) => s.leader.n >= 10 },
   { id: 'konce5', name: 'Sběratel', text: 'Odemkni 5 různých konců.', ok: (s) => (s.endings ?? []).length >= 5 },
@@ -180,7 +182,7 @@ function startScreen() {
     <div class="start">
       <img class="logo" src="icons/icon-192.png" alt="">
       <h1>ROVNOVÁHA</h1>
-      <p>Rok 2089. Po Velkém výpadku z naší země zbyla Nová republika a právě tě zvolili do jejího čela.
+      <p>Veď svůj lid od pravěkého ohně přes hrady a parní stroje až do budoucnosti.
         Udrž sedm sil v rovnováze – ideál je uprostřed, na krajích čeká katastrofa.</p>
       <div class="col">
         ${state ? `<button class="primary" id="cont">Pokračovat – ${esc(state.leader.name)}</button>` : ''}
@@ -202,14 +204,15 @@ function startScreen() {
 
 /** Nový vůdce: jméno, prezident/prezidentka a typ – vše na jedné obrazovce bez posouvání. */
 function setupScreen(mode = 'normal', kind = 'vize') {
-  let female = false;
+  let female = false, world = 'dejiny';
   const blitzMode = mode === 'blitz';
   app.innerHTML = `
     <div class="start setup">
-      <h2 class="title">${blitzMode ? 'Bleskovka' : 'Kdo povede republiku?'}</h2>
+      <h2 class="title">${blitzMode ? 'Bleskovka' : 'Kdo povede tvůj lid?'}</h2>
+      ${blitzMode ? '' : `<div class="seg world"><button id="w1" class="on">${icon('era', 'ico sm')} Dějiny lidstva<small>od pravěku do budoucnosti</small></button><button id="w2">${icon('kontakt', 'ico sm')} Rok 2089<small>jen Nová republika</small></button></div>`}
       ${blitzMode ? `<div class="small">Máš ${BLITZ_START / 60} minuty. Každé rozhodnutí přidá ${BLITZ_BONUS} s, pád vlády ${BLITZ_FALL} s ubere. Kolik rozhodnutí stihneš?</div>` : ''}
       <input id="name" maxlength="30" placeholder="Tvoje jméno" autocomplete="off" enterkeyhint="done">
-      <div class="seg"><button id="m" class="on">Prezident</button><button id="f">Prezidentka</button></div>
+      <div class="seg"><button id="m" class="on">Vládce</button><button id="f">Vládkyně</button></div>
       <div class="label">Jaký budeš vůdce?</div>
       <div id="kp">${kindPicker()}</div>
       <div class="col">
@@ -221,18 +224,23 @@ function setupScreen(mode = 'normal', kind = 'vize') {
   const seg = (f) => { female = f; $('#m').classList.toggle('on', !f); $('#f').classList.toggle('on', f); picker.refresh(); };
   $('#m').onclick = () => seg(false);
   $('#f').onclick = () => seg(true);
+  if (!blitzMode) {
+    const pick = (w) => { world = w; $('#w1').classList.toggle('on', w === 'dejiny'); $('#w2').classList.toggle('on', w === 'normal'); };
+    $('#w1').onclick = () => pick('dejiny');
+    $('#w2').onclick = () => pick('normal');
+  }
   $('#name').onkeydown = (e) => { if (e.key === 'Enter') e.target.blur(); };
   $('#back').onclick = startScreen;
   $('#go').onclick = () => {
     if (blitzMode) { startBlitz({ name: $('#name').value, female, kind }); return; }
     if (state && !confirm('Opravdu začít znovu? Současná hra i kronika vůdců se smažou (odemčené konce zůstanou).')) return;
     const keep = state ? { endings: state.endings, best: state.best } : null;
-    state = newGame({ name: $('#name').value, female, kind }, (Math.random() * 2 ** 32) >>> 0);
+    state = newGame({ name: $('#name').value, female, kind, mode: world }, (Math.random() * 2 ** 32) >>> 0);
     if (keep) Object.assign(state, keep);
     stats.games += 1; saveStats();
     save();
     gameScreen();
-    toast(`Úkol: ${taskById(state.task.id).text}`, 'newtask');
+    if (world === 'dejiny') ageSplash(); else toast(`Úkol: ${taskById(state.task.id).text}`, 'newtask');
   };
 }
 
@@ -330,7 +338,7 @@ function gameScreen() {
 const TIPS = 'rovnovaha.tips';
 function tips() {
   // Jen na úplném začátku nové hry a nikdy přes jiné okno.
-  if (state.mode !== 'normal' || state.total > 1 || document.querySelector('.pop')) return;
+  if (['blitz', 'daily'].includes(state.mode) || state.total > 1 || document.querySelector('.pop')) return;
   try { if (localStorage.getItem(TIPS)) return; } catch { return; }
   const steps = [
     ['Táhni kartu', 'Každá karta má čtyři volby: doleva, doprava, nahoru a dolů. Při tažení uvidíš, co volba udělá, a tečky ukážou, kterých ukazatelů se dotkne.'],
@@ -369,7 +377,7 @@ function render(enter) {
   const l = state.leader;
   $('#who').textContent = l.name;
   const k = kindOf(state);
-  $('#nth').textContent = `${l.n}. ${l.female ? 'prezidentka' : 'prezident'} · ${timeLabel(state)}`;
+  $('#nth').textContent = `${l.n}. ${leaderTitle(state)} · ${state.mode === 'dejiny' ? `${ageOf(state).name} · ` : ''}${timeLabel(state)}`;
   if (state.mode === 'blitz') updateClock();
   // Vpravo nahoře: ikona typu vůdce. U aktivních schopností kroužek ukazuje nabití.
   const ab = $('#ab'), active = ACTIVE.includes(k.id);
@@ -594,7 +602,7 @@ function nextToast() {
   if (!m) return;
   const t = document.createElement('div');
   t.className = `toast ${m.kind}`;
-  const ic = { law: 'law', task: 'task', era: 'era', crisis: 'crisis', crisisLost: 'crisis', election: 'vote', electionSoon: 'vote', rescue: 'rescue', perk: 'perk', fall: 'crisis', ach: 'trophy', sun: 'sun' }[m.kind];
+  const ic = { law: 'law', task: 'task', era: 'era', crisis: 'crisis', crisisLost: 'crisis', election: 'vote', electionSoon: 'vote', rescue: 'rescue', perk: 'perk', fall: 'crisis', ach: 'trophy', sun: 'sun', age: 'era' }[m.kind];
   t.innerHTML = (ic ? icon(ic, 'ico sm') : '') + `<span>${esc(m.text)}</span>`;
   document.body.appendChild(t);
   setTimeout(() => { t.remove(); toasts.shift(); nextToast(); }, m.kind ? 2800 : 1800);
@@ -602,6 +610,7 @@ function nextToast() {
 /** Zprávy ze hry (zákon, úkol, éra) jako krátké oznámení. */
 function showNews() {
   for (const n of state.news ?? []) {
+    if (n.kind === 'age') { ageSplash(); continue; }
     toast(n.text, n.kind);
     if (n.kind === 'task') stats.tasks += 1;
     if (n.kind === 'election') stats.elections += 1;
@@ -683,12 +692,13 @@ function offerPerk() {
 function lawPicker() {
   const p = document.createElement('div');
   p.className = 'pop';
-  const on = activeLaws(state);
+  const on = activeLaws(state), allowed = Object.keys(LAWS).filter((l) => lawAllowed(state, l) || on.includes(l));
+  if (!allowed.length) { toast(`V době „${ageOf(state).name}“ ještě žádné zákony nejsou`); return; }
   const per = (l) => Object.entries(LAWS[l].per).map(([k, v]) => `<span class="${v > 0 ? 'up' : 'down'}">${METERS.find((m) => m.id === k).name} ${v > 0 ? '▲' : '▼'}</span>`).join(' ');
   p.innerHTML = `
     <div class="pane scroll" role="dialog" aria-label="Zákony">
       <b class="pane-title">${icon('reform', 'ico')} Který zákon zavést, nebo zrušit?</b>
-      <div class="steer">${Object.keys(LAWS).map((l) => `<button data-l="${l}" class="law${on.includes(l) ? ' on' : ''}"><span><b>${LAWS[l].name}</b><small>${per(l)}</small></span><em>${on.includes(l) ? 'Zrušit' : 'Zavést'}</em></button>`).join('')}</div>
+      <div class="steer">${allowed.map((l) => `<button data-l="${l}" class="law${on.includes(l) ? ' on' : ''}"><span><b>${LAWS[l].name}</b><small>${per(l)}</small></span><em>${on.includes(l) ? 'Zrušit' : 'Zavést'}</em></button>`).join('')}</div>
       <button class="ghost" data-x>Zatím ne</button>
     </div>`;
   p.onclick = (e) => {
@@ -822,6 +832,45 @@ function deathScreen() {
   $('#chron').onclick = () => chronicleScreen(deathScreen);
 }
 
+/** Cesta dějinami: kde svět je a jak daleko je další přelom. */
+function timeline() {
+  const a = state.age ?? 7, done = Math.min(AGE_LEN, state.total - (state.ageStart ?? 0));
+  return `<h3>${icon('era', 'ico')} Doba: ${ageOf(state).name}</h3>
+    <div class="ages">${AGES.map((x) => `<span class="${x.n < a ? 'done' : x.n === a ? 'now' : ''}" title="${x.name}"><i></i></span>`).join('')}</div>
+    <div class="ageends"><span>Pravěk</span><span>Budoucnost</span></div>
+    ${a < 7 ? `<div class="bar"><i style="width:${Math.round((done / AGE_LEN) * 100)}%"></i></div>
+    <div class="small">${done < AGE_LEN ? `Do přelomového objevu zbývá asi ${AGE_LEN - done} rozhodnutí.` : 'Přelomový objev je na spadnutí – když ho přijmeš, svět se posune do další doby.'}</div>` : '<div class="small">Dějiny dorazily do budoucnosti.</div>'}`;
+}
+
+/** Úvod nové doby: co se změnilo. */
+function ageSplash() {
+  if (document.querySelector('.agesplash')) return;
+  const a = ageOf(state);
+  const what = {
+    1: 'Žádné zákony, žádné volby. Jen kmen, zvěř a duchové předků. Až přijde objev zemědělství, můžeš svět posunout dál.',
+    2: 'Města, chrámy a první zákony. Vládneš jako král nebo královna – a lid čeká chléb a hry.',
+    3: 'Hrady, církev a rytíři. Pozor na mor a na kazatele.',
+    4: 'Lodě, parní stroje a revoluce. Lidé chtějí práva.',
+    5: 'Republika! Od teď se každé 4 roky volí – hlasy ti dají Lid a Spojenci.',
+    6: 'Internet, sítě a oteplování planety. Svět se zrychluje.',
+    7: 'Velký výpadek změnil všechno. Vítej v Nové republice roku 2089 – éry, zákony, krize i tajné příběhy.',
+  }[a.n];
+  sfx('good');
+  const p = document.createElement('div');
+  p.className = 'pop tips agesplash';
+  p.innerHTML = `
+    <div class="pane" role="dialog">
+      ${icon('era', 'ico xl')}
+      <div class="small">${a.when}</div>
+      <b class="pane-title">${a.n === 1 ? 'Začíná' : 'Nová doba'}: ${a.name}</b>
+      <p>${a.text}</p>
+      <p class="dim">${what}</p>
+      <button class="primary">Vládnout</button>
+    </div>`;
+  p.onclick = (e) => { if (e.target.closest('button')) { p.remove(); if (ui) { render(false); tips(); } } };
+  document.body.appendChild(p);
+}
+
 // ── Stav republiky: éra, úkol, zákony, lidé ──────────
 function realmScreen(back) {
   ui = null;
@@ -833,17 +882,18 @@ function realmScreen(back) {
   const per = (l) => Object.entries(LAWS[l].per).map(([k, v]) => `<span class="${v > 0 ? 'up' : 'down'}">${METERS.find((m) => m.id === k).name} ${v > 0 ? '▲' : '▼'}</span>`).join(' ');
   app.innerHTML = `
     <div class="sheet realm">
-      <h3>${icon('era', 'ico')} Éra: ${era.name}</h3>
-      <div class="small">${nextEra ? `Další éra „${nextEra.name}“ přijde s časem${nextEra.seals ? ` a se ${nextEra.seals} pečetěmi (máš ${seals(state)})` : ''}.` : 'Svět dosáhl poslední éry.'}</div>
+      ${state.mode === 'dejiny' ? timeline() : ''}
+      ${(state.age ?? 7) >= 7 ? `<h3>${icon('era', 'ico')} Éra: ${era.name}</h3>
+      <div class="small">${nextEra ? `Další éra „${nextEra.name}“ přijde s časem${nextEra.seals ? ` a se ${nextEra.seals} pečetěmi (máš ${seals(state)})` : ''}.` : 'Svět dosáhl poslední éry.'}</div>` : ''}
       <h3>${icon('task', 'ico')} Úkol vůdce</h3>
       ${t ? `<div class="box"><p>${esc(t.text)}</p><div class="bar"><i style="width:${Math.round((p.now / p.of) * 100)}%"></i></div><div class="small">${p.now} / ${p.of}</div></div>` : '<div class="small">Žádný úkol.</div>'}
       <div class="small">Pečetě (splněné úkoly): <b>${seals(state)} z ${TASKS.length}</b>. Splněný úkol hned nabije schopnost a dá ti vybrat výhodu.</div>
-      <h3>${icon('vote', 'ico')} Volby</h3>
-      <div class="small">Další volby za ${toElection(state)} ${toElection(state) === 1 ? 'měsíc' : toElection(state) < 5 ? 'měsíce' : 'měsíců'}. Podpora (průměr Lidu a Spojenců): <b class="${support(state) >= VOTE_MIN ? 'ok' : 'bad'}">${support(state)} %</b>, potřebuješ aspoň ${VOTE_MIN} %.</div>
+      ${hasElections(state) ? `<h3>${icon('vote', 'ico')} Volby</h3>
+      <div class="small">Další volby za ${toElection(state)} ${toElection(state) === 1 ? 'měsíc' : toElection(state) < 5 ? 'měsíce' : 'měsíců'}. Podpora (průměr Lidu a Spojenců): <b class="${support(state) >= VOTE_MIN ? 'ok' : 'bad'}">${support(state)} %</b>, potřebuješ aspoň ${VOTE_MIN} %.</div>` : ''}
       ${state.crisis ? `<h3>${icon('crisis', 'ico')} Krize</h3><div class="small">${CRISES[state.crisis.id].name}: krok ${state.crisis.step} z ${CRISES[state.crisis.id].steps.length} za tebou, zvládnuto ${state.crisis.score}. K úspěchu potřebuješ zvládnout ${CRISES[state.crisis.id].good}.</div>` : ''}
       ${state.perks?.length ? `<h3>${icon('perk', 'ico')} Výhody</h3>${perkList().replace(/<div class="label"[^>]*>Výhody<\/div>/, '')}` : ''}
-      <h3>${icon('law', 'ico')} Zákony (${laws.length})</h3>
-      ${laws.length ? laws.map((l) => `<div class="past"><span>${LAWS[l].name}</span><span class="per">${per(l)} / měsíc</span></div>`).join('') : '<div class="small">Žádný zákon zatím neplatí. Návrhy zákonů ti přinesou ministři.</div>'}
+      ${(state.age ?? 7) < 7 && !laws.length ? '' : `<h3>${icon('law', 'ico')} Zákony (${laws.length})</h3>
+      ${laws.length ? laws.map((l) => `<div class="past"><span>${LAWS[l].name}</span><span class="per">${per(l)} / měsíc</span></div>`).join('') : '<div class="small">Žádný zákon zatím neplatí. Návrhy zákonů ti přinesou ministři.</div>'}`}
       <h3>${icon('people', 'ico')} Lidé</h3>
       ${people.length ? people.map(([who, r]) => `<div class="past"><span>${esc(PEOPLE[who]?.name ?? who)} ${mood(r, REL_LOYAL)}</span><span class="rel"><i style="width:${(Math.abs(r) / 5) * 50}%;${r > 0 ? 'left:50%' : `right:50%`}" class="${r > 0 ? 'pos' : 'neg'}"></i></span></div>`).join('') : '<div class="small">Zatím si o tobě nikdo neudělal názor.</div>'}
       <button class="primary" id="back">Zpět</button>
@@ -1031,6 +1081,7 @@ function helpScreen(back) {
         <li><b>Zákony</b> platí, dokud je někdo nezruší, a každý měsíc pomalu posouvají ukazatele. Platí i pro nástupce.</li>
         <li><b>Úkoly:</b> každý vůdce dostane úkol. Splněný úkol je pečeť – pečetě a čas otevírají nové éry světa a tajné příběhy s legendárními konci.</li>
         <li>Některé volby se odemknou, jen když je země silná v něčem (třeba v diplomacii) – poznáš je podle <b>klíče</b>.</li>
+        <li><b>Dějiny lidstva:</b> začneš jako náčelník kmene v pravěku. Každá doba (pravěk, starověk, středověk, novověk, moderní doba, současnost, budoucnost) má vlastní postavy, karty a konce. Po čase přijde přelomový objev – když ho přijmeš, svět se posune dál. Volby jsou až od moderní doby, zákony podle doby.</li>
         <li><b>Výhody:</b> za splněný úkol si vybereš jednu ze tří výhod (třeba Brzda, Druhá šance nebo Zvědové). Platí do konce vlády.</li>
         <li><b>Volby</b> jsou každé 4 roky. Hlasy ti dají Lid a Spojenci – když je jejich průměr pod ${VOTE_MIN} %, prohraješ a vláda končí. Půl roku předem tě varují.</li>
         <li><b>Krize</b> (epidemie, povodeň, útok na síť) trvají několik karet. Když zvládneš většinu kroků, země z toho vyjde silnější, jinak to bolí.</li>

@@ -27,6 +27,8 @@ Sedm ukazatelů drží zemi pohromadě. **Ideál je uprostřed – oba kraje jso
 
 ## Hloubka hry
 
+- **Dějiny lidstva** (výchozí režim): od pravěku přes starověk, středověk, novověk, moderní dobu a současnost až do budoucnosti (Nová republika 2089). Každá doba má vlastní postavy, karty, oslovení, jména nástupců a konce; přelomový objev posune svět dál. Obsah je v `hra/ages.js`.
+
 - **Jedenáct typů vůdců:** Vizionář (vidí směr změn), Krizový manažer (návrat z krajnosti ×2), Vyčkávač (každých 5 rozhodnutí odloží kartu),
   Kormidelník (každých 5 rozhodnutí posune ukazatel o 15 k rovnováze), Prezident s rádcem (rada je v 70 % nejlepší),
   Zachránce (jednou se odrazí od kraje), Charismatik (vztahy ×2), Prorok (vidí další kartu), Byrokrat (volby ×0,75, zákony ×2),

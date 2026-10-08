@@ -14,16 +14,16 @@ export const REL_LOYAL = 3;
 
 /// Zákony: dokud platí, každý měsíc posouvají ukazatele (po malých krocích).
 export const LAWS = {
-  dan_bohati: { name: 'Daň z bohatství', icon: '💰', per: { fin: 0.5, dip: -0.25 } },
-  brannost: { name: 'Branná povinnost', icon: '🪖', per: { sil: 0.5, lid: -0.5 } },
-  ochrana_lesu: { name: 'Ochrana lesů', icon: '🌲', per: { pri: 0.5, fin: -0.5 } },
-  statni_cirkev: { name: 'Státní církev', icon: '⛪', per: { vir: 0.5, ved: -0.5 } },
-  otevrene_hranice: { name: 'Otevřené hranice', icon: '🛂', per: { dip: 0.5, sil: -0.5 } },
-  robotizace: { name: 'Robotizace průmyslu', icon: '🤖', per: { ved: 0.5, fin: 0.25, lid: -0.5 } },
-  zakladni_prijem: { name: 'Základní příjem', icon: '🍞', per: { lid: 0.5, fin: -0.5 } },
-  cenzura: { name: 'Cenzura tisku', icon: '🔇', per: { vir: 0.25, lid: -0.25, ved: -0.25, sil: 0.25 } },
-  volny_trh: { name: 'Volný trh', icon: '📈', per: { fin: 0.5, pri: -0.5 } },
-  skolstvi: { name: 'Školy zdarma', icon: '🎓', per: { ved: 0.5, fin: -0.5 } },
+  dan_bohati: { age: 3, name: 'Daň z bohatství', icon: '💰', per: { fin: 0.5, dip: -0.25 } },
+  brannost: { age: 2, name: 'Branná povinnost', icon: '🪖', per: { sil: 0.5, lid: -0.5 } },
+  ochrana_lesu: { age: 4, name: 'Ochrana lesů', icon: '🌲', per: { pri: 0.5, fin: -0.5 } },
+  statni_cirkev: { age: 2, name: 'Státní církev', icon: '⛪', per: { vir: 0.5, ved: -0.5 } },
+  otevrene_hranice: { age: 5, name: 'Otevřené hranice', icon: '🛂', per: { dip: 0.5, sil: -0.5 } },
+  robotizace: { age: 7, name: 'Robotizace průmyslu', icon: '🤖', per: { ved: 0.5, fin: 0.25, lid: -0.5 } },
+  zakladni_prijem: { age: 6, name: 'Základní příjem', icon: '🍞', per: { lid: 0.5, fin: -0.5 } },
+  cenzura: { age: 3, name: 'Cenzura tisku', icon: '🔇', per: { vir: 0.25, lid: -0.25, ved: -0.25, sil: 0.25 } },
+  volny_trh: { age: 4, name: 'Volný trh', icon: '📈', per: { fin: 0.5, pri: -0.5 } },
+  skolstvi: { age: 4, name: 'Školy zdarma', icon: '🎓', per: { ved: 0.5, fin: -0.5 } },
 };
 
 /// Úkoly vůdců. Splněný úkol = pečeť; pečetě otevírají další éry a tajné příběhy.
