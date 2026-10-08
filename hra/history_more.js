@@ -98,7 +98,7 @@ const konec = (id) => ({ unset: `stavba_${id}` });
 const w = (id, age, who, [t1, a1, b1, c1, d1], [t2, a2, b2, c2, d2], [t3, a3, b3, c3, d3]) => {
   const ag = age === 7 ? null : age;
   return [
-    c(`div_${id}_1`, ag, who[0], t1, [...a1, start(id)], [...b1, start(id)], c1, d1, { not: [`div_${id}`, `stavba_${id}`], weight: 0.8 }),
+    c(`div_${id}_1`, ag, who[0], t1, [...a1, start(id)], [...b1, start(id)], c1, d1, { not: [`div_${id}`, `stavba_${id}`], weight: 1.3 }),
     c(`div_${id}_2`, ag, who[1], t2, [...a2, dal(id)], [...b2, dal(id)], [...c2, konec(id)], [...d2, konec(id)], { weight: 0, req: [`stavba_${id}`] }),
     c(`div_${id}_3`, ag, who[2], t3, [...a3, hotovo(id)], [...b3, hotovo(id)], [...c3, konec(id)], [...d3, konec(id)], { weight: 0, req: [`stavba_${id}`] }),
   ];

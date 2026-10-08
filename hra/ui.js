@@ -605,7 +605,7 @@ function gearLine() {
 function equip() {
   state.hints = 0;
   if (!assisted()) return;
-  state.meta = { tree: { ...stats.tree }, relics: [...stats.equip] };
+  state.meta = { tree: { ...stats.tree }, relics: [...stats.equip], title: titleOn() };
   const pred = stats.tree.predkove ?? 0, dech = stats.tree.dech ?? 0;
   if (pred) state.hints = 5 * pred;
   if (dech >= 3) (state.perks ??= []).push('sance');
@@ -677,6 +677,7 @@ function useTool(id, pop) {
   if (id === 'zpet') {
     if (!undoSnap) { toast('Zatím není co vracet'); return; }
     state = JSON.parse(undoSnap);
+    state.eye = null; // Vidoucí oko se vrácením tahu neobnoví
     undoSnap = null;
     spendTool(id); pop.remove(); save();
     render(true); toast('Tah vrácen – vol znovu', 'perk');

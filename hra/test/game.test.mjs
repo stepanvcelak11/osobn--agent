@@ -891,3 +891,15 @@ test('Vizionář vidí směr jen u poloviny dotčených ukazatelů, mistr u vše
   const k = newGame({ kind: 'krize' }, 21); choose(k, 'left'); k.card = 'stavka';
   assert.equal(revealed(k, 'left').size, 0);
 });
+
+test('přeskočená výchova dítěte se vrátí, remíza pověst nesmaže', () => {
+  const s = newGame({}, 31); choose(s, 'left');
+  s.kids = [{ name: 'Ota', female: false, trait: 'statecny', edu: null, born: 1 }];
+  s.card = 'dite_vychova'; skipCard(s);
+  assert.ok(s.queue.some((q) => q.id === 'dite_vychova'), 'výchova znovu ve frontě');
+  const r = newGame({}, 32); choose(r, 'left');
+  r.repNow = 'ucenec'; r.rep = { zbozny: 10, ucenec: 10 }; r.card = 'stavka';
+  r.meters = Object.fromEntries(METERS.map((m) => [m.id, 50]));
+  choose(r, 'left');
+  if (r.rep.zbozny === r.rep.ucenec) assert.equal(r.repNow, 'ucenec');
+});

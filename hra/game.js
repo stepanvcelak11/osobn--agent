@@ -489,6 +489,7 @@ function passCard(state) {
   const card = cardById(state.card);
   state.rush = false;
   if (card?.crisis) crisisStep(state, card, {}); // odložený krok krize se počítá jako nezvládnutý
+  if (card?.id === 'dite_vychova') state.queue.push({ id: card.id, at: state.total + 4 }); // výchova dítěte se jen odloží
   state.recent = [...state.recent, state.card].slice(-RECENT);
   state.turn += 1;
   state.total += 1;
@@ -629,7 +630,9 @@ function reputation(state, before) {
   const d = Object.fromEntries(METERS.map((m) => [m.id, state.meters[m.id] - before[m.id]]));
   state.rep ??= {};
   for (const r of repOf(d)) state.rep[r] = (state.rep[r] ?? 0) + 1;
-  const [top, second] = Object.entries(state.rep).sort((a, b) => b[1] - a[1]);
+  // Při shodě vede dosavadní pověst (aby remíza pověst nesmazala).
+  const [top, second] = Object.entries(state.rep).sort((a, b) => b[1] - a[1] || (b[0] === state.repNow) - (a[0] === state.repNow));
+  if (top && second && top[1] === second[1] && top[0] === state.repNow) return;
   const now = top && top[1] >= REP_MIN && (!second || top[1] > second[1]) ? top[0] : state.repNow && top?.[0] !== state.repNow ? null : state.repNow;
   if (now && now !== state.repNow) news(state, 'rep', `Lid ti začal říkat: ${repName(now, state.leader.female)}. ${REPS[now].text}`);
   state.repNow = now;
@@ -687,8 +690,9 @@ function progressAmb(state) {
 function birth(state) {
   const female = random(state) < 0.5, age = state.age ?? 7;
   const pool = age < 7 ? AGE_NAMES[age] : SUCCESSORS;
-  const taken = new Set([...state.history.map((h) => h.name), ...(state.kids ?? []).map((k) => k.name), state.leader.name]);
-  let names = (female ? pool.f : pool.m).filter((n) => !taken.has(n));
+  const first = (n) => n.split(' ')[0];
+  const taken = new Set([...state.history.map((h) => h.name), ...(state.kids ?? []).map((k) => k.name), state.leader.name].map(first));
+  let names = (female ? pool.f : pool.m).filter((n) => !taken.has(first(n)));
   if (!names.length) names = female ? pool.f : pool.m;
   const name = names[Math.floor(random(state) * names.length)].split(' ')[0];
   const traits = Object.keys(TRAITS), trait = traits[Math.floor(random(state) * traits.length)];
@@ -857,7 +861,10 @@ function monthPasses(state) {
   court(state);
   worldEvents(state);
   (state.trace ??= []).push(snap(state));
-  if (state.trace.length > 1200) state.trace = state.trace.filter((_, i) => i % 2 === 0); // dlouhá vláda: graf zhustit
+  if (state.trace.length > 1200) { // dlouhá vláda: graf zhustit (i značky)
+    state.trace = state.trace.filter((_, i) => i % 2 === 0);
+    state.marks = (state.marks ?? []).map((m) => ({ ...m, t: Math.floor(m.t / 2) }));
+  }
   const age = state.age ?? 7;
   if (age < 7) {
     // Přelom: po čase v dané době přijde objev, který může svět posunout dál.
@@ -1039,7 +1046,7 @@ function progressTask(state) {
 /** Tři náhodné výhody, které vůdce ještě nemá a které mu k něčemu jsou. */
 export function offerPerks(state) {
   const k = state.leader.kind;
-  const useless = { smer: k === 'vize' && master(state), nahled: k === 'prorok', sance: k === 'zachrance' && !state.rescued, sarm: k === 'charisma', nabiti: !ACTIVE.includes(k) };
+  const useless = { smer: k === 'vize' && master(state), nahled: k === 'prorok', sance: !!state.iron || (k === 'zachrance' && !state.rescued), sarm: k === 'charisma', nabiti: !ACTIVE.includes(k) };
   const pool = Object.keys(PERKS).filter((p) => !has(state, p) && !useless[p]);
   const out = [];
   while (out.length < 3 && pool.length) out.push(pool.splice(Math.floor(random(state) * pool.length), 1)[0]);
