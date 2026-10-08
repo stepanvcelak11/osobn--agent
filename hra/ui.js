@@ -6,6 +6,18 @@ import { LEVELS, levelOf, MASTERY, LEVEL_TEXT, TREE, TREE_MAX, RELICS, RELIC_SLO
 import { ARCS, PACKS, REPS, TRAITS, EDU, AMBITIONS, TITLES, COUNCIL_MAX, CARES, repName, councilCandidates, appoint, dismiss, ambById, ambProgress, rivalName, dailyCard, simVotes, FACTIONS, FACTION_REVOLT, PROJECTS, PROJECT_MONTHS, albumPeople, whoOf, master, chargeOf, ENDINGS_PAST, offerPerks, skipCard, bestDir, sageHint, shiftMeter, SHIFT, newGame, newBlitz, newRun, daily, touches, seesAhead, personOf, seasonOf, SEASON_NAMES, RIVALS, MODS, BRANCHES, WONDERS, modBonus, ageOf, leaderTitle, hasElections, lawAllowed, AGES, AGE_LEN, choose, nextLeader, currentCard, cardById, preview, outcome, optionOf, unlocked, skip, nudge, reformLaw, choosePerk, ready, tenure, timeLabel, danger, kindOf, upgrade, activeLaws, seals, taskById, taskProgress, seesDirection, toElection, support, KINDS, ACTIVE, CHARGE, NUDGE, METERS, ENDINGS, LAWS, TASKS, ERAS, SPECIAL, PEOPLE, REL_LOYAL, PERKS, CRISES, ELECTION, VOTE_MIN, BLITZ_START, BLITZ_BONUS, BLITZ_FALL } from './game.js';
 
 const SAVE = 'rovnovaha.save';
+const calm = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
+// Okna a nabídka se zavírají animovaně: místo okamžitého odebrání nejdřív dojedou dolů a zmizí.
+const plainRemove = Element.prototype.remove;
+Element.prototype.remove = function remove() {
+  const cl = this.classList;
+  if (cl && (cl.contains('pop') || cl.contains('menu')) && !cl.contains('closing') && this.isConnected && !calm()) {
+    cl.add('closing');
+    setTimeout(() => plainRemove.call(this), 200);
+    return;
+  }
+  plainRemove.call(this);
+};
 const app = document.getElementById('app');
 let state = load();
 
@@ -613,7 +625,7 @@ function updateBag() {
 }
 /** Jednorázové pomůcky (jen v hlavní hře – ve výzvách a bleskovce by to nebylo fér). */
 function bag() {
-  if (busy || state.dead || document.querySelector('.pop')) return;
+  if (busy || state.dead || document.querySelector('.pop:not(.closing)')) return;
   const p = document.createElement('div');
   p.className = 'pop';
   p.innerHTML = `
@@ -784,6 +796,7 @@ function render(enter) {
   const c = currentCard(state);
   document.body.style.setProperty('--scene', mix(c.person.color, '#0d0c0b', 0.8));
   ui.q.firstElementChild.textContent = c.text;
+  if (enter) { const q = ui.q.firstElementChild; q.style.animation = 'none'; void q.offsetWidth; q.style.animation = ''; }
   ui.person.textContent = c.person.name;
   $('#mood').innerHTML = mood(state.rel?.[c.who] ?? 0, REL_LOYAL);
   // Pod kartou leží další: je vidět, kdo přijde (při tažení se odkryje celá).
@@ -962,7 +975,7 @@ function setupDrag(card) {
 
 document.addEventListener('keydown', (e) => {
   const dir = { ArrowLeft: 'left', ArrowRight: 'right', ArrowUp: 'up', ArrowDown: 'down' }[e.key];
-  if (dir && ui && document.contains(ui.card) && state && !state.dead && !document.querySelector('.menu, .pop')) { e.preventDefault(); tapDir(dir); }
+  if (dir && ui && document.contains(ui.card) && state && !state.dead && !document.querySelector('.menu:not(.closing), .pop:not(.closing)')) { e.preventDefault(); tapDir(dir); }
 });
 
 // ── Schopnosti: odložit kartu / posunout ukazatel ─────
@@ -1020,7 +1033,9 @@ function nextToast() {
     traitor: 'key', traitorHint: 'key', traitorStrike: 'crisis', built: 'era', pact: 'globe', golden: 'sun', season: 'sun', kid: 'people', rep: 'people', arc: 'book', amb: 'task', echo: 'book' }[m.kind];
   t.innerHTML = (ic ? icon(ic, 'ico sm') : '') + `<span>${esc(m.text)}</span>`;
   document.body.appendChild(t);
-  setTimeout(() => { t.remove(); toasts.shift(); nextToast(); }, m.kind ? 2800 : 1800);
+  const life = m.kind ? 2600 : 1600;
+  setTimeout(() => t.classList.add('out'), life);
+  setTimeout(() => { t.remove(); toasts.shift(); nextToast(); }, life + 220);
 }
 /** Zprávy ze hry (zákon, úkol, éra) jako krátké oznámení. */
 function showNews() {
@@ -1092,7 +1107,7 @@ function perkList() {
 
 /** Po splněném úkolu: vyber jednu ze tří výhod (do konce vlády). */
 function offerPerk() {
-  if (!state.perkOffer || document.querySelector('.pop.perks')) return;
+  if (!state.perkOffer || document.querySelector('.pop.perks:not(.closing)')) return;
   const p = document.createElement('div');
   p.className = 'pop perks';
   p.innerHTML = `
@@ -1165,7 +1180,7 @@ function steer(id, pop) {
 
 // ── Ukazatel: stav, význam a co ho ovlivňuje ─────────
 function meterInfo(id) {
-  if (busy || document.querySelector('.pop')) return;
+  if (busy || document.querySelector('.pop:not(.closing)')) return;
   const m = METERS.find((x) => x.id === id), v = state.meters[id], d = danger(v);
   const side = v < 50 ? m.low : m.high;
   const status = d < 0.45 ? ['ok', 'V rovnováze'] : d < 0.7 ? ['warn', `Pozor – blíží se ${side.toLowerCase()}`] : ['bad', `Nebezpečí – hrozí ${side.toLowerCase()}`];
@@ -1295,12 +1310,12 @@ const LINE_C = { fin: '#e0b84a', lid: '#e07a5f', sil: '#9aa8bd', ved: '#5fa8e0',
 function reignGraph(trace = state.trace ?? [], marks = state.marks ?? []) {
   if (trace.length < 2) return '';
   const W = 300, H = 110, n = trace.length - 1, x = (i) => ((i / n) * W).toFixed(1), y = (v) => (H - (v / 100) * H).toFixed(1);
-  const lines = METERS.map((m, j) => `<polyline points="${trace.map((row, i) => `${x(i)},${y(row[j])}`).join(' ')}" stroke="${LINE_C[m.id]}"/>`).join('');
+  const lines = METERS.map((m, j) => `<polyline pathLength="1" style="animation-delay:${j * 70}ms" points="${trace.map((row, i) => `${x(i)},${y(row[j])}`).join(' ')}" stroke="${LINE_C[m.id]}"/>`).join('');
   const mk = marks.filter((k) => k.t <= n).map((k) => k.kind === 'big'
-    ? `<circle cx="${x(k.t)}" cy="${H - 3}" r="2.2" class="gm big"/>` : `<line x1="${x(k.t)}" x2="${x(k.t)}" y1="0" y2="${H}" class="gm ${k.kind}"/>`).join('');
+    ? `<circle cx="${x(k.t)}" cy="${H - 3}" r="2.2" class="gm bd"/>` : `<line x1="${x(k.t)}" x2="${x(k.t)}" y1="0" y2="${H}" class="gm ${k.kind}"/>`).join('');
   return `<div class="graph"><svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-label="Graf vlády">
       <rect x="0" y="${y(70)}" width="${W}" height="${(H * 0.4).toFixed(1)}" class="calm"/><line x1="0" x2="${W}" y1="${y(50)}" y2="${y(50)}" class="mid"/>${mk}<g class="gl">${lines}</g></svg>
-    <div class="glegend">${METERS.map((m) => `<span><i style="background:${LINE_C[m.id]}"></i>${m.name}</span>`).join('')}<span><i class="gk crisis"></i>krize</span><span><i class="gk war"></i>válka</span><span><i class="gk big"></i>velké rozhodnutí</span></div></div>`;
+    <div class="glegend">${METERS.map((m) => `<span><i style="background:${LINE_C[m.id]}"></i>${m.name}</span>`).join('')}<span><i class="gk crisis"></i>krize</span><span><i class="gk war"></i>válka</span><span><i class="gk bd"></i>velké rozhodnutí</span></div></div>`;
 }
 /** Obrázek s výsledkem vlády (erb, délka vlády, konec, graf) – sdílet, nebo uložit. */
 async function shareReign() {
@@ -1543,7 +1558,7 @@ function tickBlitz() {
   const now = performance.now(), dt = now - blitz.last;
   blitz.last = now;
   // Čas stojí v nabídce, v oknech, mimo herní obrazovku a když je aplikace na pozadí.
-  if (document.hidden || !ui || document.querySelector('.pop, .menu')) return;
+  if (document.hidden || !ui || document.querySelector('.pop:not(.closing), .menu:not(.closing)')) return;
   blitz.left -= dt;
   updateClock();
   if (blitz.left <= 0) endBlitz();
@@ -1667,7 +1682,7 @@ function helpScreen(back) {
   app.innerHTML = `
     <div class="sheet help">
       <h3>Jak hrát</h3>
-      <ul>
+      <details class="hsec" open><summary>Základy</summary><ul>
         <li>Za tebou chodí ministři, generálové, vědci i obyčejní lidé. Každá karta má <b>čtyři možnosti</b> – táhni ji
           <b>doleva, doprava, nahoru, nebo dolů</b>. Volbu uvidíš, ještě než kartu pustíš; když si to rozmyslíš, vrať ji doprostřed.</li>
         <li>Můžeš také klepnout na šipku u karty (ukáže volbu) a klepnutím znovu ji potvrdit.</li>
@@ -1677,48 +1692,58 @@ function helpScreen(back) {
         <li>Po rozhodnutí se dotčené ukazatele na chvíli obarví: <b style="color:var(--sky)">modře, když stouply</b> (nebe nahoře),
           <b style="color:var(--grass)">zeleně, když klesly</b> (tráva dole).</li>
         <li>Klepnutím na ukazatel zjistíš jeho stav, co znamená a co ho zvyšuje nebo snižuje.</li>
+        <li><b>Čti karty.</b> Kdo odpoví rychleji než za vteřinu, nečte – další karta (s červeným rámečkem) mu pak jen uškodí, ať zvolí cokoli. V bleskovce to neplatí.</li>
+        <li><b>Čím déle vládneš, tím víc rozhodnutí váží</b> – na začátku vlády mají účinek 1,8×, po čtyřech letech 2,6×. Nový vůdce začíná zase mírněji.</li>
         <li>Rozhodnutí mají následky – některá se ti vrátí za pár měsíců. Když padneš, úřad převezme nástupce, ale svět si pamatuje, co se stalo.</li>
+      </ul></details>
+      <details class="hsec"><summary>Vůdci a schopnosti</summary><ul>
         <li><b>Typy vůdců</b> – každý má jednu schopnost (ikona vpravo nahoře):<br>${KINDS.map((k) => `<b>${k.m}</b> – ${k.text}`).join('<br>')}</li>
+        <li><b>Výhody:</b> za splněný úkol si vybereš jednu ze tří výhod (třeba Brzda, Druhá šance nebo Zvědové). Platí do konce vlády.</li>
+        <li><b>Dynastie:</b> každý typ vůdce sbírá zkušenost (měsíce vlády) a roste na úroveň 2–4 – na úrovni 3 je mistr se silnější schopností. Za body kupuješ trvalá vylepšení stromu dynastie.</li>
+      </ul></details>
+      <details class="hsec"><summary>Vláda</summary><ul>
         <li><b>Lidé si pamatují.</b> Komu pomůžeš, ten ti bude věrný (srdíčko u jména) a přijde s pomocí. Komu škodíš, rozzlobí se (blesk) – a jednou si to vybere.</li>
         <li><b>Zákony</b> platí, dokud je někdo nezruší, a každý měsíc pomalu posouvají ukazatele. Platí i pro nástupce.</li>
         <li><b>Úkoly:</b> každý vůdce dostane úkol. Splněný úkol je pečeť – pečetě a čas otevírají nové éry světa a tajné příběhy s legendárními konci.</li>
         <li>Některé volby se odemknou, jen když je země silná v něčem (třeba v diplomacii) – poznáš je podle <b>klíče</b>.</li>
+        <li><b>Volby</b> jsou každé 4 roky. Hlasy ti dají Lid a Spojenci – když je jejich průměr pod ${VOTE_MIN} %, prohraješ a vláda končí. Půl roku předem tě varují.</li>
+        <li><b>Krize</b> (epidemie, povodeň, útok na síť) trvají několik karet. Když zvládneš většinu kroků, země z toho vyjde silnější, jinak to bolí.</li>
+        <li><b>Frakce</b> (Kněží, Kupci, Vojsko, Učenci) se zlobí, když jejich ukazatel dlouho klesá – nakonec se vzbouří. <b>Zvěsti</b> můžou a nemusí být pravda, a některá rozhodnutí se ti vrátí až po letech.</li>
+        <li><b>Dlouhé krajnosti</b> mají následky (hladomor, fanatici, vojáci nad zákonem…), dlouhý klid přinese zlatý věk.</li>
+        <li><b>Pověst:</b> podle tvých rozhodnutí ti lidé začnou říkat Tyran, Dobrotivý, Lakomec, Učenec nebo Zbožný. Pověst mění, jak silně na tebe ukazatele reagují, a přivádí vlastní karty.</li>
+        <li><b>Královská rada:</b> ve Stavu republiky jmenuj až 3 rádce z lidí, kteří ti věří. Každý tlumí pokles svého ukazatele. Rozzlobený rádce zradí.</li>
+        <li><b>Osobní ambice:</b> každý vůdce má vlastní cíl – za splnění body a zápis do kroniky. <b>Tituly rodu</b> (Dynastie) dávají malý trvalý bonus.</li>
+      </ul></details>
+      <details class="hsec"><summary>Svět a dějiny</summary><ul>
         <li><b>Dějiny lidstva:</b> začneš jako náčelník kmene v pravěku. Každá doba (pravěk, starověk, středověk, novověk, moderní doba, současnost, budoucnost) má vlastní postavy, karty a konce. Po čase přijde přelomový objev – když ho přijmeš, svět se posune dál. Volby jsou až od moderní doby, zákony podle doby.</li>
         <li><b>Cesta dějin:</b> každý přelom nabízí dva objevy (třeba knihtisk, nebo střelný prach). Tvoje volba otevře jiné karty v další době.</li>
         <li><b>Divy světa:</b> v každé době můžeš postavit velkou stavbu. Stavba trvá několik karet; hotový div navždy drží jeden ukazatel u rovnováhy.</li>
+        <li><b>Velké stavby:</b> na začátku vlády můžeš začít stavět. Stavba stojí zásoby každý měsíc a po dokončení navždy drží svůj ukazatel u rovnováhy. Kdo vládne aspoň 3 roky, předá nástupci jednu výhodu a věrné lidi.</li>
         <li><b>Sousední říše</b> (v dávných dobách) sílí s časem. Obchoduj, uzavírej spojenectví, plať tribut, nebo válči – válku rozhoduje tvoje Síla proti síle souseda. Slabého souseda můžeš pohltit.</li>
+        <li><b>Sousední rod</b> má vlastního vládce a pamatuje si tě i po tvém pádu. Sňatek drží mír, obchodní smlouva přináší zásoby.</li>
         <li><b>Roční období:</b> zima ubírá zásoby, jaro pomáhá přírodě, léto lidem, podzim přináší úrodu. Občas přijde tuhá zima, povodně, sucho nebo bohatá úroda. Každé období má vlastní karty.</li>
         <li><b>Zrádci:</b> občas někdo z tvých blízkých začne vynášet tajemství. Když ho vyšetřovatel včas neodhalí, zradí tě.</li>
-        <li><b>Dynastie:</b> každý typ vůdce sbírá zkušenost (měsíce vlády) a roste na úroveň 2–4 – na úrovni 3 je mistr se silnější schopností. Za body kupuješ trvalá vylepšení stromu dynastie.</li>
-        <li><b>Sbírka:</b> album postav, galerie konců, relikvie (najdeš je za dlouhé vlády, legendy, divy a nové doby; nasadíš dvě) a vzhledy karet.</li>
-        <li><b>Frakce</b> (Kněží, Kupci, Vojsko, Učenci) se zlobí, když jejich ukazatel dlouho klesá – nakonec se vzbouří. <b>Zvěsti</b> můžou a nemusí být pravda, a některá rozhodnutí se ti vrátí až po letech.</li>
-        <li><b>Velké stavby:</b> na začátku vlády můžeš začít stavět. Stavba stojí zásoby každý měsíc a po dokončení navždy drží svůj ukazatel u rovnováhy. Kdo vládne aspoň 3 roky, předá nástupci jednu výhodu a věrné lidi.</li>
-        <li><b>Kampaň:</b> 10 kapitol s pevným zadáním, hodnocení hvězdami. <b>Prestiž:</b> po dosažení budoucnosti začni znovu od pravěku – těžší, ale s víc body.</li>
-        <li><b>Pověst:</b> podle tvých rozhodnutí ti lidé začnou říkat Tyran, Dobrotivý, Lakomec, Učenec nebo Zbožný. Pověst mění, jak silně na tebe ukazatele reagují, a přivádí vlastní karty.</li>
-        <li><b>Děti a dědicové:</b> během vlády se rodí děti s vlastností; výchovou (vojenská, církevní, učená, dvorská) je připravíš. Po pádu si můžeš vybrat dědice z rodu – dostane výhodu podle vlastnosti a jeho ukazatel se mění méně. V kronice uvidíš rodokmen.</li>
-        <li><b>Královská rada:</b> ve Stavu republiky jmenuj až 3 rádce z lidí, kteří ti věří. Každý tlumí pokles svého ukazatele. Rozzlobený rádce zradí.</li>
-        <li><b>Sousední rod</b> má vlastního vládce a pamatuje si tě i po tvém pádu. Sňatek drží mír, obchodní smlouva přináší zásoby.</li>
         <li><b>Příběhy:</b> delší linie na několik karet s větvením a více konci (Sbírka → Příběhy). <b>Balíčky karet</b> (Mořeplavci, Mor, Průmyslová revoluce, Vesmírná kolonie) koupíš v obchodě.</li>
-        <li><b>Osobní ambice:</b> každý vůdce má vlastní cíl – za splnění body a zápis do kroniky. <b>Tituly rodu</b> (Dynastie) dávají malý trvalý bonus.</li>
+      </ul></details>
+      <details class="hsec"><summary>Rod a postup</summary><ul>
+        <li><b>Děti a dědicové:</b> během vlády se rodí děti s vlastností; výchovou (vojenská, církevní, učená, dvorská) je připravíš. Po pádu si můžeš vybrat dědice z rodu – dostane výhodu podle vlastnosti a jeho ukazatel se mění méně. V kronice uvidíš rodokmen.</li>
+        <li><b>Sbírka:</b> album postav, galerie konců, relikvie (najdeš je za dlouhé vlády, legendy, divy a nové doby; nasadíš dvě) a vzhledy karet.</li>
+        <li><b>Kampaň:</b> 10 kapitol s pevným zadáním, hodnocení hvězdami. <b>Prestiž:</b> po dosažení budoucnosti začni znovu od pravěku – těžší, ale s víc body.</li>
         <li><b>Železný režim:</b> žádné záchrany, pomůcky ani rady – ale dvojnásobek bodů. <b>Karta dne</b> na úvodní obrazovce: jedna karta pro všechny a jak by volilo 100 simulovaných vládců.</li>
         <li>Po pádu vlády uvidíš <b>graf vlády</b> a výsledek můžeš <b>sdílet</b> jako obrázek.</li>
-        <li><b>Čti karty.</b> Kdo odpoví rychleji než za vteřinu, nečte – další karta (s červeným rámečkem) mu pak jen uškodí, ať zvolí cokoli. V bleskovce to neplatí.</li>
-        <li><b>Čím déle vládneš, tím víc rozhodnutí váží</b> – na začátku vlády mají účinek 1,8×, po čtyřech letech 2,6×. Nový vůdce začíná zase mírněji.</li>
-        <li><b>Dlouhé krajnosti</b> mají následky (hladomor, fanatici, vojáci nad zákonem…), dlouhý klid přinese zlatý věk.</li>
-        <li><b>Ztížení</b> (při založení hry) – hladová léta, nevraživí sousedé, bouřlivá doba, hnízdo zrádců – násobí skóre vlády.</li>
+        <li><b>Body a obchod:</b> za dlouhé vlády (1, 3 a 6 let; se ztížením dvojnásob), úkoly, úspěchy, výzvy, bleskovku a vítězství v souboji dostáváš body. V obchodě za ně odemkneš další vůdce (na začátku je volných pět) a koupíš pomůcky: radu mudrce, výhodu do začátku, štít, přeskočení karty, posun ukazatele, vrácení tahu nebo balíčky karet.</li>
+        <li>Sbírej všech <b>${15 + Object.keys(SPECIAL).length} konců</b> a překonej svou nejdelší vládu.</li>
+      </ul></details>
+      <details class="hsec"><summary>Režimy a statistiky</summary><ul>
         <li><b>Výzvy:</b> denní výzva v roce 2089 i v Dějinách a týdenní výzva se třemi vládci.</li>
-        <li><b>Hra pro dva:</b> bleskovka pro dva naráz. Obrazovka se rozdělí – jeden hraje zespodu, druhý shora (jeho polovina je otočená). Každý má vlastního vůdce a vlastní hodiny; vyhrává, kdo se dostane nejdál.</li>
-        <li><b>Body a obchod:</b> za dlouhé vlády (2, 5, 10 let; se ztížením dvojnásob), úkoly, úspěchy, výzvy, bleskovku a vítězství v souboji dostáváš body. V obchodě za ně odemkneš další vůdce (na začátku je volných pět) a koupíš pomůcky: radu, přeskočení karty, vyrovnání ukazatele nebo štít.</li>
-        <li><b>Výhody:</b> za splněný úkol si vybereš jednu ze tří výhod (třeba Brzda, Druhá šance nebo Zvědové). Platí do konce vlády.</li>
-        <li><b>Volby</b> jsou každé 4 roky. Hlasy ti dají Lid a Spojenci – když je jejich průměr pod ${VOTE_MIN} %, prohraješ a vláda končí. Půl roku předem tě varují.</li>
-        <li><b>Krize</b> (epidemie, povodeň, útok na síť) trvají několik karet. Když zvládneš většinu kroků, země z toho vyjde silnější, jinak to bolí.</li>
-        <li><b>Bleskovka:</b> hra na čas. Začínáš se 3 minutami, každé rozhodnutí přidá 5 s, pád vlády 15 s ubere. Počítá se, kolik rozhodnutí stihneš.</li>
         <li><b>Denní výzva:</b> každý den nový začátek a typ vůdce – stejný pro všechny. Jedna vláda, počítá se, jak dlouho vydržíš. Hraj ji každý den a buduj sérii.</li>
+        <li><b>Bleskovka:</b> hra na čas. Začínáš se 3 minutami, každé rozhodnutí přidá 5 s, pád vlády 15 s ubere. Počítá se, kolik rozhodnutí stihneš.</li>
+        <li><b>Hra pro dva:</b> bleskovka pro dva naráz. Obrazovka se rozdělí – jeden hraje zespodu, druhý shora (jeho polovina je otočená). Každý má vlastního vůdce a vlastní hodiny; vyhrává, kdo se dostane nejdál.</li>
+        <li><b>Ztížení</b> (při založení hry) – hladová léta, nevraživí sousedé, bouřlivá doba, hnízdo zrádců – násobí skóre vlády.</li>
         <li><b>Úspěchy:</b> 26 odznaků za výjimečné vlády (Harmonie, O vlásek, Dynastie…). Najdeš je ve statistikách.</li>
         <li><b>Statistiky</b> ukazují tvoje hodnocení (od Nováčka po Legendu republiky), nejdelší vlády a rekordy z bleskovky.</li>
-        <li>Sbírej všech <b>${15 + Object.keys(SPECIAL).length} konců</b> a překonej svou nejdelší vládu.</li>
         <li>Hra běží i offline. V Safari dej <b>Sdílet → Přidat na plochu</b> a hraj jako aplikaci.</li>
-      </ul>
+      </ul></details>
       <button class="primary" id="back">Zpět</button>
     </div>`;
   $('#back').onclick = back;

@@ -1,5 +1,5 @@
 /* Rovnováha – tmavý, klidný vzhled. Téměř černé pozadí šetří baterii (OLED), teplý tlumený text šetří oči.
-   Jediná animace je pohyb karty (jen transform/opacity – plynulé i na slabším telefonu). */
+   Animace jen přes transform/opacity (plynulé i na slabším telefonu); kdo má v systému omezený pohyb, animace nevidí. */
 :root {
   --bg: #0d0c0b;
   --bg1: #1b1916;
@@ -554,10 +554,10 @@ body.skin-hvezdy .card:not(.next) { box-shadow: 0 0 0 2px #fff6, 0 0 30px #8fb4f
 .graph .calm { fill: #ffffff0d; } .graph .mid { stroke: #ffffff30; stroke-dasharray: 3 3; stroke-width: 1; }
 .graph .gl polyline { fill: none; stroke-width: 1.6; vector-effect: non-scaling-stroke; stroke-linejoin: round; opacity: .9; }
 .graph .gm { stroke-width: 1.4; vector-effect: non-scaling-stroke; } .graph .gm.crisis { stroke: var(--bad); opacity: .6; } .graph .gm.war { stroke: var(--warn); opacity: .6; }
-.graph circle.gm.big { fill: #fff; opacity: .8; }
+.graph circle.gm.bd { fill: #fff; opacity: .8; }
 .glegend { display: flex; flex-wrap: wrap; gap: 4px 10px; font-size: 11px; color: var(--dim); margin-top: 6px; }
 .glegend i { display: inline-block; width: 10px; height: 3px; border-radius: 2px; margin-right: 4px; vertical-align: middle; }
-.glegend .gk.crisis { background: var(--bad); } .glegend .gk.war { background: var(--warn); } .glegend .gk.big { background: #fff; width: 5px; height: 5px; border-radius: 50%; }
+.glegend .gk.crisis { background: var(--bad); } .glegend .gk.war { background: var(--warn); } .glegend .gk.bd { background: #fff; width: 5px; height: 5px; border-radius: 50%; }
 .heirs { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 6px; }
 .heir { display: flex; gap: 8px; align-items: center; text-align: left; padding: 8px 10px; min-width: 0; }
 .heir span { min-width: 0; } .heir b { display: block; font-size: 14px; } .heir small { display: block; font-size: 11px; color: var(--dim); }
@@ -591,3 +591,132 @@ body.skin-hvezdy .card:not(.next) { box-shadow: 0 0 0 2px #fff6, 0 0 30px #8fb4f
 .glegend span { white-space: nowrap; display: inline-flex; align-items: center; }
 .past:has(> .unlock) { align-items: center; padding: 6px 0; }
 .past > .unlock { flex: none; }
+
+/* ══ Vizuální vyladění: přechody obrazovek, okna, oznámení, seznamy ══ */
+:root { --ease: cubic-bezier(.2, .9, .3, 1); --spring: cubic-bezier(.34, 1.4, .5, 1); }
+
+/* Obrazovky přijíždějí jemně zdola, jejich obsah postupně (kaskáda). */
+.start, .sheet { animation: screenin .34s var(--ease) both; }
+@keyframes screenin { from { opacity: 0; transform: translateY(14px); } }
+.sheet > *, .start > *, .col > *, .modes > *, .shoplist > *, .mlist > *, .heirs > *, .album > *, .lineage > *, .stats > * {
+  animation: itemin .42s var(--ease) both; }
+@keyframes itemin { from { opacity: 0; transform: translateY(10px); } }
+:is(.sheet, .start, .col, .modes, .shoplist, .mlist, .heirs, .album, .lineage, .stats) > :nth-child(2) { animation-delay: 30ms; }
+:is(.sheet, .start, .col, .modes, .shoplist, .mlist, .heirs, .album, .lineage, .stats) > :nth-child(3) { animation-delay: 60ms; }
+:is(.sheet, .start, .col, .modes, .shoplist, .mlist, .heirs, .album, .lineage, .stats) > :nth-child(4) { animation-delay: 90ms; }
+:is(.sheet, .start, .col, .modes, .shoplist, .mlist, .heirs, .album, .lineage, .stats) > :nth-child(5) { animation-delay: 120ms; }
+:is(.sheet, .start, .col, .modes, .shoplist, .mlist, .heirs, .album, .lineage, .stats) > :nth-child(6) { animation-delay: 150ms; }
+:is(.sheet, .start, .col, .modes, .shoplist, .mlist, .heirs, .album, .lineage, .stats) > :nth-child(7) { animation-delay: 180ms; }
+:is(.sheet, .start, .col, .modes, .shoplist, .mlist, .heirs, .album, .lineage, .stats) > :nth-child(8) { animation-delay: 210ms; }
+:is(.sheet, .start, .col, .modes, .shoplist, .mlist, .heirs, .album, .lineage, .stats) > :nth-child(n+9) { animation-delay: 240ms; }
+
+/* Herní obrazovka: hlavička a ukazatele se při návratu do hry rozsvítí. */
+body.game .top, body.game .meters { animation: fade .35s ease-out both; }
+body.game .meter { animation: itemin .4s var(--ease) both; }
+body.game .meter:nth-child(2) { animation-delay: 25ms; } body.game .meter:nth-child(3) { animation-delay: 50ms; }
+body.game .meter:nth-child(4) { animation-delay: 75ms; } body.game .meter:nth-child(5) { animation-delay: 100ms; }
+body.game .meter:nth-child(6) { animation-delay: 125ms; } body.game .meter:nth-child(7) { animation-delay: 150ms; }
+
+/* Úvodní obrazovka – vše se vejde na jednu obrazovku. */
+.start { gap: 16px; }
+.start .logo { width: 76px; height: 76px; border-radius: 20px; animation: logo 1s var(--spring) both; }
+@keyframes logo { from { opacity: 0; transform: scale(.6) rotate(-8deg); } }
+.start h1 { font-size: 34px; text-shadow: 0 2px 24px #e0915a40; }
+.start > p { font-size: 15.5px; line-height: 1.5; }
+.modes.grid4 button { padding: 11px 12px; border-radius: 14px; background: linear-gradient(180deg, #ffffff08, #ffffff02); border-color: #ffffff14; }
+.modes.grid4 button:active { background: #e0915a1a; border-color: #e0915a55; }
+@media (max-height: 760px) { .start { gap: 12px; } .start .logo { width: 60px; height: 60px; } .start h1 { font-size: 28px; } .start > p { font-size: 14.5px; } .modes.grid4 button { padding: 8px 10px; } }
+
+/* Nadpisy sekcí s jemnou linkou. */
+.sheet h3 { display: flex; align-items: center; gap: 8px; }
+.sheet h3::after { content: ""; flex: 1; height: 1px; background: linear-gradient(90deg, #e0915a40, transparent); margin-left: 4px; }
+.sheet h3 .dim, .sheet h3 span { font-family: var(--sans); font-size: 13px; font-weight: 400; }
+
+/* Karty v seznamech: jemný přechod, výraznější stisk. */
+.shopitem, .stat, .lvrow, .endrow, .lnbox, .box { background: linear-gradient(180deg, #221f1b, #1a1815); }
+.shopitem { border-radius: 16px; padding: 11px 12px; transition: border-color .2s, background-color .2s; }
+.shopitem.got { border-color: #ffffff17; }
+.mlist { background: linear-gradient(180deg, #24211d, #1c1a17); }
+.mi { transition: background-color .15s; } .mi:active { background: #ffffff0d; transform: none; }
+.unlock { box-shadow: 0 3px 10px #e0915a26; transition: transform .12s, filter .15s, background-color .2s, color .2s; }
+.unlock.on { background: transparent; border: 1px solid var(--accent); color: var(--accent); box-shadow: none; }
+.unlock[disabled] { box-shadow: none; opacity: .75; }
+.rankcard { background: radial-gradient(120% 90% at 50% 0%, #e0915a1f, transparent 70%), var(--bg1); }
+.rankcard .ico.xl { animation: pop .6s var(--spring) both; }
+@keyframes pop { from { opacity: 0; transform: scale(.4); } }
+.seg button { transition: background-color .2s, border-color .2s, color .2s, transform .12s; }
+.tabs { position: sticky; top: -8px; z-index: 2; padding: 6px 0; background: linear-gradient(var(--bg) 70%, transparent); }
+
+/* Okna (vyjíždějí zdola, zavírají se animovaně) a nabídka. */
+.pop, .menu { backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px); }
+.pane { max-height: 88%; overflow-y: auto; box-shadow: 0 -12px 40px #0009; border-top: 1px solid #ffffff14; animation: rise .32s var(--ease); }
+.pane::before, .sheetmenu .grab { content: ""; display: block; width: 38px; height: 4px; border-radius: 2px; background: #ffffff26; margin: -10px auto 0; flex: none; }
+.sheetmenu .grab::before { content: none; }
+@keyframes rise { from { transform: translateY(70px); opacity: 0; } }
+.pop.closing, .menu.closing { animation: fadeout .2s ease-in forwards; pointer-events: none; }
+.pop.closing .pane, .menu.closing .sheetmenu { animation: sink .2s ease-in forwards; }
+@keyframes fadeout { to { opacity: 0; } }
+@keyframes sink { to { transform: translateY(60px); opacity: 0; } }
+.pop.tips .pane, .agesplash .pane { animation: popin .45s var(--spring); }
+@keyframes popin { from { opacity: 0; transform: scale(.85) translateY(20px); } }
+.agesplash .ico.xl { animation: spin-in 1.2s var(--ease) both; }
+@keyframes spin-in { from { opacity: 0; transform: rotate(-120deg) scale(.5); } }
+.perk { transition: transform .12s, border-color .2s; } .perk:active { border-color: var(--accent); }
+.pop.perks .perk { animation: itemin .4s var(--ease) both; } .pop.perks .perk:nth-child(2) { animation-delay: 70ms; } .pop.perks .perk:nth-child(3) { animation-delay: 140ms; }
+
+/* Oznámení: skleněná pilulka, přijede s pružinou a odjede. */
+.toast { background: #2a2622e6; backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); border-color: #ffffff1c; border-radius: 16px;
+  animation: toastin .42s var(--spring) both; font-weight: 500; }
+.toast.out { animation: toastout .22s ease-in forwards; }
+@keyframes toastin { from { opacity: 0; transform: translate(-50%, 14px) scale(.92); } to { opacity: 1; transform: translate(-50%, 0); } }
+@keyframes toastout { to { opacity: 0; transform: translate(-50%, -8px) scale(.96); } }
+.toast.points { border-color: #e0915a88; } .toast.points .ico { animation: pop .5s var(--spring) both; }
+.toast.fall, .toast.crisisLost, .toast.warLost, .toast.traitorStrike { border-color: #d4553f88; } .toast.fall .ico { color: var(--bad); }
+
+/* Karta: měkčí příchod s pružinou, výraznější stín při tažení, volba se plynule objeví. */
+.card.enter { animation: enter .36s var(--spring); }
+@keyframes enter { from { opacity: 0; transform: translateY(18px) scale(.92); } to { opacity: 1; transform: none; } }
+.deck.dragging .card:not(.next) { box-shadow: 0 26px 50px #00000080, 0 0 0 1px #ffffff1c; }
+.card.fly { transition: transform .26s cubic-bezier(.5, 0, .9, .6), opacity .26s ease-in; }
+.opt { transition: opacity .1s linear; backdrop-filter: blur(2px); -webkit-backdrop-filter: blur(2px); letter-spacing: .01em; }
+.question p { animation: textin .4s ease-out both; }
+@keyframes textin { from { opacity: 0; transform: translateY(4px); } }
+.chev { transition: opacity .15s, transform .15s; }
+.chev.on { opacity: 1; color: var(--accent); }
+.stage.rush .card { box-shadow: 0 0 0 2px var(--bad), 0 0 30px #d4553f66; animation: shake .4s ease-in-out; }
+@keyframes shake { 20%, 60% { transform: translateX(-4px); } 40%, 80% { transform: translateX(4px); } }
+
+/* Konec vlády: ikona dopadne, graf se nakreslí. */
+.sheet .big > * { animation: drop .7s var(--spring) both; }
+@keyframes drop { from { opacity: 0; transform: translateY(-30px) scale(.7); } }
+.graph .gl polyline { stroke-dasharray: 1; stroke-dashoffset: 1; animation: draw 1.4s ease-out forwards; }
+@keyframes draw { to { stroke-dashoffset: 0; } }
+.record { animation: pop .6s var(--spring) .3s both; }
+
+/* Průvodce a karta dne. */
+.coach { animation: popin .45s var(--spring) both; backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
+.dcardbox { animation: popin .5s var(--spring) both; }
+.vote .wk i { animation: grow .9s var(--ease) both; transform-origin: left; }
+@keyframes grow { from { transform: scaleX(0); } }
+.bar i, .facbar i, .lvrow .bar i { transition: width .6s var(--ease); animation: grow .8s var(--ease) both; transform-origin: left; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01ms !important; animation-delay: 0ms !important; transition-duration: .01ms !important; }
+}
+.pane > * { flex-shrink: 0; }
+.pop .pane .mlist { max-height: none; overflow: visible; }
+.hsec { background: linear-gradient(180deg, #221f1b, #1a1815); border: 1px solid var(--line); border-radius: 16px; padding: 0 14px; }
+.hsec summary { list-style: none; cursor: pointer; padding: 14px 0; font-family: var(--serif); font-size: 19px; color: var(--accent); display: flex; justify-content: space-between; align-items: center; }
+.hsec summary::-webkit-details-marker { display: none; }
+.hsec summary::after { content: "›"; font-family: var(--sans); font-size: 22px; color: var(--dim); transition: transform .25s var(--ease); }
+.hsec[open] summary::after { transform: rotate(90deg); }
+.hsec ul { margin: 0 0 12px; padding-left: 18px; animation: itemin .3s var(--ease); }
+.hsec li { margin-bottom: 9px; line-height: 1.5; }
+/* Konec vlády: hlavní tlačítko je pořád po ruce (lepí se ke spodku). */
+.sheet #next { position: sticky; bottom: 0; z-index: 4; box-shadow: 0 -10px 24px var(--bg), 0 6px 18px #e0915a33; }
+/* Štítky pod kartou (rada, volby, neklid…) jako drobné pilulky. */
+.advice { gap: 5px 6px; margin-top: 6px; }
+.advice > span { display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; border-radius: 999px; background: #ffffff0b; border: 1px solid #ffffff12;
+  animation: itemin .35s var(--ease) both; }
+.advice > span:has(.warn) { background: #e3b86012; border-color: #e3b86040; }
+.name > b { animation: fade .3s ease-out; }
