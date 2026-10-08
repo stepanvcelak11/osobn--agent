@@ -88,7 +88,7 @@ export function cardById(id) { return BY_ID.get(id); }
 
 /// Typy prezidenta – každý má jednu schopnost.
 export const KINDS = [
-  { id: 'vize', short: 'Vizionář', m: 'Vizionář', f: 'Vizionářka', icon: '🔭', text: 'Při tažení vidí, jestli volba ukazatel zvedne, nebo sníží – ale ne o kolik.' },
+  { id: 'vize', short: 'Vizionář', m: 'Vizionář', f: 'Vizionářka', icon: '🔭', text: 'Při tažení vidí u poloviny dotčených ukazatelů, jestli stoupnou, nebo klesnou (u ostatních jen tečku) – a nikdy ne o kolik.' },
   { id: 'krize', short: 'Krizový', m: 'Krizový manažer', f: 'Krizová manažerka', icon: '🧯', text: 'Když je ukazatel v krajnosti (pod 30 % nebo nad 70 %), kroky zpět k rovnováze mají dvojnásobný účinek.' },
   { id: 'odklad', short: 'Vyčkávač', m: 'Vyčkávač', f: 'Vyčkávačka', icon: '⏭️', text: 'Po každých 5 rozhodnutích může jednu kartu odložit – nic se nestane a jde se dál.' },
   { id: 'kormidlo', short: 'Kormidelník', m: 'Kormidelník', f: 'Kormidelnice', icon: '🧭', text: 'Po každých 5 rozhodnutích může jeden ukazatel posunout o 15 bodů k rovnováze.' },
@@ -131,6 +131,16 @@ export const chargeOf = (state) => CHARGE - (master(state) && ['odklad', 'kormid
 export const kindOf = (state) => KINDS.find((k) => k.id === state.leader.kind) || KINDS[0];
 export const has = (state, perk) => (state.perks ?? []).includes(perk);
 /** Vidí vůdce směr změn / další kartu? (typ, nebo výhoda) */
+/** Kterým ukazatelům vůdce vidí směr změny: Vizionář (a Prorok mistr) polovině dotčených, aspoň jednomu;
+ *  mistr Vizionář a výhoda Čtení lidí všem. Výběr je pevný pro danou kartu a volbu (při tažení neskáče). */
+export function revealed(state, dir) {
+  if (!seesDirection(state)) return new Set();
+  const e = optionOf(state, cardById(state.card) || INTRO, dir)?.e ?? {};
+  const keys = Object.keys(e).filter((k) => e[k]);
+  if (has(state, 'smer') || (state.leader.kind === 'vize' && master(state))) return new Set(keys);
+  const h = (k) => [...`${state.card}|${dir}|${k}|${state.total}`].reduce((a, c) => (Math.imul(a, 31) + c.charCodeAt(0)) >>> 0, 7);
+  return new Set(keys.sort((a, b) => h(a) - h(b)).slice(0, Math.max(1, Math.floor(keys.length / 2))));
+}
 export const seesDirection = (state) => state.leader.kind === 'vize' || has(state, 'smer') || (state.leader.kind === 'prorok' && master(state));
 /** Kdo přijde příště, vidí každý (karta pod kartou). Prorok a výhoda Zvědové navíc vidí, co další karta ovlivní. */
 export const seesAhead = (state) => state.leader.kind === 'prorok' || has(state, 'nahled') || relic(state, 'kompas');
@@ -1028,7 +1038,7 @@ function progressTask(state) {
 /** Tři náhodné výhody, které vůdce ještě nemá a které mu k něčemu jsou. */
 export function offerPerks(state) {
   const k = state.leader.kind;
-  const useless = { smer: k === 'vize', nahled: k === 'prorok', sance: k === 'zachrance' && !state.rescued, sarm: k === 'charisma', nabiti: !ACTIVE.includes(k) };
+  const useless = { smer: k === 'vize' && master(state), nahled: k === 'prorok', sance: k === 'zachrance' && !state.rescued, sarm: k === 'charisma', nabiti: !ACTIVE.includes(k) };
   const pool = Object.keys(PERKS).filter((p) => !has(state, p) && !useless[p]);
   const out = [];
   while (out.length < 3 && pool.length) out.push(pool.splice(Math.floor(random(state) * pool.length), 1)[0]);

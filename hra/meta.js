@@ -6,7 +6,7 @@
 export const LEVELS = [0, 36, 120, 300];
 export const levelOf = (xp = 0) => LEVELS.filter((n) => xp >= n).length;
 export const MASTERY = {
-  vize: 'Vidí i velikost změny – velká změna má plnou tečku.',
+  vize: 'Vidí směr u všech dotčených ukazatelů, ne jen u poloviny.',
   krize: 'Za krajnost bere už ukazatel pod 35 % nebo nad 65 %.',
   odklad: 'Schopnost se nabije už po 4 rozhodnutích.',
   kormidlo: 'Schopnost se nabije po 4 rozhodnutích a posune o 20 bodů.',

@@ -3,7 +3,7 @@ import { portrait, meterIcon, glyph, icon, mood, mix } from './art.js';
 import { duelSetup } from './duel.js';
 import { AMB_POINTS } from './court.js';
 import { LEVELS, levelOf, MASTERY, LEVEL_TEXT, TREE, TREE_MAX, RELICS, RELIC_SLOTS, SKINS, PRESTIGE_BONUS, ROMAN, CAMPAIGN } from './meta.js';
-import { ARCS, PACKS, REPS, TRAITS, EDU, AMBITIONS, TITLES, COUNCIL_MAX, CARES, repName, councilCandidates, appoint, dismiss, ambById, ambProgress, rivalName, dailyCard, simVotes, FACTIONS, FACTION_REVOLT, PROJECTS, PROJECT_MONTHS, albumPeople, whoOf, master, chargeOf, ENDINGS_PAST, offerPerks, skipCard, bestDir, sageHint, shiftMeter, SHIFT, newGame, newBlitz, newRun, daily, touches, seesAhead, personOf, seasonOf, SEASON_NAMES, RIVALS, MODS, BRANCHES, WONDERS, modBonus, ageOf, leaderTitle, hasElections, lawAllowed, AGES, AGE_LEN, choose, nextLeader, currentCard, cardById, preview, outcome, optionOf, unlocked, skip, nudge, reformLaw, choosePerk, ready, tenure, timeLabel, danger, kindOf, upgrade, activeLaws, seals, taskById, taskProgress, seesDirection, toElection, support, KINDS, ACTIVE, CHARGE, NUDGE, METERS, ENDINGS, LAWS, TASKS, ERAS, SPECIAL, PEOPLE, REL_LOYAL, PERKS, CRISES, ELECTION, VOTE_MIN, BLITZ_START, BLITZ_BONUS, BLITZ_FALL } from './game.js';
+import { ARCS, PACKS, REPS, TRAITS, EDU, AMBITIONS, TITLES, COUNCIL_MAX, CARES, repName, councilCandidates, appoint, dismiss, ambById, ambProgress, rivalName, dailyCard, simVotes, FACTIONS, FACTION_REVOLT, PROJECTS, PROJECT_MONTHS, albumPeople, whoOf, master, chargeOf, ENDINGS_PAST, offerPerks, skipCard, bestDir, sageHint, shiftMeter, SHIFT, newGame, newBlitz, newRun, daily, touches, seesAhead, personOf, seasonOf, SEASON_NAMES, RIVALS, MODS, BRANCHES, WONDERS, modBonus, ageOf, leaderTitle, hasElections, lawAllowed, AGES, AGE_LEN, choose, nextLeader, currentCard, cardById, preview, outcome, optionOf, unlocked, skip, nudge, reformLaw, choosePerk, ready, tenure, timeLabel, danger, kindOf, upgrade, activeLaws, seals, taskById, taskProgress, seesDirection, revealed, toElection, support, KINDS, ACTIVE, CHARGE, NUDGE, METERS, ENDINGS, LAWS, TASKS, ERAS, SPECIAL, PEOPLE, REL_LOYAL, PERKS, CRISES, ELECTION, VOTE_MIN, BLITZ_START, BLITZ_BONUS, BLITZ_FALL } from './game.js';
 
 const SAVE = 'rovnovaha.save';
 const calm = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -93,6 +93,7 @@ const TOOLS = {
   preskok: { name: 'Přeskočit kartu', icon: 'odklad', price: 3, text: 'Karta zmizí bez následků, uplyne jen měsíc.' },
   posun: { name: 'Posunout ukazatel', icon: 'kormidlo', price: 3, text: `Posuneš libovolný ukazatel o ${SHIFT} nahoru, nebo dolů – kam potřebuješ.` },
   zpet: { name: 'Vrátit tah', icon: 'undo', price: 4, text: 'Vezme zpět poslední rozhodnutí – karta se vrátí a můžeš volit znovu.' },
+  oko: { name: 'Vidoucí oko', icon: 'vize', price: 3, text: 'U jedné karty uvidíš u každé volby přesně, co se jak změní – směr i velikost.' },
 };
 let undoSnap = null;
 /// Kdo odpoví rychleji než za vteřinu, nečte – další karta mu jen uškodí (ne v bleskovce).
@@ -647,7 +648,15 @@ function spendTool(id) {
   if (!stats.items[id]) delete stats.items[id];
   saveStats();
 }
+/** Vidoucí oko platí jen pro kartu, u které ho hráč použil. */
+const eyeOn = () => state?.eye === `${state.total}:${state.card}`;
 function useTool(id, pop) {
+  if (id === 'oko') {
+    if (eyeOn()) { toast('Vidoucí oko už na téhle kartě působí'); return; }
+    state.eye = `${state.total}:${state.card}`;
+    spendTool(id); pop.remove(); save(); current = null; render(false);
+    toast('Vidoucí oko: při tažení vidíš přesně, co se jak změní', 'perk');
+  }
   if (id === 'preskok') {
     const before = { ...state.meters };
     undoSnap = JSON.stringify(state);
@@ -772,6 +781,7 @@ function render(enter) {
   const angry = Object.entries(state.fac ?? {}).filter(([, a]) => a >= FACTION_REVOLT - 2).map(([f]) => FACTIONS[f].name);
   if (angry.length) chips.push(`<span class="warn">${icon('people', 'ico sm')} Neklid: ${angry.join(', ')}</span>`);
   if (state.rush) chips.push(`<span class="warn">${icon('crisis', 'ico sm')} Nečetl{a} jsi – každá volba teď škodí</span>`.replace('{a}', state.leader.female ? 'a' : ''));
+  if (eyeOn()) chips.push(`${icon('vize', 'ico sm')} Vidoucí oko: táhni a uvidíš přesné změny`);
   if (state.advice) chips.push(`${icon('rada', 'ico sm')} Rádce radí: <b>${DIR_WORD[state.advice]}</b>`);
   else if (state.hints > 0) {
     const key = `${state.total}:${state.card}`;
@@ -873,16 +883,16 @@ function highlight(dir, strength) {
     if (current && ui.opts[current]) ui.opts[current].style.opacity = 0;
     for (const [d, b] of Object.entries(ui.chev)) b.classList.toggle('on', d === dir);
     ui.card.classList.toggle('choosing', !!dir);
-    if (dir && seesDirection(state)) {
-      // Vizionář vidí směr změny, ne její velikost.
-      const after = outcome(state, dir);
-      for (const m of METERS) {
-        const d = after[m.id] - state.meters[m.id];
-        ui.dots[m.id].className = 'dot' + (d > 0 ? ' rise' : d < 0 ? ' fall' : '') + (d && master(state) && Math.abs(d) >= 12 ? ' much' : '');
-      }
-    } else {
-      const pv = dir ? preview(currentCard(state), dir, state) : {};
-      for (const m of METERS) ui.dots[m.id].className = 'dot ' + (pv[m.id] || '');
+    // Vidoucí oko (pomůcka) ukáže směr i velikost všeho; Vizionář vidí směr jen u části ukazatelů, jinak jen tečky.
+    const eye = eyeOn(), rev = dir && !eye ? revealed(state, dir) : new Set();
+    const after = dir ? outcome(state, dir) : null, pv = dir ? preview(currentCard(state), dir, state) : {};
+    for (const m of METERS) {
+      const d = after ? after[m.id] - state.meters[m.id] : 0, el = ui.dots[m.id];
+      el.removeAttribute('data-v');
+      if (dir && d && (eye || rev.has(m.id))) {
+        el.className = `dot ${d > 0 ? 'rise' : 'fall'}${eye ? ' num' : ''}`;
+        if (eye) el.dataset.v = `${d > 0 ? '+' : ''}${d}`;
+      } else el.className = 'dot ' + (pv[m.id] || '');
     }
     current = dir;
   }

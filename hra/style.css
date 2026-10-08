@@ -720,3 +720,8 @@ body.game .meter:nth-child(6) { animation-delay: 125ms; } body.game .meter:nth-c
   animation: itemin .35s var(--ease) both; }
 .advice > span:has(.warn) { background: #e3b86012; border-color: #e3b86040; }
 .name > b { animation: fade .3s ease-out; }
+/* Vidoucí oko: přesná změna pod ukazatelem. */
+.dot { position: relative; }
+.dot.num::after { content: attr(data-v); position: absolute; top: 7px; left: 50%; transform: translateX(-50%); font-size: 10.5px; font-weight: 700; white-space: nowrap; line-height: 1; }
+.dot.num.rise::after { color: var(--sky); } .dot.num.fall::after { color: var(--grass); }
+.dot.num.rise, .dot.num.fall { transform: none; }

@@ -869,3 +869,25 @@ test('příběhové linie: každá cesta končí koncem příběhu', async () =>
     if (o.arcEnd) { const [arc, end] = o.arcEnd.split('.'); assert.ok(ARCS[arc]?.ends?.[end], o.arcEnd); }
   }
 });
+
+test('Vizionář vidí směr jen u poloviny dotčených ukazatelů, mistr u všech', async () => {
+  const { revealed } = await import('../game.js');
+  const s = newGame({ kind: 'vize' }, 21); choose(s, 'left');
+  let checked = 0;
+  for (const c of CARDS.filter((x) => !x.req && DIRS.every((d) => x.opts[d]))) {
+    s.card = c.id;
+    for (const d of DIRS) {
+      const n = Object.values(optionOf(s, c, d).e ?? {}).filter(Boolean).length;
+      if (!n) continue;
+      const r = revealed(s, d);
+      assert.equal(r.size, Math.max(1, Math.floor(n / 2)), `${c.id}.${d}`);
+      assert.deepEqual([...revealed(s, d)], [...r], 'stejná volba = stejné ukazatele');
+      checked++;
+    }
+    if (checked > 200) break;
+  }
+  const m = newGame({ kind: 'vize', lvl: 3 }, 21); choose(m, 'left'); m.card = 'stavka';
+  assert.equal(revealed(m, 'left').size, Object.values(optionOf(m, cardById('stavka'), 'left').e).filter(Boolean).length);
+  const k = newGame({ kind: 'krize' }, 21); choose(k, 'left'); k.card = 'stavka';
+  assert.equal(revealed(k, 'left').size, 0);
+});
