@@ -242,11 +242,14 @@ export function newGame({ name = '', female = false, kind = 'vize', mode = 'norm
 }
 
 /** Text s dosazeným oslovením a ženskými tvary. */
+/// Překlad obsahu (nastaví ho zobrazení podle zvoleného jazyka; v testech a česky beze změny).
+let translate = (s) => s;
+export const setTranslator = (fn) => { translate = fn; };
 export function fill(text, leader, names = {}) {
   const f = leader.female;
   const age = AGES[(leader.age ?? 7) - 1] ?? AGES[6];
-  return text
-    .replaceAll('{osl}', age.osl[f ? 1 : 0])
+  return translate(text)
+    .replaceAll('{osl}', translate(age.osl[f ? 1 : 0]))
     .replaceAll('{a}', f ? 'a' : '')
     .replaceAll('{ty}', leader.name)
     .replaceAll('{sok}', names.sok ?? 'Sousední vládce')

@@ -3,6 +3,17 @@ import { portrait, meterIcon, glyph, icon, mood, mix } from './art.js';
 import { duelSetup } from './duel.js';
 import { AMB_POINTS } from './court.js';
 import { sceneSVG } from './scene.js';
+import { lang, LANGS, setLang, tr, addDict, startTranslating } from './i18n.js';
+import { setTranslator } from './game.js';
+// Angličtina: slovníky se načtou jen tehdy, když je hra anglicky.
+export const I18N_FILES = ['en_cards1.js', 'en_cards2.js', 'en_cards3.js', 'en_cards4.js', 'en_cards5.js', 'en_cards6.js', 'en_world.js', 'en_systems.js', 'en_ui.js'];
+if (lang !== 'cs') {
+  for (const f of I18N_FILES) {
+    try { const m = await import(`./i18n/${f}`); addDict(m.default ?? {}, m.patterns ?? []); } catch { /* chybějící slovník = česky */ }
+  }
+  setTranslator(tr);
+  startTranslating();
+}
 import { OBJECTS, VERBS, MANNERS, TARGETS, Q_VERBS, Q_OBJECTS, Q_MANNERS, PEN_EVERY, penLeft, canCustom, cardTakesWords, customOption, questOption, reaction, sentence } from './words.js';
 import { PROVINCES, HERO_CLASSES, ATTRS, THREATS, canHire, hire, startQuest, questRoll, questHero, stepById, chance, attrOf, heroTitle, ready as heroReady, lostCount, LOST_MAX, WOUNDS_MAX, HEROES_MAX, HIRE_COST, NEED, STEPS } from './realm.js';
 import { LEVELS, levelOf, MASTERY, LEVEL_TEXT, TREE, TREE_MAX, RELICS, RELIC_SLOTS, SKINS, PRESTIGE_BONUS, ROMAN, CAMPAIGN } from './meta.js';
@@ -326,6 +337,7 @@ function startScreen() {
   document.body.classList.remove('game');
   app.innerHTML = `
     <div class="start">
+      <button class="langsw" id="lang" hidden>${lang === 'cs' ? 'EN' : 'CZ'}</button>
       <img class="logo" src="icons/icon-192.png" alt="">
       <h1>ROVNOVÁHA</h1>
       <button class="pts" id="shop">${icon('trophy', 'ico sm')} ${stats.points} ${bodu(stats.points)} · obchod</button>
@@ -349,6 +361,7 @@ function startScreen() {
     </div>`;
   app.scrollLeft = 0;
   $('#help').onclick = () => helpScreen(startScreen);
+  $('#lang').onclick = () => setLang(lang === 'cs' ? 'en' : 'cs');
   $('#stats').onclick = () => statsScreen(startScreen);
   $('#blitz').onclick = () => setupScreen('blitz');
   $('#daily').onclick = challengePicker;

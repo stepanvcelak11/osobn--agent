@@ -1,5 +1,6 @@
 // Vlastní odpověď skládaná ze slov (jako v Pocket Realmu, jen bez psaní): Čin + Co + (Jak) + (Pro koho).
 // Hra větu „rozumí“ podle významu slov: každé slovo nese změny ukazatelů a věta je jejich součet.
+import { tr } from './i18n.js';
 import { cardById, optionOf, rankDirs, DIRS, METERS, INTRO, PEN_EVERY } from './game.js';
 export { PEN_EVERY };
 
@@ -60,7 +61,7 @@ export function cardTakesWords(state) {
   if (!c || c.id === INTRO.id || c.id.startsWith('dej_') || c.milestone || c.finale || state.dead) return false;
   return !DIRS.some((d) => { const o = c.opts[d]; return o?.end || o?.advance || o?.arcEnd || o?.clue || o?.edu || o?.project; });
 }
-export const sentence = (sel) => [VERBS[sel.verb]?.t, OBJECTS[sel.obj]?.t, MANNERS[sel.how]?.t, TARGETS[sel.who]?.t].filter(Boolean).join(' ');
+export const sentence = (sel) => [VERBS[sel.verb]?.t, OBJECTS[sel.obj]?.t, MANNERS[sel.how]?.t, TARGETS[sel.who]?.t].filter(Boolean).map(tr).join(' ');
 
 /** Složí z vybraných slov volbu {t, e, …}. Mimo téma karty: problém zůstane a půlka nejhoršího následku dopadne stejně. */
 export function customOption(state, sel) {
@@ -97,9 +98,9 @@ export function reaction(state, before, o, speaker) {
   const ch = METERS.map((m) => [m.id, state.meters[m.id] - before[m.id]]).filter(([, d]) => d).sort((a, b) => Math.abs(b[1]) - Math.abs(a[1])).slice(0, 2);
   const parts = ch.map(([m, d]) => REACT[m][d > 0 ? 0 : 1]);
   if (o.offTopic) parts.push(VERBS_STALL_TEXT(speaker));
-  return parts.join(' ') || 'Nic se nezměnilo.';
+  return parts.map(tr).join(' ') || tr('Nic se nezměnilo.');
 }
-const VERBS_STALL_TEXT = (who) => `„Ale co můj problém?“ ptá se ${who ?? 'posel'}. Vrátí se s ním.`;
+const VERBS_STALL_TEXT = (who) => tr('„Ale co můj problém?“ ptá se {kdo}. Vrátí se s ním.').replace('{kdo}', who ?? tr('posel'));
 
 // ── Výprava: vlastní čin hrdiny ──────────────────────
 /// Sloveso určí vlastnost (jako v Pocket Realmu), cíl a způsob obtížnost.
@@ -119,9 +120,9 @@ export const Q_MANNERS = {
 export function questOption(sel, female) {
   const v = Q_VERBS[sel.verb], ob = Q_OBJECTS[sel.obj], how = Q_MANNERS[sel.how];
   if (!v || !ob) return null;
-  const a = how?.a ?? v.a, t = [v.t, v.gen ? ob.g : ob.t, how?.t].filter(Boolean).join(' ');
-  const f = female ? 'a' : '';
+  const a = how?.a ?? v.a, t = [v.t, v.gen ? ob.g : ob.t, how?.t].filter(Boolean).map(tr).join(' ');
+  const cin = (s) => tr(s).replaceAll('{cin}', t.toLowerCase()).replaceAll('{a}', female ? 'a' : '');
   return { t, a, d: (v.d ?? 0) + ob.d + (how?.d ?? 0), heal: !!how?.heal, custom: true,
-    ok: `{hrdina} se rozhodl${f}: ${t.toLowerCase()}. A vyšlo to – cesta je volná.`,
-    bad: `{hrdina} se rozhodl${f}: ${t.toLowerCase()}. Nevyšlo to a odnesl${f} to šrámem.` };
+    ok: cin('{hrdina} se rozhodl{a}: {cin}. A vyšlo to – cesta je volná.'),
+    bad: cin('{hrdina} se rozhodl{a}: {cin}. Nevyšlo to a odnesl{a} to šrámem.') };
 }

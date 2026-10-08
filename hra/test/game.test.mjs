@@ -132,13 +132,15 @@ test('náhodný hráč vládne krátce, rozumný dlouho', () => {
 
 test('navazující příběhy opravdu navazují', () => {
   const seen = new Set();
-  for (let i = 0; i < 300; i++) {
+  // Pevná náhoda: výsledek je pokaždé stejný (test nesmí náhodně padat).
+  let rs = 7; const rnd = () => ((rs = (rs * 1103515245 + 12345) % 2147483648) / 2147483648);
+  for (let i = 0; i < 400; i++) {
     const s = newGame({ mode: i % 3 === 0 ? 'dejiny' : 'normal', packs: ['more', 'mor', 'prumysl', 'vesmir'] }, 500 + i);
     let g = 0;
     // Napůl rozumná hra, ať se svět dostane i do pozdějších ér a k tajným příběhům.
     while (g++ < (s.mode === 'dejiny' ? 1200 : 900)) {
       seen.add(s.card);
-      choose(s, Math.random() < 0.5 ? randomDir(s) : wise(s));
+      choose(s, rnd() < 0.5 ? DIRS[Math.floor(rnd() * 4)] : wise(s));
       if (s.dead) nextLeader(s);
     }
   }
