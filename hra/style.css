@@ -545,3 +545,49 @@ body.skin-smaragd .card:not(.next) { filter: hue-rotate(70deg) saturate(.9); box
 body.skin-hvezdy .card:not(.next) { box-shadow: 0 0 0 2px #fff6, 0 0 30px #8fb4ff88, 0 14px 34px #0009; }
 .swatch.skin-zlato { box-shadow: inset 0 0 0 3px #d4af37; } .swatch.skin-noc { background: #2a3550; } .swatch.skin-krev { box-shadow: inset 0 0 0 3px #a3333d; }
 .swatch.skin-smaragd { background: #cfe8d8; box-shadow: inset 0 0 0 3px #2f8f6a; } .swatch.skin-hvezdy { background: #1d2340; box-shadow: 0 0 10px #8fb4ff; }
+
+/* ── Dvůr, graf vlády, karta dne, průvodce ── */
+.row3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.row3 button { min-width: 0; padding-left: 4px; padding-right: 4px; }
+.graph { margin: 10px 0 4px; }
+.graph svg { width: 100%; height: 120px; display: block; background: var(--bg2); border-radius: 10px; }
+.graph .calm { fill: #ffffff0d; } .graph .mid { stroke: #ffffff30; stroke-dasharray: 3 3; stroke-width: 1; }
+.graph .gl polyline { fill: none; stroke-width: 1.6; vector-effect: non-scaling-stroke; stroke-linejoin: round; opacity: .9; }
+.graph .gm { stroke-width: 1.4; vector-effect: non-scaling-stroke; } .graph .gm.crisis { stroke: var(--bad); opacity: .6; } .graph .gm.war { stroke: var(--warn); opacity: .6; }
+.graph circle.gm.big { fill: #fff; opacity: .8; }
+.glegend { display: flex; flex-wrap: wrap; gap: 4px 10px; font-size: 11px; color: var(--dim); margin-top: 6px; }
+.glegend i { display: inline-block; width: 10px; height: 3px; border-radius: 2px; margin-right: 4px; vertical-align: middle; }
+.glegend .gk.crisis { background: var(--bad); } .glegend .gk.war { background: var(--warn); } .glegend .gk.big { background: #fff; width: 5px; height: 5px; border-radius: 50%; }
+.heirs { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 6px; }
+.heir { display: flex; gap: 8px; align-items: center; text-align: left; padding: 8px 10px; min-width: 0; }
+.heir span { min-width: 0; } .heir b { display: block; font-size: 14px; } .heir small { display: block; font-size: 11px; color: var(--dim); }
+.heir.on { border-color: var(--accent); background: #d8b25a14; }
+.lineage { display: flex; flex-direction: column; }
+.ln { position: relative; padding-left: 16px; border-left: 2px dashed var(--line); margin-left: 8px; }
+.ln.blood { border-left: 2px solid var(--accent); }
+.lnlink { font-size: 11px; color: var(--dim); padding: 6px 0 2px; }
+.ln.blood .lnlink { color: var(--accent); }
+.lnbox { display: flex; gap: 8px; align-items: flex-start; background: var(--bg2); border-radius: 10px; padding: 8px 10px; }
+.lnbox b { display: block; font-size: 14px; } .lnbox small { display: block; font-size: 12px; color: var(--dim); }
+.rodtitle { text-align: center; font-size: 13px; color: var(--accent); letter-spacing: .04em; margin-top: -4px; }
+.dcard { display: flex; align-items: center; gap: 10px; text-align: left; }
+.dcard b { display: block; } .dcard small { display: block; font-size: 12px; color: var(--dim); }
+.dcardbox { display: flex; gap: 12px; align-items: center; background: var(--bg2); border-radius: 14px; padding: 10px; margin: 10px 0; }
+.dcardbox svg { width: 84px; height: 84px; flex: none; border-radius: 12px; }
+.dcardbox p { margin: 4px 0 0; font-size: 15px; }
+.dopts { display: flex; flex-direction: column; gap: 6px; }
+.deff { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin: 6px 0; font-size: 13px; }
+.deff .up { color: var(--sky); } .deff .down { color: var(--grass); }
+.vote { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 6px 0; font-size: 13px; border-bottom: 1px solid var(--line); }
+.vote > span:first-child { min-width: 0; flex: 1; } .vote .wk { width: 40%; flex: none; }
+.vote.me > span:first-child { color: var(--accent); font-weight: 600; }
+.mod.iron { width: 100%; }
+.gear.off { opacity: .35; text-decoration: line-through; }
+.coach { position: fixed; left: 12px; right: 12px; bottom: calc(env(safe-area-inset-bottom) + 10px); z-index: 40; background: #1d1a16f2; border: 1px solid var(--accent);
+  border-radius: 14px; padding: 10px 12px; box-shadow: 0 8px 30px #0008; max-width: 520px; margin: 0 auto; }
+.coach b { display: block; color: var(--accent); } .coach p { margin: 4px 0 8px; font-size: 14px; }
+.coach .dots { display: flex; gap: 4px; float: right; } .coach .dots i { width: 6px; height: 6px; border-radius: 50%; background: var(--line); } .coach .dots i.on { background: var(--accent); }
+.coach .row2 button { padding: 8px; font-size: 14px; }
+.glegend span { white-space: nowrap; display: inline-flex; align-items: center; }
+.past:has(> .unlock) { align-items: center; padding: 6px 0; }
+.past > .unlock { flex: none; }

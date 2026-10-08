@@ -10,8 +10,10 @@ import { BRANCH_CARDS, WONDERS, WONDER_CARDS } from './history_more.js';
 import { FACTION_CARDS, RUMOR_CARDS, ECHO_CARDS } from './depth.js';
 import { PROJECT_CARDS, PROJECTS, PROJECT_MONTHS } from './projects.js';
 import { RELICS, PRESTIGE_STEP } from './meta.js';
+import { ARC_CARDS, ARCS, REP_CARDS, SOK_CARDS, SEASON2_CARDS, PACK_CARDS, PACK_PEOPLE, PACKS, HEIR_CARDS } from './saga.js';
+import { REPS, REP_MIN, repOf, repMult, TRAITS, EDU, KIDS_MAX, HEIR_DAMP, COUNCIL_MAX, COUNCIL_MIN_REL, COUNCIL_DAMP, AMBITIONS, TITLES } from './court.js';
 
-Object.assign(PEOPLE, AGE_PEOPLE, {
+Object.assign(PEOPLE, AGE_PEOPLE, PACK_PEOPLE, {
   // Zástupné postavy: skutečnou osobu určí doba (viz DYN) – tady jen pro jistotu.
   '@kraj': { name: 'Posel z kraje', icon: '🧺', color: '#9a8466', look: 'straw' },
   '@rada': { name: 'Rádce', icon: '📜', color: '#8a8f98', look: 'hair' },
@@ -33,6 +35,7 @@ export const RIVALS = {
   4: { name: 'Velvyslanec sousedního císařství', look: 'tophat', color: '#7a6a9a' },
   5: { name: 'Vyslanec sousední mocnosti', look: 'hair', color: '#5a6a7a' },
   6: { name: 'Premiérka sousední země', look: 'long', color: '#5a8a9a' },
+  7: { name: 'Kancléř Severní federace', look: 'shades', color: '#5a6a8a' },
 };
 /// Ztížení: víc bodů za těžší hru.
 export const MODS = {
@@ -52,8 +55,9 @@ const PERSON_AGE = {};
 for (const c of [...AGE_CARDS, ...AGE_CARDS_MORE]) PERSON_AGE[c.who] ??= c.age;
 const OWN_BONDS = [...new Set(EXTRA.filter((c) => c.rel).map((c) => c.who))];
 const BONDS = bondCards(CARES, PERSON_AGE, OWN_BONDS, REL_LOYAL);
-const CARDS = [...BASE, ...EXTRA, ...AGE_CARDS, ...AGE_CARDS_MORE, ...BONDS, ...SEASON_CARDS, ...STATE_CARDS, ...RIVAL_CARDS, ...TRAITOR_CARDS, ...BRANCH_CARDS, ...WONDER_CARDS, ...FACTION_CARDS, ...RUMOR_CARDS, ...ECHO_CARDS, ...PROJECT_CARDS];
-export { PROJECTS, PROJECT_MONTHS };
+const CARDS = [...BASE, ...EXTRA, ...AGE_CARDS, ...AGE_CARDS_MORE, ...BONDS, ...SEASON_CARDS, ...STATE_CARDS, ...RIVAL_CARDS, ...TRAITOR_CARDS, ...BRANCH_CARDS, ...WONDER_CARDS, ...FACTION_CARDS, ...RUMOR_CARDS, ...ECHO_CARDS, ...PROJECT_CARDS,
+  ...ARC_CARDS, ...REP_CARDS, ...SOK_CARDS, ...SEASON2_CARDS, ...PACK_CARDS, ...HEIR_CARDS];
+export { PROJECTS, PROJECT_MONTHS, ARCS, PACKS, REPS, TRAITS, EDU, AMBITIONS, TITLES, COUNCIL_MAX, COUNCIL_MIN_REL, CARES };
 /** Album postav: kdo se v které době může objevit (postavy z karet i zástupné postavy podle doby). */
 export function albumPeople() {
   const out = {};
@@ -141,14 +145,24 @@ export function random(state) {
 
 function freshMeters() { return Object.fromEntries(METERS.map((m) => [m.id, START])); }
 
-export function newGame({ name = '', female = false, kind = 'vize', mode = 'normal', world = null, mods = [], lvl = 1, meta = null, prestige = 0, meters = null } = {}, seed = Date.now() >>> 0) {
+export function newGame({ name = '', female = false, kind = 'vize', mode = 'normal', world = null, mods = [], lvl = 1, meta = null, prestige = 0, meters = null, packs = [], iron = false } = {}, seed = Date.now() >>> 0) {
   const history = mode === 'dejiny' || world === 'dejiny';
   const leaderName = name.trim().slice(0, 30) || (history ? (female ? 'Ara' : 'Brok') : female ? 'Jana Nová' : 'Jan Nový');
   const s = {
     v: 1,
     seed: seed >>> 0 || 1,
     leader: { name: leaderName, female: !!female, n: 1, kind, age: history ? 1 : 7, lvl },
-    meta: { tree: { ...(meta?.tree ?? {}) }, relics: [...(meta?.relics ?? [])] }, // trvalý postup hráče (strom, relikvie)
+    meta: { tree: { ...(meta?.tree ?? {}) }, relics: [...(meta?.relics ?? [])], title: meta?.title ?? null }, // trvalý postup hráče (strom, relikvie, titul)
+    packs: packs.filter((p) => PACKS[p]), // odemčené balíčky karet
+    iron: !!iron, // železný režim: žádné záchrany, pomůcky ani rady
+    rep: {}, // body pověsti současného vůdce
+    repNow: null, // platná pověst
+    kids: [], // děti současného vůdce {name, female, trait, edu, born}
+    council: [], // královská rada (kdo)
+    amb: null, // osobní ambice vůdce {id, streak, done}
+    arcs: [], // dokončené příběhy 'arc.konec'
+    trace: [], // průběh ukazatelů po měsících (graf vlády)
+    marks: [], // velká rozhodnutí a krize v grafu {t, kind}
     prestige, // kolikrát svět začal znovu od pravěku
     fac: { kneze: 0, kupci: 0, vojsko: 0, ucenci: 0 }, // hněv frakcí
     later: [], // odložené důsledky {at, e, text}
@@ -196,19 +210,37 @@ export function newGame({ name = '', female = false, kind = 'vize', mode = 'norm
     dead: null,
   };
   assignTask(s);
+  assignAmb(s);
+  newRival(s);
+  if (s.meta.title === 'mirotvurci') s.rel.riv = 2;
+  s.trace.push(snap(s));
   s.queue.push({ id: PROJECT_CARDS[Math.floor(random(s) * PROJECT_CARDS.length)].id, at: 5 });
   return s;
 }
 
 /** Text s dosazeným oslovením a ženskými tvary. */
-export function fill(text, leader) {
+export function fill(text, leader, names = {}) {
   const f = leader.female;
   const age = AGES[(leader.age ?? 7) - 1] ?? AGES[6];
   return text
     .replaceAll('{osl}', age.osl[f ? 1 : 0])
     .replaceAll('{a}', f ? 'a' : '')
-    .replaceAll('{ty}', leader.name);
+    .replaceAll('{ty}', leader.name)
+    .replaceAll('{sok}', names.sok ?? 'Sousední vládce')
+    .replaceAll('{dite}', names.dite ?? 'dědic');
 }
+/** Jméno vládce sousední říše (rivalská dynastie). */
+export const rivalName = (state) => state.rival?.ruler?.name ?? 'Sousední vládce';
+/** Nový vládce sousedů (nový rod při nové době, jinak syn či dcera – další generace). */
+function newRival(state, heir = false) {
+  const age = state.age ?? 7, female = random(state) < 0.4;
+  const pool = age < 7 ? AGE_NAMES[age] : SUCCESSORS;
+  const list = (female ? pool.f : pool.m).filter((n) => n !== state.leader.name);
+  const name = list[Math.floor(random(state) * list.length)];
+  const gen = heir ? (state.rival.ruler?.gen ?? 1) + 1 : 1;
+  state.rival.ruler = { name, female, gen, since: state.total ?? 0, at: (state.total ?? 0) + 60 + Math.floor(random(state) * 40) };
+}
+const kidUnraised = (state) => (state.kids ?? []).find((k) => !k.edu);
 
 const MOOD_BAD = ['Bez pozdravu', 'Chladně', 'Nevraživě', 'Úsečně'];
 const MOOD_GOOD = ['S úsměvem', 'Přátelsky', 'Srdečně'];
@@ -232,7 +264,7 @@ export const SEASON_NAMES = { zima: 'zima', jaro: 'jaro', leto: 'léto', podzim:
 export function currentCard(state) {
   const c0 = cardById(state.card) || INTRO;
   const c = { ...c0, who: whoOf(state, c0) };
-  let text = fill(c.text, state.leader);
+  let text = fill(c.text, state.leader, { sok: rivalName(state), dite: kidUnraised(state)?.name });
   // Rozzlobení a věrní lidé mluví jinak.
   const r = state.rel?.[c.who] ?? 0;
   if (!c.rel && c.who !== 'tajemnik' && !c.traitor) {
@@ -256,7 +288,10 @@ function eligible(state, c) {
   if ((c.weight ?? 1) <= 0 || c.faction || c.queueOnly) return false;
   // Dějiny lidstva: karta dávné doby jen ve své době, karty budoucnosti až v budoucnosti.
   const age = state.age ?? 7;
-  const timeless = c.season || c.traitor || c.who?.startsWith('@');
+  const timeless = c.season || c.traitor || c.anyAge || c.who?.startsWith('@');
+  if (c.pack && !(state.packs ?? []).includes(c.pack)) return false;
+  if (c.rep && state.repNow !== c.rep) return false;
+  if (c.anyAge && state.rival?.absorbed) return false;
   if (c.age) { if (c.age !== age) return false; }
   else if (c.pastOnly) { if (age >= 7 || state.rival?.absorbed) return false; }
   else if (!timeless && age < 7) return false;
@@ -283,7 +318,7 @@ function draw(state) {
   state.card = pickCard(state);
   state.luck = state.leader.kind === 'hazard' ? 0.5 + Math.round(random(state) * (master(state) ? 7 : 10)) / 10 : 1;
   state.peek = peekCard(state);
-  state.advice = state.leader.kind === 'rada' ? advise(state) : null;
+  state.advice = state.leader.kind === 'rada' && !state.iron ? advise(state) : null;
 }
 
 /** Prorok: kdo přijde příště (pokračování příběhu, nebo předem vylosovaná karta). */
@@ -323,7 +358,7 @@ export function pickCard(state) {
   // Méně viděné karty mají přednost (méně opakování); rozzlobení lidé chodí častěji.
   const seen = state.seen ?? {};
   const weights = pool.map((c) => (c.weight ?? 1) * (c.req ? 2 : 1) * (c.rel ? 3 : 1) / (1 + 0.8 * (seen[c.id] ?? 0))
-    * ((state.rel?.[c.who] ?? 0) <= -REL_LOYAL ? 1.5 : 1) * (c.season ? 2.5 : 1) * (c.traitor ? 3 : 1));
+    * ((state.rel?.[c.who] ?? 0) <= -REL_LOYAL ? 1.5 : 1) * (c.season ? 2.5 : 1) * (c.traitor ? 3 : 1) * (c.rep ? 2 : 1) * (c.pack ? 1.3 : 1));
   let r = random(state) * weights.reduce((a, b) => a + b, 0);
   for (let i = 0; i < pool.length; i++) {
     r -= weights[i];
@@ -369,6 +404,7 @@ export function outcome(state, dir) {
     if (mult !== 1) d = Math.round(d * mult);
     if (has(state, 'brzda')) d = Math.max(-12, Math.min(12, d));
     if ((state.meta?.relics ?? []).some((r) => RELICS[r]?.m === k)) d = Math.round(d * 0.75);
+    d = Math.round(d * damp(state, k, d));
     // Krok zpátky ke středu z krajnosti má dvojnásobnou sílu – ale za střed ho bonus nepřehoupne.
     if (crisis && d && Math.abs(from - START) > (master(state) ? 15 : EXTREME) && Math.sign(d) === Math.sign(START - from)) {
       const doubled = from + 2 * d;
@@ -379,6 +415,15 @@ export function outcome(state, dir) {
     out[k] = clamp(from + d);
   }
   return out;
+}
+
+/** Pověst, královská rada a výchova dědice tlumí (nebo zesilují) změnu ukazatele. */
+function damp(state, k, d) {
+  if (!d) return 1;
+  let f = repMult(state.repNow, k, d);
+  if (d < 0) for (const who of state.council ?? []) if (CARES[who] === k) f *= COUNCIL_DAMP;
+  if (state.heirM === k) f *= HEIR_DAMP;
+  return f;
 }
 
 /** Volby seřazené od nejlepší po nejhorší: žádná katastrofa a ukazatele co nejblíž středu. */
@@ -492,10 +537,23 @@ export function choose(state, dir) {
   state.meters = outcome(state, dir);
   state.rush = false;
   factionMood(state, before, o);
+  reputation(state, before);
+  if (METERS.reduce((a, m) => a + Math.abs(state.meters[m.id] - before[m.id]), 0) >= 30) mark(state, 'big');
+  if (o.edu && EDU[o.edu]) {
+    const kid = kidUnraised(state);
+    if (kid) { kid.edu = o.edu; news(state, 'kid', `${kid.name} dostane ${EDU[o.edu]} výchovu.`); }
+  }
+  if (o.arcEnd) {
+    const [arc, end] = o.arcEnd.split('.');
+    if (!(state.arcs ??= []).includes(o.arcEnd)) state.arcs.push(o.arcEnd);
+    news(state, 'arc', `Příběh „${ARCS[arc]?.name ?? arc}“ skončil: ${ARCS[arc]?.ends?.[end] ?? end}`);
+  }
+  if (o.set?.startsWith('pakt_') && !state.flags.includes(o.set)) news(state, 'pact', o.set === 'pakt_snatek' ? `Sňatek s rodem sousedů zpečetěn. ${rivalName(state)} je teď tvůj příbuzný.` : `Obchodní smlouva se sousedy podepsána. Zásoby budou pomalu přibývat.`);
   for (const l of o.later ?? []) if (random(state) < (l.p ?? 1)) (state.later ??= []).push({ at: state.total + 1 + (l.in ?? 2), e: l.e, text: l.text });
   if (o.project && PROJECTS[o.project] && !state.project) {
-    state.project = { id: o.project, left: PROJECT_MONTHS };
-    news(state, 'law', `Začala stavba: ${PROJECTS[o.project].name}. Hotovo za ${PROJECT_MONTHS} měsíců.`);
+    const left = Math.round(PROJECT_MONTHS * (state.meta?.title === 'stavitele' ? 0.75 : 1));
+    state.project = { id: o.project, left };
+    news(state, 'law', `Začala stavba: ${PROJECTS[o.project].name}. Hotovo za ${left} měsíců.`);
   }
   state.charge = Math.min(chargeOf(state), (state.charge ?? 0) + (has(state, 'nabiti') ? 2 : 1));
   if (o.set && !state.flags.includes(o.set)) state.flags.push(o.set);
@@ -551,11 +609,89 @@ export function choose(state, dir) {
 }
 
 function news(state, kind, text) { (state.news ??= []).push({ kind, text }); }
+const snap = (state) => METERS.map((m) => state.meters[m.id]);
+/** Značka v grafu vlády (velké rozhodnutí, krize, válka). */
+function mark(state, kind) { (state.marks ??= []).push({ t: (state.trace ?? []).length, kind }); if (state.marks.length > 200) state.marks.shift(); }
+
+/** Pověst: co o vůdci vypovídají jeho volby. Platí ta, která má aspoň REP_MIN bodů a vede. */
+function reputation(state, before) {
+  const d = Object.fromEntries(METERS.map((m) => [m.id, state.meters[m.id] - before[m.id]]));
+  state.rep ??= {};
+  for (const r of repOf(d)) state.rep[r] = (state.rep[r] ?? 0) + 1;
+  const [top, second] = Object.entries(state.rep).sort((a, b) => b[1] - a[1]);
+  const now = top && top[1] >= REP_MIN && (!second || top[1] > second[1]) ? top[0] : state.repNow && top?.[0] !== state.repNow ? null : state.repNow;
+  if (now && now !== state.repNow) news(state, 'rep', `Lid ti začal říkat: ${repName(now, state.leader.female)}. ${REPS[now].text}`);
+  state.repNow = now;
+}
+export const repName = (id, female) => (female ? REPS[id]?.f ?? REPS[id]?.name : REPS[id]?.name);
+
+// ── Královská rada ───────────────────────────────────
+/** Koho lze jmenovat do rady: lidé, kteří vládě věří a mají „svůj“ ukazatel. */
+export function councilCandidates(state) {
+  return Object.entries(state.rel ?? {}).filter(([who, r]) => r >= COUNCIL_MIN_REL && CARES[who] && PEOPLE[who] && !(state.council ?? []).includes(who) && who !== 'riv')
+    .sort((a, b) => b[1] - a[1]).map(([who]) => who);
+}
+export function appoint(state, who) {
+  if (state.dead || (state.council ??= []).length >= COUNCIL_MAX || !councilCandidates(state).includes(who)) return false;
+  state.council.push(who);
+  return true;
+}
+export function dismiss(state, who) {
+  if (!(state.council ?? []).includes(who)) return false;
+  state.council = state.council.filter((x) => x !== who);
+  state.rel[who] = Math.max(-REL_MAX, (state.rel[who] ?? 0) - 2);
+  return true;
+}
+
+// ── Osobní ambice ────────────────────────────────────
+function assignAmb(state) {
+  const pool = AMBITIONS.filter((a) => a.id !== state.amb?.id);
+  state.amb = { id: pool[Math.floor(random(state) * pool.length)].id, streak: 0, done: false, built: false };
+}
+export const ambById = (id) => AMBITIONS.find((a) => a.id === id);
+export function ambProgress(state) {
+  const a = ambById(state.amb?.id), st = state.amb;
+  if (!a) return null;
+  switch (a.type) {
+    case 'hold': case 'calm': return { now: Math.min(st.streak, a.n), of: a.n };
+    case 'friends': return { now: Math.min(Object.values(state.rel ?? {}).filter((r) => r >= REL_LOYAL).length, a.n), of: a.n };
+    case 'built': return { now: st.built ? 1 : 0, of: 1 };
+    case 'kids': return { now: Math.min((state.kids ?? []).length, a.n), of: a.n };
+    case 'months': return { now: Math.min(state.turn, a.n), of: a.n };
+  }
+  return null;
+}
+function progressAmb(state) {
+  const a = ambById(state.amb?.id);
+  if (!a || state.amb.done) return;
+  if (a.type === 'hold') state.amb.streak = state.meters[a.m] >= a.min ? state.amb.streak + 1 : 0;
+  if (a.type === 'calm') state.amb.streak = Object.values(state.meters).every((v) => v >= 30 && v <= 70) ? state.amb.streak + 1 : 0;
+  const p = ambProgress(state);
+  if (p.now < p.of) return;
+  state.amb.done = true;
+  news(state, 'amb', `Ambice splněna: ${a.text}`);
+}
+
+// ── Děti a dědicové ──────────────────────────────────
+function birth(state) {
+  const female = random(state) < 0.5, age = state.age ?? 7;
+  const pool = age < 7 ? AGE_NAMES[age] : SUCCESSORS;
+  const taken = new Set([...state.history.map((h) => h.name), ...(state.kids ?? []).map((k) => k.name), state.leader.name]);
+  let names = (female ? pool.f : pool.m).filter((n) => !taken.has(n));
+  if (!names.length) names = female ? pool.f : pool.m;
+  const name = names[Math.floor(random(state) * names.length)].split(' ')[0];
+  const traits = Object.keys(TRAITS), trait = traits[Math.floor(random(state) * traits.length)];
+  (state.kids ??= []).push({ name, female, trait, edu: null, born: state.total });
+  const t = TRAITS[trait];
+  news(state, 'kid', `Narodil${female ? 'a' : ''} se ti ${female ? 'dcera' : 'syn'} ${name}. ${female ? t.f : t.name} od prvního dne.`);
+  state.queue.push({ id: 'dite_vychova', at: state.total + 3 });
+}
 
 /** Válka se sousední říší: rozhoduje Síla proti síle soupeře (a trocha štěstí). */
 function war(state) {
   const r = state.rival;
-  const won = state.meters.sil + random(state) * 40 > r.power + 20;
+  const won = state.meters.sil + (state.meta?.title === 'valecnici' ? 10 : 0) + random(state) * 40 > r.power + 20;
+  mark(state, 'war');
   const apply = (e) => { for (const [k, v] of Object.entries(e)) state.meters[k] = clamp(state.meters[k] + effect(k, v)); };
   if (won) {
     apply({ fin: 10, lid: 5, sil: -5 });
@@ -593,7 +729,7 @@ export const seals = (state) => (state.tasksDone ?? []).length + (state.bonusSea
 /** Víceměsíční krize: každý krok se počítá, na konci odměna, nebo trest. */
 function crisisStep(state, card, o) {
   const cr = CRISES[card.crisis];
-  if (!state.crisis || state.crisis.id !== card.crisis) state.crisis = { id: card.crisis, step: 0, score: 0 };
+  if (!state.crisis || state.crisis.id !== card.crisis) { state.crisis = { id: card.crisis, step: 0, score: 0 }; mark(state, 'crisis'); }
   state.crisis.step += 1;
   if (o.ok) state.crisis.score += 1;
   if (state.crisis.step < cr.steps.length) {
@@ -616,7 +752,7 @@ function factionMood(state, before, o) {
   for (const [f, { m }] of Object.entries(FACTIONS)) {
     const d = state.meters[m] - before[m];
     let a = state.fac[f] ?? 0;
-    if (d < 0) a += -d / 8; else if (d > 0) a -= d / 16;
+    if (d < 0) a += (-d / 8) * (state.repNow === 'tyran' ? 0.5 : 1) * (state.meta?.title === 'otcove' ? 0.75 : 1); else if (d > 0) a -= d / 16;
     state.fac[f] = Math.max(0, Math.min(FACTION_MAX, Math.round(a * 10) / 10));
   }
   if (o.calm && o.calm in state.fac) state.fac[o.calm] = 0;
@@ -642,6 +778,12 @@ function monthPasses(state) {
   const season = seasonOf(state);
   if (season === 'zima') add('fin', -0.3);
   if (season === 'podzim') add('fin', 0.3);
+  if (season === 'jaro') add('pri', 0.3);
+  if (season === 'leto') add('lid', 0.2);
+  weather(state);
+  // Smlouvy se sousedy: obchod přináší zásoby, sňatek drží mír.
+  if (state.flags.includes('pakt_obchod')) add('fin', 0.3);
+  if (state.flags.includes('pakt_snatek')) add('dip', 0.2);
   if (state.mods?.includes('hlad')) add('fin', -0.4);
   if (state.mods?.includes('sousede')) add('dip', -0.3);
   // Divy světa a dokončené projekty drží svůj ukazatel u rovnováhy.
@@ -656,7 +798,8 @@ function monthPasses(state) {
     if (state.project.left <= 0) {
       const p = PROJECTS[state.project.id];
       (state.built ??= []).push(state.project.id);
-      news(state, 'wonder', `Stavba dokončena: ${p.name}! Navždy bude držet ${METERS.find((m) => m.id === p.m).name} v rovnováze.`);
+      if (state.amb) state.amb.built = true;
+      news(state, 'built', `Stavba dokončena: ${p.name}! Navždy bude držet ${METERS.find((m) => m.id === p.m).name} v rovnováze.`);
       state.project = null;
     }
   }
@@ -674,7 +817,7 @@ function monthPasses(state) {
   }
   let hit = METERS.find((m) => state.meters[m.id] <= 0 || state.meters[m.id] >= 100);
   const mirror = relic(state, 'zrcadlo') && !state.mirror;
-  if (hit && ((state.leader.kind === 'zachrance' && !state.rescued) || has(state, 'sance') || mirror)) {
+  if (hit && !state.iron && ((state.leader.kind === 'zachrance' && !state.rescued) || has(state, 'sance') || mirror)) {
     // Záchrana: ukazatel se odrazí od kraje. Typ Zachránce jednou za vládu (mistr dvakrát), výhoda Druhá šance jednou,
     // relikvie Zrcadlo osudu jednou za hru.
     if (has(state, 'sance')) state.perks = state.perks.filter((p) => p !== 'sance');
@@ -699,7 +842,11 @@ function monthPasses(state) {
     news(state, 'electionSoon', `Za půl roku jsou volby. Hlasy ti dají Lid a Spojenci (teď ${support(state)} %, potřebuješ ${VOTE_MIN} %).`);
   }
   progressTask(state);
+  progressAmb(state);
+  court(state);
   worldEvents(state);
+  (state.trace ??= []).push(snap(state));
+  if (state.trace.length > 1200) state.trace = state.trace.filter((_, i) => i % 2 === 0); // dlouhá vláda: graf zhustit
   const age = state.age ?? 7;
   if (age < 7) {
     // Přelom: po čase v dané době přijde objev, který může svět posunout dál.
@@ -716,11 +863,45 @@ function monthPasses(state) {
   }
 }
 
+/** Počasí: na začátku ročního období občas přijde zvláštní rok. */
+const WEATHER = {
+  zima: [0.3, 'Tuhá zima! Mráz bere zásoby.', { fin: -6 }],
+  jaro: [0.25, 'Jarní povodně zaplavily pole.', { pri: -5, fin: -3 }],
+  leto: [0.25, 'Suché léto – úroda trpí.', { pri: -6, lid: -3 }],
+  podzim: [0.3, 'Bohatá úroda! Sýpky jsou plné.', { fin: 6, lid: 3 }],
+};
+function weather(state) {
+  if (![2, 5, 8, 11].includes(state.turn % 12)) return; // první měsíc období
+  const [p, text, e] = WEATHER[seasonOf(state)];
+  if (random(state) >= p) return;
+  for (const [k, v] of Object.entries(e)) state.meters[k] = clamp(state.meters[k] + v);
+  news(state, 'season', text);
+}
+
+/** Dvůr: narození dětí, zrada v radě, střídání vládců u sousedů. */
+function court(state) {
+  if (state.turn >= 10 && (state.kids ?? []).length < KIDS_MAX && !kidUnraised(state) && random(state) < 1 / 24) birth(state);
+  for (const who of [...(state.council ?? [])]) {
+    if ((state.rel?.[who] ?? 0) > -REL_LOYAL) continue;
+    state.council = state.council.filter((x) => x !== who);
+    const m = CARES[who];
+    if (m) state.meters[m] = clamp(state.meters[m] - 10);
+    news(state, 'traitorStrike', `Zrada v radě! ${PEOPLE[who]?.name ?? who} vynáší tajemství a z rady mizí. ${METERS.find((x) => x.id === m)?.name ?? 'Země'} to odnese.`);
+  }
+  const r = state.rival;
+  if (r?.ruler && !r.absorbed && state.total >= r.ruler.at) {
+    const old = r.ruler;
+    newRival(state, true);
+    const mood = state.rel?.riv ?? 0;
+    news(state, 'rival', `U sousedů zemřel${old.female ? 'a' : ''} ${old.name}. Vládne ${old.female ? 'její' : 'jeho'} ${r.ruler.female ? 'dcera' : 'syn'} ${r.ruler.name}${mood <= -2 ? ' – a pamatuje si, co jsi jeho rodu provedl{a}.' : mood >= 2 ? ' – a váží si přátelství s tvým rodem.' : '.'}`.replace('{a}', state.leader.female ? 'a' : ''));
+  }
+}
+
 /** Svět žije: soused sílí, zrádci se objevují, dlouhé krajnosti mají následky. */
 function worldEvents(state) {
   const age = state.age ?? 7;
   state.rival ??= { power: 30, absorbed: false };
-  if (age < 7 && !state.rival.absorbed) state.rival.power = Math.min(100, state.rival.power + (state.mods?.includes('sousede') ? 0.6 : 0.3));
+  if (age < 7 && !state.rival.absorbed && !state.flags.includes('pakt_snatek')) state.rival.power = Math.min(100, state.rival.power + (state.mods?.includes('sousede') ? 0.6 : 0.3));
   // Zrádce
   if (!state.traitor && state.turn >= 8 && random(state) < (state.mods?.includes('zradci') ? 0.06 : 0.02)) {
     const people = [...new Set(Object.keys(state.seen ?? {}).map((id) => cardById(id)).filter((c) => c && !c.who.startsWith('@') && !['tajemnik', 'riv'].includes(c.who)
@@ -751,7 +932,10 @@ function worldEvents(state) {
     }
   }
   state.ext.calm = calm ? (state.ext.calm ?? 0) + 1 : 0;
-  if (state.ext.calm === 6 && !state.queue.some((q) => q.id === 'zlaty_vek')) state.queue.push({ id: 'zlaty_vek', at: state.total });
+  if (state.ext.calm === (state.meta?.title === 'zlati' ? 5 : 6) && !state.queue.some((q) => q.id === 'zlaty_vek')) {
+    state.queue.push({ id: 'zlaty_vek', at: state.total });
+    news(state, 'golden', 'Země je v klidu už půl roku – blíží se zlatý věk.');
+  }
 }
 
 /** Skóre vlády: měsíce × bonus za ztížení. */
@@ -773,6 +957,8 @@ function advanceAge(state) {
   state.queue = state.queue.filter((q) => !q.id.startsWith('prelom'));
   state.rival = { power: 30, absorbed: false }; // nová doba = nový soused
   if (state.rel) state.rel.riv = 0;
+  state.flags = state.flags.filter((f) => !f.startsWith('pakt_'));
+  newRival(state);
   if (state.traitor && !state.traitor.known) state.traitor = null;
   if (state.age === 7) {
     state.futureAt = state.total;
@@ -785,7 +971,8 @@ function endReign(state, e, key) {
   state.dead = { meter: e.meter ?? null, side: e.side ?? null, special: e.special ?? null, election: !!e.election, title: e.title, text: fill(e.text, state.leader), months: state.turn };
   const score = Math.round(state.turn * modBonus(state));
   state.dead.score = score;
-  state.history.push({ name: state.leader.name, female: state.leader.female, n: state.leader.n, months: state.turn, score, ending: key, title: e.title, kind: state.leader.kind });
+  state.history.push({ name: state.leader.name, female: state.leader.female, n: state.leader.n, months: state.turn, score, ending: key, title: e.title, kind: state.leader.kind,
+    heir: state.leader.heir ?? null, rep: state.repNow ?? null, amb: state.amb?.done ? ambById(state.amb.id)?.text : null, kids: (state.kids ?? []).map((k) => k.name) });
   if (!state.endings.includes(key)) state.endings.push(key);
   state.best = Math.max(state.best, state.turn);
   return state.dead;
@@ -849,35 +1036,53 @@ export function offerPerks(state) {
 }
 
 /** Nástupce: nový vůdce, ukazatele zpět doprostřed. Svět (příznaky) zůstává. */
-export function nextLeader(state, kind = state.leader.kind, lvl = 1) {
+export function nextLeader(state, kind = state.leader.kind, lvl = 1, heir = null) {
   // Dědictví: kdo vládl aspoň 3 roky, předá nástupci jednu výhodu a věrné lidi.
   const legacy = state.turn >= 36;
   const keepPerk = legacy ? (state.perks ?? []).find((p) => p !== 'sance') : null;
-  const female = random(state) < 0.5;
-  const pool = (state.age ?? 7) < 7 ? AGE_NAMES[state.age] : SUCCESSORS;
-  const names = female ? pool.f : pool.m;
-  const used = new Set(state.history.map((h) => h.name));
-  const free = names.filter((n) => !used.has(n));
-  const list = free.length ? free : names;
-  const name = list[Math.floor(random(state) * list.length)];
-  state.leader = { name, female, n: state.leader.n + 1, kind, age: state.age ?? 7, lvl };
+  // Dědic z vlastního rodu: jméno, vlastnost (výhoda) a výchova (jeho ukazatel se mění méně).
+  const kid = heir != null ? (state.kids ?? [])[heir] : null;
+  const parent = state.leader;
+  let female = random(state) < 0.5, name;
+  if (kid) ({ female, name } = kid);
+  else {
+    const pool = (state.age ?? 7) < 7 ? AGE_NAMES[state.age] : SUCCESSORS;
+    const names = female ? pool.f : pool.m;
+    const used = new Set(state.history.map((h) => h.name));
+    const free = names.filter((n) => !used.has(n));
+    const list = free.length ? free : names;
+    name = list[Math.floor(random(state) * list.length)];
+  }
+  state.leader = { name, female, n: state.leader.n + 1, kind, age: state.age ?? 7, lvl, heir: kid ? { of: parent.name, female: parent.female } : null };
   state.charge = 0;
   state.drift = {};
   state.perks = keepPerk ? [keepPerk] : [];
+  state.heirM = kid?.edu ?? null;
+  if (kid && TRAITS[kid.trait] && !state.perks.includes(TRAITS[kid.trait].perk)) state.perks.push(TRAITS[kid.trait].perk);
+  if (kid) news(state, 'kid', `Vlády se ujímá ${kid.female ? 'dcera' : 'syn'} ${kid.name} – ${(kid.female ? TRAITS[kid.trait].f : TRAITS[kid.trait].name).toLowerCase()}${kid.edu ? `, s ${EDU[kid.edu]} výchovou` : ''}.`);
+  state.kids = [];
+  state.rep = {};
+  state.repNow = null;
+  state.trace = [];
+  state.marks = [];
   state.perkOffer = null;
   state.rescued = false;
   state.zUsed = 0;
   state.crisis = null;
   state.peek = null;
   // Nový vůdce = nová šance: vztahy vychladnou na polovinu (po dlouhé vládě zůstanou věrní věrnými).
-  for (const k of Object.keys(state.rel ?? {})) if (!(legacy && state.rel[k] >= REL_LOYAL)) state.rel[k] = Math.trunc(state.rel[k] / 2) || 0;
+  for (const k of Object.keys(state.rel ?? {})) if (k !== 'riv' && !(legacy && state.rel[k] >= REL_LOYAL)) state.rel[k] = Math.trunc(state.rel[k] / 2) || 0;
+  if (state.meta?.title === 'mirotvurci') state.rel.riv = Math.min(REL_MAX, (state.rel.riv ?? 0) + 2);
+  state.council = (state.council ?? []).filter((who) => (state.rel[who] ?? 0) >= REL_LOYAL); // věrní rádci zůstávají
   if (legacy) news(state, 'friend', `Dědictví: ${keepPerk ? `výhoda ${PERKS[keepPerk].name} a ` : ''}věrní lidé zůstávají i novému vůdci.`);
   state.meters = freshMeters();
-  state.queue = state.queue.filter((q) => q.id.startsWith('era') || q.id.startsWith('prelom')); // nová éra ani přelom nezapadne
+  state.queue = state.queue.filter((q) => q.id.startsWith('era') || q.id.startsWith('prelom') || cardById(q.id)?.arc); // nová éra, přelom ani příběh nezapadne
   if (!state.project) state.queue.push({ id: PROJECT_CARDS[Math.floor(random(state) * PROJECT_CARDS.length)].id, at: state.total + 4 });
   state.turn = 0;
   state.dead = null;
   assignTask(state);
+  assignAmb(state);
+  state.trace.push(snap(state));
   draw(state);
 }
 
@@ -900,6 +1105,26 @@ export function daily(dateKey) {
   let h = 2166136261;
   for (const ch of dateKey) h = Math.imul(h ^ ch.charCodeAt(0), 16777619) >>> 0;
   return { seed: h >>> 0 || 1, kind: KINDS[h % KINDS.length].id };
+}
+
+/** Karta dne: jedna karta pro všechny v daný den (jen samostatné karty bez předpokladů). */
+const DAILY_POOL = () => CARDS.filter((c) => !c.req && !c.not && !c.rel && !c.queueOnly && !c.faction && !c.pack && !c.crisis && !c.milestone && !c.arc && !c.rep && !c.traitor
+  && !c.season && !c.once && !c.who?.startsWith('@') && c.who !== 'riv' && c.id !== INTRO.id && !c.id.startsWith('dej_') && DIRS.every((d) => c.opts[d] && !c.opts[d].need && Object.keys(c.opts[d].e ?? {}).length));
+export function dailyCard(dateKey) {
+  const { seed } = daily(`karta-${dateKey}`), pool = DAILY_POOL();
+  return pool[seed % pool.length].id;
+}
+/** Jak by se rozhodlo 100 simulovaných vládců (každý v jiné, náhodně rozházené zemi). Offline odhad, ne skuteční hráči. */
+export function simVotes(cardId, seed = 1) {
+  const card = cardById(cardId), votes = { left: 0, right: 0, up: 0, down: 0 };
+  const s = { seed, meters: {}, leader: { kind: 'vize', age: card.age ?? 7 }, age: card.age ?? 7, card: cardId, turn: 0, flags: [] };
+  for (let i = 0; i < 100; i++) {
+    for (const m of METERS) s.meters[m.id] = 20 + Math.floor(random(s) * 61);
+    // Každý vládce trochu chybuje: v pětině případů volí podle srdce, ne podle rozumu.
+    const d = random(s) < 0.2 ? DIRS[Math.floor(random(s) * 4)] : rankDirs(s)[0];
+    votes[d] += 1;
+  }
+  return votes;
 }
 
 /** „2 roky a 3 měsíce“ */
@@ -946,6 +1171,16 @@ export function upgrade(state) {
   if (state.futureAt === undefined) state.futureAt = 0;
   state.leader.age ??= state.age;
   if (!state.task && !state.dead) assignTask(state);
+  state.packs ??= [];
+  state.rep ??= {};
+  state.repNow ??= null;
+  state.kids ??= [];
+  state.council ??= [];
+  state.arcs ??= [];
+  state.trace ??= [];
+  state.marks ??= [];
+  if (!state.amb && !state.dead) assignAmb(state);
+  if (!state.rival.ruler) newRival(state);
   return state;
 }
 

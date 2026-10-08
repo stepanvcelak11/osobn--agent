@@ -133,7 +133,7 @@ test('náhodný hráč vládne krátce, rozumný dlouho', () => {
 test('navazující příběhy opravdu navazují', () => {
   const seen = new Set();
   for (let i = 0; i < 300; i++) {
-    const s = newGame({ mode: i % 3 === 0 ? 'dejiny' : 'normal' }, 500 + i);
+    const s = newGame({ mode: i % 3 === 0 ? 'dejiny' : 'normal', packs: ['more', 'mor', 'prumysl', 'vesmir'] }, 500 + i);
     let g = 0;
     // Napůl rozumná hra, ať se svět dostane i do pozdějších ér a k tajným příběhům.
     while (g++ < (s.mode === 'dejiny' ? 1200 : 900)) {
@@ -145,7 +145,7 @@ test('navazující příběhy opravdu navazují', () => {
   for (const id of ['vrana2', 'ork2', 'ork3', 'prorok2', 'fed2', 'fed3', 'stin2', 'hlad', 'epidemie', 'vakcina', 'nula2', 'vrana_dluh', 'pristav2', 'vlci', 'intro2']) {
     assert.ok(seen.has(id), `pokračování ${id} se nikdy neobjevilo`);
   }
-  const never = CARDS.filter((c) => !c.generated && !seen.has(c.id)).map((c) => c.id);
+  const never = CARDS.filter((c) => !c.generated && !c.rep && !seen.has(c.id)).map((c) => c.id); // pověst závisí na stylu hry
   assert.deepEqual(never, [], 'každá karta se někdy objeví');
 });
 
@@ -493,7 +493,7 @@ test('Dějiny lidstva: od pravěku přes přelomy až do budoucnosti', () => {
     const c = cardById(s.card);
     seenAges.add(s.age);
     if (c.age) assert.equal(c.age, s.age, `${c.id} nepatří do doby ${s.age}`);
-    else if (!['dej_intro'].includes(c.id) && !(c.season || c.traitor || c.pastOnly || c.who.startsWith('@'))) assert.fail(`karta budoucnosti ${c.id} v době ${s.age}`);
+    else if (!['dej_intro'].includes(c.id) && !(c.season || c.traitor || c.pastOnly || c.anyAge || c.who.startsWith('@'))) assert.fail(`karta budoucnosti ${c.id} v době ${s.age}`);
     if (c.milestone) {
       prelomSeen++;
       // nejdřív odmítnout – objev se vrátí, pak přijmout
@@ -799,4 +799,73 @@ test('hloubka: frakce, zvěsti, projekty, dědictví, relikvie, úrovně, presti
   const base = newGame({}, 9);
   assert.ok(Math.abs(intensity(a) - (intensity(base) - 0.1 - 0.12 + 0.15)) < 1e-9);
   assert.equal(support(a), support(base) + 9);
+});
+
+test('dvůr a rod: pověst, děti a dědic, rada, sousední rod, ambice, balíčky, železný režim, graf, karta dne', async () => {
+  const g = await import('../game.js');
+  const flat = () => Object.fromEntries(METERS.map((m) => [m.id, 50]));
+  // pověst: opakovaně Síla nahoru a Lid dolů → Tyran; Lid pak roste méně
+  const t = newGame({}, 11); choose(t, 'left');
+  t.rep = { tyran: 9 }; t.meters = flat(); t.card = 'stavka';
+  choose(t, 'left');
+  assert.equal(t.repNow, 'tyran', 'pověst Tyran');
+  t.meters = flat(); t.card = 'stavka';
+  const up = DIRS.find((x) => (optionOf(t, cardById('stavka'), x).e.lid ?? 0) > 0);
+  if (up) { const plain = { ...t, repNow: null }; assert.ok(outcome(t, up).lid - 50 <= outcome(plain, up).lid - 50, 'tyranovi Lid roste méně'); }
+  // děti: narození → karta výchovy → dědic s výhodou a tlumeným ukazatelem
+  const k = newGame({}, 12); choose(k, 'left');
+  k.kids = [{ name: 'Ota', female: false, trait: 'statecny', edu: null, born: 1 }];
+  k.card = 'dite_vychova';
+  const vir = DIRS.find((x) => cardById('dite_vychova').opts[x].edu === 'vir');
+  k.meters = flat(); choose(k, vir);
+  assert.equal(k.kids[0].edu, 'vir');
+  k.turn = 5; nextLeader(k, 'vize', 1, 0);
+  assert.equal(k.leader.name, 'Ota'); assert.ok(k.perks.includes('brzda')); assert.equal(k.heirM, 'vir'); assert.deepEqual(k.kids, []);
+  assert.ok(k.leader.heir);
+  // rada: jmenovat jde jen věrného, tlumí pokles jeho ukazatele, rozzlobený zradí
+  const r = newGame({}, 13); choose(r, 'left');
+  const who = Object.keys(PEOPLE).find((w) => g.CARES[w] && !w.startsWith('@') && w !== 'riv');
+  assert.ok(!g.appoint(r, who), 'bez důvěry ne');
+  r.rel[who] = 3;
+  assert.ok(g.appoint(r, who));
+  r.rel[who] = -4; r.card = 'stavka'; r.meters = flat(); choose(r, 'left');
+  assert.ok(!r.council.includes(who), 'zrádce z rady odešel');
+  // sousední rod: vládce má jméno a přežije pád vůdce; pakt dává zásoby
+  const s = newGame({ mode: 'dejiny', world: 'dejiny' }, 14);
+  assert.ok(s.rival.ruler?.name);
+  s.rel.riv = 4; s.turn = 10; nextLeader(s, 'vize');
+  assert.equal(s.rel.riv, 4, 'sousedé si pamatují');
+  // ambice
+  const a = newGame({}, 15); choose(a, 'left');
+  a.amb = { id: 'a_dlouho', streak: 0, done: false }; a.turn = 59; a.card = 'stavka'; a.meters = flat(); choose(a, 'up');
+  if (!a.dead) assert.ok(a.amb.done, 'ambice splněna');
+  // balíčky: karty balíčku jen s odemčeným balíčkem
+  const packCard = CARDS.find((c) => c.pack && !c.queueOnly);
+  assert.ok(packCard, 'balíčky mají karty');
+  // železný režim: žádná záchrana
+  const i = newGame({ kind: 'zachrance', iron: true }, 16); choose(i, 'left');
+  i.meters = flat(); i.meters.fin = 1; i.card = 'stavka';
+  for (const x of DIRS) { const o = outcome(i, x); if (o.fin <= 0) { choose(i, x); break; } }
+  if (i.meters.fin <= 0 || i.dead) assert.ok(i.dead, 'v železném režimu záchrana není');
+  // graf vlády
+  const gr = newGame({}, 17); choose(gr, 'left');
+  for (let n = 0; n < 5 && !gr.dead; n++) choose(gr, bestDir(gr));
+  assert.ok(gr.trace.length >= 5 && gr.trace[0].length === 7);
+  // karta dne a simulované hlasy
+  const id = g.dailyCard('2026-10-08');
+  assert.equal(id, g.dailyCard('2026-10-08'));
+  const v = g.simVotes(id, 3);
+  assert.equal(Object.values(v).reduce((x, y) => x + y, 0), 100);
+});
+
+test('příběhové linie: každá cesta končí koncem příběhu', async () => {
+  const { ARCS } = await import('../game.js');
+  const arcCards = CARDS.filter((c) => c.arc);
+  assert.ok(Object.keys(ARCS).length >= 7);
+  for (const c of arcCards) for (const d of DIRS) {
+    const o = c.opts[d];
+    assert.ok(o.next || o.arcEnd, `${c.id}.${d} nikam nevede`);
+    if (o.next) assert.ok(cardById(o.next)?.arc === c.arc, `${c.id} → ${o.next}`);
+    if (o.arcEnd) { const [arc, end] = o.arcEnd.split('.'); assert.ok(ARCS[arc]?.ends?.[end], o.arcEnd); }
+  }
 });

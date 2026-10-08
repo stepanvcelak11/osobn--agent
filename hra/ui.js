@@ -1,8 +1,9 @@
 // Rovnováha – zobrazení a ovládání (tažení karty do čtyř stran, šipky, klávesy, uložení hry).
 import { portrait, meterIcon, glyph, icon, mood, mix } from './art.js';
 import { duelSetup } from './duel.js';
+import { AMB_POINTS } from './court.js';
 import { LEVELS, levelOf, MASTERY, LEVEL_TEXT, TREE, TREE_MAX, RELICS, RELIC_SLOTS, SKINS, PRESTIGE_BONUS, ROMAN, CAMPAIGN } from './meta.js';
-import { FACTIONS, FACTION_REVOLT, PROJECTS, PROJECT_MONTHS, albumPeople, whoOf, master, chargeOf, ENDINGS_PAST, offerPerks, skipCard, bestDir, sageHint, shiftMeter, SHIFT, newGame, newBlitz, newRun, daily, touches, seesAhead, personOf, seasonOf, SEASON_NAMES, RIVALS, MODS, BRANCHES, WONDERS, modBonus, ageOf, leaderTitle, hasElections, lawAllowed, AGES, AGE_LEN, choose, nextLeader, currentCard, cardById, preview, outcome, optionOf, unlocked, skip, nudge, reformLaw, choosePerk, ready, tenure, timeLabel, danger, kindOf, upgrade, activeLaws, seals, taskById, taskProgress, seesDirection, toElection, support, KINDS, ACTIVE, CHARGE, NUDGE, METERS, ENDINGS, LAWS, TASKS, ERAS, SPECIAL, PEOPLE, REL_LOYAL, PERKS, CRISES, ELECTION, VOTE_MIN, BLITZ_START, BLITZ_BONUS, BLITZ_FALL } from './game.js';
+import { ARCS, PACKS, REPS, TRAITS, EDU, AMBITIONS, TITLES, COUNCIL_MAX, CARES, repName, councilCandidates, appoint, dismiss, ambById, ambProgress, rivalName, dailyCard, simVotes, FACTIONS, FACTION_REVOLT, PROJECTS, PROJECT_MONTHS, albumPeople, whoOf, master, chargeOf, ENDINGS_PAST, offerPerks, skipCard, bestDir, sageHint, shiftMeter, SHIFT, newGame, newBlitz, newRun, daily, touches, seesAhead, personOf, seasonOf, SEASON_NAMES, RIVALS, MODS, BRANCHES, WONDERS, modBonus, ageOf, leaderTitle, hasElections, lawAllowed, AGES, AGE_LEN, choose, nextLeader, currentCard, cardById, preview, outcome, optionOf, unlocked, skip, nudge, reformLaw, choosePerk, ready, tenure, timeLabel, danger, kindOf, upgrade, activeLaws, seals, taskById, taskProgress, seesDirection, toElection, support, KINDS, ACTIVE, CHARGE, NUDGE, METERS, ENDINGS, LAWS, TASKS, ERAS, SPECIAL, PEOPLE, REL_LOYAL, PERKS, CRISES, ELECTION, VOTE_MIN, BLITZ_START, BLITZ_BONUS, BLITZ_FALL } from './game.js';
 
 const SAVE = 'rovnovaha.save';
 const app = document.getElementById('app');
@@ -87,7 +88,8 @@ const RUSH_MS = 1000;
 let shownAt = 0; // stav před posledním rozhodnutím (pro „Vrátit tah“)
 const bodu = (n) => (n === 1 ? 'bod' : n >= 2 && n <= 4 ? 'body' : 'bodů');
 const emptyStats = () => ({ points: 0, unlocked: [...START_KINDS], items: {}, games: 0, decisions: 0, reigns: 0, months: 0, tasks: 0, elections: 0, crises: 0, ends: {}, top: [], blitz: [], daily: {}, weekly: {}, ach: {}, kinds: [], wonders: 0, wars: 0, traitors: 0,
-  xp: {}, tree: {}, relics: [], equip: [], skins: ['klasik'], skin: 'klasik', met: [], albums: [], camp: {}, prestige: 0, weekAward: {} });
+  xp: {}, tree: {}, relics: [], equip: [], skins: ['klasik'], skin: 'klasik', met: [], albums: [], camp: {}, prestige: 0, weekAward: {},
+  packs: [], title: null, built: 0, pacts: 0, heirs: 0, golden: 0, arcs: [], ironTop: [], dcard: {}, tut: 0 });
 let stats = loadStats();
 function loadStats() {
   let s = null;
@@ -112,8 +114,17 @@ function loadStats() {
 function saveStats() { try { localStorage.setItem(STATS, JSON.stringify(stats)); } catch { /* nic */ } }
 const isUnlocked = (id) => stats.unlocked.includes(id);
 const isMain = () => state && ['normal', 'dejiny'].includes(state.mode) && !state.camp;
-/** Postup hráče, který si vůdce bere do hlavní hry: úroveň typu, strom dynastie, nasazené relikvie. */
-const metaFor = (kind) => ({ lvl: levelOf(stats.xp[kind]), meta: { tree: { ...stats.tree }, relics: [...stats.equip] } });
+/** Hlavní hra s pomocí (ne železný režim): vybavení, pomůcky, strom, relikvie. */
+const assisted = () => isMain() && !state.iron;
+/** Postup hráče, který si vůdce bere do hlavní hry: úroveň typu, strom dynastie, nasazené relikvie, titul, balíčky. */
+const metaFor = (kind, iron = false) => (iron ? { lvl: 1, meta: null, packs: [...stats.packs], iron: true }
+  : { lvl: levelOf(stats.xp[kind]), meta: { tree: { ...stats.tree }, relics: [...stats.equip], title: titleOn() }, packs: [...stats.packs] });
+/** Aktivní titul dynastie (jen pokud je opravdu získaný). */
+const titleOn = () => (stats.title && titleGot(stats.title) ? stats.title : null);
+const titleGot = (id) => {
+  const t = TITLES[id];
+  return t && (t.stat === 'arcs' ? new Set(stats.arcs.map((a) => a.split('.')[0])).size : stats[t.stat] ?? 0) >= t.n;
+};
 /** Relikvie: náhodná, kterou hráč ještě nemá (nebo konkrétní). */
 function dropRelic(why, id = null) {
   const free = Object.keys(RELICS).filter((r) => !stats.relics.includes(r));
@@ -155,13 +166,18 @@ function recordReign() {
   const after = levelOf(stats.xp[kind]);
   if (after > before) setTimeout(() => toast(`${KINDS.find((k) => k.id === kind).short}: úroveň ${after} – ${LEVEL_TEXT[after]}`, 'ach'), 900);
   if (before >= 4 && h.months >= 12) n += 1;
-  if (isMain()) {
+  if (isMain() && state.iron) {
+    n *= 2;
+    stats.ironTop = [...stats.ironTop, { name: h.name, months: h.months, title: h.title, kind }].sort((a, b) => b.months - a.months).slice(0, 10);
+  }
+  if (h.heir) stats.heirs = (stats.heirs ?? 0) + 1;
+  if (assisted()) {
     n = Math.round(n * (1 + 0.2 * (stats.tree.pokladna ?? 0)) * (1 + PRESTIGE_BONUS * (state.prestige ?? 0)));
     if (h.months >= 60 || h.ending.startsWith('x.')) dropRelic(h.ending.startsWith('x.') ? 'legenda' : 'dlouhá vláda');
   }
   saveStats();
   lastAward = n;
-  award(n, `vláda ${tenure(h.months)}${state.mods?.length ? ' se ztížením' : ''}`);
+  award(n, `vláda ${tenure(h.months)}${state.iron ? ' v železném režimu' : state.mods?.length ? ' se ztížením' : ''}`);
 }
 /// Hodnocení: body za nejdelší vládu, konce, úkoly, volby, krize a zkušenosti.
 const RANKS = [[0, 'Nováček'], [30, 'Radní'], [80, 'Ministr'], [160, 'Prezident'], [300, 'Státník'], [500, 'Legenda republiky']];
@@ -288,6 +304,7 @@ function startScreen() {
       <img class="logo" src="icons/icon-192.png" alt="">
       <h1>ROVNOVÁHA</h1>
       <button class="pts" id="shop">${icon('trophy', 'ico sm')} ${stats.points} ${bodu(stats.points)} · obchod</button>
+      ${titleOn() ? `<div class="rodtitle">${TITLES[titleOn()].name}</div>` : ''}
       <p>Veď svůj lid od pravěkého ohně přes hrady a parní stroje až do budoucnosti.
         Udrž sedm sil v rovnováze – ideál je uprostřed, na krajích čeká katastrofa.</p>
       <div class="col">
@@ -336,6 +353,7 @@ function setupScreen(mode = 'normal', kind = 'vize') {
       ${blitzMode ? '' : `<div class="seg world"><button id="w1" class="on">${icon('era', 'ico sm')} Dějiny lidstva<small>od pravěku do budoucnosti</small></button><button id="w2">${icon('kontakt', 'ico sm')} Rok 2089<small>jen Nová republika</small></button></div>`}
       ${blitzMode ? `<div class="small">Máš ${BLITZ_START / 60} minuty. Každé rozhodnutí přidá ${BLITZ_BONUS} s, pád vlády ${BLITZ_FALL} s ubere. Kolik rozhodnutí stihneš?</div>` : ''}
       <div class="seg"><button id="m" class="on">Vládce</button><button id="f">Vládkyně</button></div>
+      ${blitzMode ? '' : `<button class="mod iron" id="iron"><b>${icon('crisis', 'ico sm')} Železný režim <em>body ×2</em></b><small>Žádné záchrany, vybavení, pomůcky, rady, strom ani relikvie. Vlastní žebříček.</small></button>`}
       ${blitzMode ? '' : `<details class="mods"><summary>${icon('crisis', 'ico sm')} Ztížení za víc bodů <span id="mb"></span></summary>
         <div class="modlist">${Object.entries(MODS).map(([id, m]) => `<button class="mod" data-mod="${id}"><b>${m.name} <em>+${Math.round(m.bonus * 100)} %</em></b><small>${m.text}</small></button>`).join('')}</div></details>`}
       <div class="label">Jaký budeš vůdce?</div>
@@ -356,7 +374,9 @@ function setupScreen(mode = 'normal', kind = 'vize') {
     $('#w2').onclick = () => pick('normal');
   }
   const mods = new Set();
-  for (const b of app.querySelectorAll('.mod')) b.onclick = () => {
+  let iron = false;
+  if (!blitzMode) $('#iron').onclick = () => { iron = !iron; $('#iron').classList.toggle('on', iron); $('.gear')?.classList.toggle('off', iron); };
+  for (const b of app.querySelectorAll('.mod:not(.iron)')) b.onclick = () => {
     const id = b.dataset.mod;
     if (mods.has(id)) mods.delete(id); else mods.add(id);
     b.classList.toggle('on', mods.has(id));
@@ -368,7 +388,7 @@ function setupScreen(mode = 'normal', kind = 'vize') {
     if (blitzMode) { startBlitz({ female, kind }); return; }
     if (state && !confirm('Opravdu začít znovu? Současná hra i kronika vůdců se smažou (odemčené konce zůstanou).')) return;
     const keep = state ? { endings: state.endings, best: state.best } : null;
-    state = newGame({ female, kind, mode: world === 'dejiny' ? 'dejiny' : 'normal', world, mods: [...mods], ...metaFor(kind) }, (Math.random() * 2 ** 32) >>> 0);
+    state = newGame({ female, kind, mode: world === 'dejiny' ? 'dejiny' : 'normal', world, mods: [...mods], ...metaFor(kind, iron) }, (Math.random() * 2 ** 32) >>> 0);
     if (keep) Object.assign(state, keep);
     stats.games += 1; saveStats();
     save();
@@ -396,13 +416,14 @@ function challengePicker() {
     <div class="pane" role="dialog" aria-label="Výzvy">
       <b class="pane-title">${icon('sun', 'ico')} Výzvy</b>
       <div class="small">Všichni mají ve stejný den (týden) stejný začátek a stejný typ vůdce. Počítá se, jak dlouho vydržíš. Série dní: <b>${dailyStreak()}</b></div>
-      <div class="mlist">${Object.keys(CHAL).map(row).join('')}</div>
+      <div class="mlist"><button class="mi" data-c="karta">${icon('book', 'ico')}<span><b>Karta dne</b><small>${stats.dcard[today()] ? 'dnes rozhodnuto – jak volili ostatní?' : 'jedna karta, stejná pro všechny'}${dcardStreak() > 1 ? ` · série ${dcardStreak()}` : ''}</small></span>${icon('chev', 'ico chev')}</button>${Object.keys(CHAL).map(row).join('')}</div>
       ${weekLadder()}
       <button class="ghost" data-x>Zpět</button>
     </div>`;
   p.onclick = (e) => {
     const b = e.target.closest('button');
     if (e.target === p || b?.dataset.x !== undefined) { p.remove(); return; }
+    if (b?.dataset.c === 'karta') { p.remove(); dailyCardScreen(); return; }
     if (b?.dataset.c) { p.remove(); startDaily(b.dataset.c); }
   };
   document.body.appendChild(p);
@@ -500,6 +521,10 @@ function shop(back) {
       <div class="small">Ve hře je použiješ tlačítkem s klíčem v levém horním rohu karty (jen v hlavní hře).</div>
       <div class="shoplist">${Object.entries(TOOLS).map(([id, it]) => `<div class="shopitem got">${icon(it.icon, 'ico')}<div><b>${it.name}${stats.items[id] ? ` <span class="dim">(máš ${stats.items[id]})</span>` : ''}</b><small>${it.text}</small></div>
         <button class="unlock" data-buy="${id}"${stats.points < it.price ? ' disabled' : ''}>${it.price} b.</button></div>`).join('')}</div>
+      <h3>Balíčky karet</h3>
+      <div class="small">Rozšíření s novými kartami a postavami. V hlavní hře platí hned – karty přijdou ve své době.</div>
+      <div class="shoplist">${Object.entries(PACKS).map(([id, k]) => `<div class="shopitem${stats.packs.includes(id) ? ' got' : ''}">${icon('book', 'ico')}<div><b>${k.name}</b><small>${k.text}</small></div>
+        ${stats.packs.includes(id) ? '<span class="dim">máš</span>' : `<button class="unlock" data-pack="${id}"${stats.points < k.price ? ' disabled' : ''}>${k.price} b.</button>`}</div>`).join('')}</div>
       <h3>Vůdci (${stats.unlocked.length} z ${KINDS.length})</h3>
       <div class="shoplist">${KINDS.map((k) => `<div class="shopitem${isUnlocked(k.id) ? ' got' : ''}">${icon(k.id, 'ico')}<div><b>${k.m}</b><small>${k.text}</small></div>
         ${isUnlocked(k.id) ? '<span class="dim">odemčeno</span>' : `<button class="unlock" data-k="${k.id}"${stats.points < PRICE ? ' disabled' : ''}>${PRICE} b.</button>`}</div>`).join('')}</div>
@@ -511,6 +536,9 @@ function shop(back) {
       <div class="past"><span>Dokončená výzva (poprvé za den/týden)</span><span>1</span></div>
       <div class="past"><span>Bleskovka 30 / 60 rozhodnutí</span><span>1 / 2</span></div>
       <div class="past"><span>Vítězství v souboji pro dva</span><span>1</span></div>
+      <div class="past"><span>Splněná osobní ambice</span><span>${AMB_POINTS}</span></div>
+      <div class="past"><span>Nový konec příběhu, karta dne</span><span>1</span></div>
+      <div class="past"><span>Železný režim</span><span>dvojnásob</span></div>
       <button class="primary" id="back">Zpět</button>
     </div>`;
   for (const b of app.querySelectorAll('[data-buy]')) b.onclick = () => {
@@ -521,6 +549,17 @@ function shop(back) {
     saveStats();
     sfx('good');
     toast(`Koupeno: ${it.name}`, 'perk');
+    shop(back);
+  };
+  for (const b of app.querySelectorAll('[data-pack]')) b.onclick = () => {
+    const id = b.dataset.pack;
+    if (stats.points < PACKS[id].price || stats.packs.includes(id)) return;
+    stats.points -= PACKS[id].price;
+    stats.packs.push(id);
+    if (state && isMain() && !state.packs.includes(id)) { state.packs.push(id); save(); } // rozehraná hra ho dostane hned
+    saveStats();
+    sfx('ach');
+    toast(`Balíček: ${PACKS[id].name}`, 'ach');
     shop(back);
   };
   for (const b of app.querySelectorAll('.unlock[data-k]')) b.onclick = () => {
@@ -543,7 +582,7 @@ function gearLine() {
 /** Na začátku vlády v hlavní hře se od každého druhu vybavení použije jeden kus. */
 function equip() {
   state.hints = 0;
-  if (!isMain()) return;
+  if (!assisted()) return;
   state.meta = { tree: { ...stats.tree }, relics: [...stats.equip] };
   const pred = stats.tree.predkove ?? 0, dech = stats.tree.dech ?? 0;
   if (pred) state.hints = 5 * pred;
@@ -569,7 +608,7 @@ const toolCount = () => Object.keys(TOOLS).reduce((a, id) => a + (stats.items[id
 function updateBag() {
   const bg = $('#bag');
   if (!bg) return;
-  bg.hidden = !toolCount() || !isMain();
+  bg.hidden = !toolCount() || !assisted();
   bg.innerHTML = `${icon('key', 'ico sm')}<span>${toolCount()}</span>`;
 }
 /** Jednorázové pomůcky (jen v hlavní hře – ve výzvách a bleskovce by to nebylo fér). */
@@ -678,46 +717,28 @@ function gameScreen() {
   setupDrag(ui.card);
   render(true);
   offerPerk();
-  tips();
+  coach();
 }
 
-/** Krátký průvodce při první hře (jen jednou). */
-const TIPS = 'rovnovaha.tips';
-function tips() {
-  // Jen na úplném začátku nové hry a nikdy přes jiné okno.
-  if (['blitz', 'daily'].includes(state.mode) || state.total > 1 || document.querySelector('.pop')) return;
-  try { if (localStorage.getItem(TIPS)) return; } catch { return; }
-  const steps = [
-    ['Táhni kartu', 'Každá karta má čtyři volby: doleva, doprava, nahoru a dolů. Při tažení uvidíš, co volba udělá, a tečky ukážou, kterých ukazatelů se dotkne.'],
-    ['Sedm ukazatelů', 'Ideál je uprostřed. Když ukazatel spadne na nulu, nebo vystoupá na maximum, vláda končí. Klepnutím na ikonu zjistíš víc.'],
-    ['Tvoje schopnost', 'Vpravo nahoře je ikona tvého typu vůdce. Kroužek kolem ní ukazuje nabíjení – když svítí, klepni.'],
-    ['Úkoly a nabídka', 'Pod třemi čárkami najdeš Stav republiky (úkol, zákony, volby, lidi), kroniku a statistiky. Hodně štěstí!'],
-  ];
-  let i = 0;
-  const p = document.createElement('div');
-  p.className = 'pop tips';
-  const show = () => {
-    p.innerHTML = `
-      <div class="pane" role="dialog">
-        <div class="dots">${steps.map((_, j) => `<i class="${j === i ? 'on' : ''}"></i>`).join('')}</div>
-        <b class="pane-title">${steps[i][0]}</b>
-        <p>${steps[i][1]}</p>
-        <button class="primary">${i < steps.length - 1 ? 'Další' : 'Rozumím'}</button>
-        ${i < steps.length - 1 ? '<button class="ghost" data-skip>Přeskočit</button>' : ''}
-      </div>`;
-  };
-  p.onclick = (e) => {
-    const b = e.target.closest('button');
-    if (!b) return;
-    if (b.dataset.skip !== undefined || ++i >= steps.length) {
-      p.remove();
-      try { localStorage.setItem(TIPS, '1'); } catch { /* nic */ }
-      return;
-    }
-    show();
-  };
-  show();
-  document.body.appendChild(p);
+/** Průvodce pro nováčky: prvních 5 karet hlavní hry s krátkou bublinou, co se právě děje. */
+const TIPS = 'rovnovaha.tips'; // starší průvodce – kdo ho viděl, nový nedostane
+const COACH = [
+  ['Táhni kartu', 'Karta má čtyři volby – doleva, doprava, nahoru, dolů. Při tažení volbu uvidíš; vrátíš-li kartu doprostřed, nic se nestane.'],
+  ['Tečky', 'Tečky pod ukazateli ukazují, čeho se volba dotkne. Velká tečka = velká změna. Jestli nahoru, nebo dolů, musíš odhadnout.'],
+  ['Ideál je uprostřed', 'Když ukazatel spadne na nulu, nebo vystoupá na maximum, vláda padá. Červená ikona = pozor. Klepnutím na ikonu zjistíš víc.'],
+  ['Tvoje schopnost', 'Vpravo nahoře je ikona tvého typu vůdce. Kroužek kolem ní ukazuje nabíjení – když svítí, klepni.'],
+  ['Čti a plánuj', 'Kdo odpoví za méně než vteřinu, dostane trestnou kartu. Pod třemi čárkami najdeš Stav republiky: úkol, ambici, radu, děti a sousedy.'],
+];
+try { if ((localStorage.getItem(TIPS) || stats.decisions > 30) && !stats.tut) { stats.tut = COACH.length; saveStats(); } } catch { /* nic */ }
+function coach() {
+  app.querySelector('.coach')?.remove();
+  if (!ui || !state || !isMain() || (stats.tut ?? 0) >= COACH.length || state.dead) return;
+  const [t, x] = COACH[stats.tut], el = document.createElement('div');
+  el.className = 'coach';
+  el.innerHTML = `<div class="dots">${COACH.map((_, j) => `<i class="${j === stats.tut ? 'on' : ''}"></i>`).join('')}</div><b>${t}</b><p>${x}</p><div class="row2"><button class="primary">${stats.tut < COACH.length - 1 ? 'Rozumím' : 'Hodně štěstí!'}</button><button class="ghost" data-skip>Přeskočit</button></div>`;
+  el.querySelector('.primary').onclick = () => { stats.tut += 1; saveStats(); coach(); };
+  el.querySelector('[data-skip]').onclick = () => { stats.tut = COACH.length; saveStats(); coach(); };
+  app.appendChild(el);
 }
 
 function render(enter) {
@@ -876,7 +897,8 @@ function commit(dir) {
   setTimeout(() => {
     undoSnap = ['normal', 'dejiny'].includes(state.mode) ? JSON.stringify(state) : null;
     if (state.hints > 0) state.hints -= 1;
-    const fast = state.mode !== 'blitz' && !['intro', 'dej_intro'].includes(state.card) && performance.now() - shownAt < RUSH_MS;
+    const fast = state.mode !== 'blitz' && (stats.tut ?? 0) >= COACH.length && !['intro', 'dej_intro'].includes(state.card) && performance.now() - shownAt < RUSH_MS;
+    if (isMain() && (stats.tut ?? 0) < COACH.length && !['intro', 'dej_intro'].includes(state.card)) stats.tut = (stats.tut ?? 0) + 1;
     const dead = choose(state, dir);
     if (fast && !dead) { state.rush = true; toast('Moc rychle! Nečteš – další karta ti jen uškodí. Veď zemi pořádně.', 'fall'); vibrate([20, 40, 20]); }
     stats.decisions += 1; saveStats();
@@ -885,14 +907,14 @@ function commit(dir) {
       state.decisions += 1;
       busy = false;
       if (dead) { blitzFall(dead); checkAch(); return; }
-      render(true); flash(before); showNews(); offerPerk(); checkAch();
+      render(true); flash(before); feel(before); showNews(); offerPerk(); checkAch();
       return;
     }
     save();
     busy = false;
     if (dead && state.mode === 'daily') { dailyFall(); return; }
     if (state.camp) { if (dead) { campFall(); return; } if (campCheck()) return; }
-    if (dead) { undoSnap = null; recordReign(); checkAch(); deathScreen(); } else { render(true); flash(before); showNews(); offerPerk(); checkAch(); }
+    if (dead) { undoSnap = null; recordReign(); checkAch(); deathScreen(); } else { render(true); flash(before); feel(before); showNews(); offerPerk(); checkAch(); coach(); }
   }, 220);
 }
 
@@ -972,10 +994,18 @@ function sfx(kind) {
     if (kind === 'warn') tone(300, 0, 0.2, 0.04, 'sawtooth');
   } catch { /* zvuk není k dispozici */ }
 }
-const vibrate = (ms) => { try { if (soundOn) navigator.vibrate?.(ms); } catch { /* nic */ } };
+const VIB = 'rovnovaha.vib';
+let vibOn = (() => { try { return localStorage.getItem(VIB) !== '0'; } catch { return true; } })();
+const vibrate = (ms) => { try { if (vibOn) navigator.vibrate?.(ms); } catch { /* nic */ } };
+/** Po rozhodnutí: ukazatel zčervenal → varovný tón a delší zavibrování; velká změna → krátké cuknutí. */
+function feel(before) {
+  const red = METERS.some((m) => danger(state.meters[m.id]) >= 0.7 && danger(before[m.id]) < 0.7);
+  if (red) { sfx('warn'); vibrate([40, 30, 40]); return; }
+  if (METERS.some((m) => Math.abs(state.meters[m.id] - before[m.id]) >= 12)) vibrate(25);
+}
 
 function toast(text, kind = '') {
-  if (['task', 'crisis', 'election', 'perk', 'rescue', 'era', 'wonder', 'war', 'traitor'].includes(kind)) sfx('good');
+  if (['task', 'crisis', 'election', 'perk', 'rescue', 'era', 'wonder', 'war', 'traitor', 'built', 'pact', 'golden', 'kid', 'arc', 'amb'].includes(kind)) sfx('good');
   if (kind === 'ach') sfx('ach');
   if (['crisisLost', 'fall', 'electionSoon', 'warLost', 'traitorStrike', 'traitorHint'].includes(kind)) sfx('warn');
   toasts.push({ text, kind });
@@ -987,7 +1017,7 @@ function nextToast() {
   const t = document.createElement('div');
   t.className = `toast ${m.kind}`;
   const ic = { law: 'law', task: 'task', era: 'era', crisis: 'crisis', crisisLost: 'crisis', election: 'vote', electionSoon: 'vote', rescue: 'rescue', perk: 'perk', fall: 'crisis', ach: 'trophy', points: 'trophy', sun: 'sun', age: 'era', enemy: 'crisis', friend: 'people', wonder: 'era', war: 'trophy', warLost: 'crisis', rival: 'globe',
-    traitor: 'key', traitorHint: 'key', traitorStrike: 'crisis' }[m.kind];
+    traitor: 'key', traitorHint: 'key', traitorStrike: 'crisis', built: 'era', pact: 'globe', golden: 'sun', season: 'sun', kid: 'people', rep: 'people', arc: 'book', amb: 'task', echo: 'book' }[m.kind];
   t.innerHTML = (ic ? icon(ic, 'ico sm') : '') + `<span>${esc(m.text)}</span>`;
   document.body.appendChild(t);
   setTimeout(() => { t.remove(); toasts.shift(); nextToast(); }, m.kind ? 2800 : 1800);
@@ -1004,6 +1034,11 @@ function showNews() {
     if (n.kind === 'wonder') stats.wonders = (stats.wonders ?? 0) + 1;
     if (n.kind === 'war') stats.wars = (stats.wars ?? 0) + 1;
     if (n.kind === 'traitor') stats.traitors = (stats.traitors ?? 0) + 1;
+    if (n.kind === 'built') { stats.built = (stats.built ?? 0) + 1; if (isMain() && Math.random() < 0.5) dropRelic('stavba dokončena'); }
+    if (n.kind === 'pact') stats.pacts = (stats.pacts ?? 0) + 1;
+    if (n.kind === 'golden') stats.golden = (stats.golden ?? 0) + 1;
+    if (n.kind === 'arc') for (const a of state.arcs ?? []) if (!stats.arcs.includes(a)) { stats.arcs.push(a); if (isMain()) award(1, 'nový konec příběhu'); }
+    if (n.kind === 'amb' && isMain()) award(AMB_POINTS + (state.meta?.title === 'kronikari' ? 1 : 0), 'splněná ambice');
   }
   if (state.news?.length) saveStats();
   if (state.news?.length) { state.news = []; save(); }
@@ -1160,7 +1195,7 @@ function menu() {
   const m = document.createElement('div');
   m.className = 'menu';
   const bl = state.mode === 'blitz';
-  const item = (a, ic, label, sub = '') => `<button class="mi" data-a="${a}">${icon(ic, 'ico')}<span><b>${label}</b>${sub ? `<small>${sub}</small>` : ''}</span>${a === 'sound' ? `<i class="sw${soundOn ? ' on' : ''}"></i>` : icon('chev', 'ico chev')}</button>`;
+  const item = (a, ic, label, sub = '') => `<button class="mi" data-a="${a}">${icon(ic, 'ico')}<span><b>${label}</b>${sub ? `<small>${sub}</small>` : ''}</span>${a === 'sound' || a === 'vib' ? `<i class="sw${(a === 'sound' ? soundOn : vibOn) ? ' on' : ''}"></i>` : icon('chev', 'ico chev')}</button>`;
   m.innerHTML = `
     <div class="sheetmenu" role="dialog" aria-label="Nabídka">
       <div class="grab"></div>
@@ -1171,7 +1206,8 @@ function menu() {
         ${bl ? '' : item('chron', 'book', 'Kronika a konce', 'vůdci a odemčené konce')}
         ${bl ? '' : item('stats', 'trophy', 'Statistiky a úspěchy', 'hodnocení a rekordy')}
         ${item('help', 'help', 'Jak hrát')}
-        ${item('sound', soundOn ? 'sound' : 'mute', 'Zvuk a vibrace')}
+        ${item('sound', soundOn ? 'sound' : 'mute', 'Zvuk')}
+        ${item('vib', 'timer', 'Vibrace', 'při velké změně a když ukazatel zčervená')}
         ${bl ? item('endblitz', 'timer', 'Ukončit bleskovku') : item('start', 'home', 'Hlavní nabídka')}
       </div>
       <div class="small mnote">${bl ? 'Bleskovka se neukládá. Tvoje hlavní hra zůstává, jak byla.' : state.mode === 'daily' ? 'Denní výzva se ukládá zvlášť – můžeš ji kdykoli dohrát.' : 'Hra se ukládá sama po každém rozhodnutí.'}</div>
@@ -1185,6 +1221,13 @@ function menu() {
       b.querySelector('.sw').classList.toggle('on', soundOn);
       b.querySelector('.ico').outerHTML = icon(soundOn ? 'sound' : 'mute', 'ico');
       sfx('good');
+      return;
+    }
+    if (a === 'vib') {
+      vibOn = !vibOn;
+      try { localStorage.setItem(VIB, vibOn ? '1' : '0'); } catch { /* nic */ }
+      b.querySelector('.sw').classList.toggle('on', vibOn);
+      vibrate(30);
       return;
     }
     m.remove();
@@ -1213,6 +1256,8 @@ function deathScreen() {
       <h2 class="${d.special ? 'legend' : ''}">${esc(d.title)}</h2>
       <div class="small" style="text-align:center">${why}</div>
       <p>${esc(d.text)}</p>
+      ${reignGraph()}
+      ${(() => { const h = state.history[state.history.length - 1]; return h?.amb ? `<div class="small" style="text-align:center">${icon('task', 'ico sm')} Splněná ambice: ${esc(h.amb)}</div>` : ''; })()}
       <div class="stats">
         <div class="stat"><span class="small">${l.female ? 'Vládla' : 'Vládl'}</span><b>${tenure(d.months)}</b>${state.mods?.length ? `<span class="small">skóre ${d.score} (×${modBonus(state).toFixed(2).replace('.', ',')})</span>` : ''}</div>
         <div class="stat"><span class="small">Nejdelší vláda</span><b>${tenure(state.best)}</b></div>
@@ -1221,17 +1266,88 @@ function deathScreen() {
         <div class="stat"><span class="small">Získané body</span><b>${lastAward ? `+${lastAward}` : '0'}</b><span class="small">celkem ${stats.points}</span></div>
         <div class="stat"><span class="small">Vůdci</span><b>${stats.unlocked.length} z ${KINDS.length}</b><span class="small">další za ${PRICE} bodů</span></div>
       </div>
+      ${(state.kids ?? []).length ? `<div class="label">Kdo nastoupí?</div>
+      <div class="heirs"><button class="heir on" data-h="">${icon('people', 'ico sm')}<span><b>Cizí nástupce</b><small>nový rod</small></span></button>${state.kids.map((k, i) => `<button class="heir" data-h="${i}">${icon(k.edu ? { sil: 'krize', vir: 'sun', ved: 'prorok', dip: 'globe' }[k.edu] : 'people', 'ico sm')}<span><b>${esc(k.name)}</b><small>${k.female ? TRAITS[k.trait].f : TRAITS[k.trait].name} · ${k.edu ? `${EDU[k.edu]} výchova` : 'bez výchovy'}</small></span></button>`).join('')}</div>
+      <div class="small" id="heirinfo">Dědic z rodu dostane výhodu podle své vlastnosti a jeho výchova tlumí změny jednoho ukazatele.</div>` : ''}
       <div class="label">Jaký bude nástupce?</div>
       <div id="kp">${kindPicker()}</div>
       ${gearLine()}
       <button class="primary" id="next">Úřad přebírá nástupce</button>
-      <div class="row2"><button class="ghost" id="chron">Kronika</button><button class="ghost" id="tohome">Hlavní nabídka</button></div>
+      <div class="row3"><button class="ghost" id="chron">Kronika</button><button class="ghost" id="share">Sdílet</button><button class="ghost" id="tohome">Nabídka</button></div>
     </div>`;
   $('#tohome').onclick = startScreen;
-  let kind = l.kind;
+  $('#share').onclick = () => shareReign().catch(() => toast('Sdílení se nepovedlo'));
+  let kind = l.kind, heir = null;
+  for (const b of app.querySelectorAll('.heir')) b.onclick = () => {
+    heir = b.dataset.h === '' ? null : Number(b.dataset.h);
+    for (const x of app.querySelectorAll('.heir')) x.classList.toggle('on', x === b);
+    const k = heir != null ? state.kids[heir] : null;
+    $('#heirinfo').textContent = k ? `${k.name} dostane výhodu ${PERKS[TRAITS[k.trait].perk].name}${k.edu ? ` a díky ${EDU[k.edu]} výchově se ${METERS.find((m) => m.id === k.edu).name} bude měnit o pětinu méně` : ''}.` : 'Cizí nástupce: nový rod, žádné dědictví krve.';
+  };
   bindPicker($('#kp'), kind, () => null, (k) => (kind = k));
-  $('#next').onclick = () => { nextLeader(state, kind, levelOf(stats.xp[kind])); equip(); save(); gameScreen(); toast(`Úkol: ${taskById(state.task.id).text}`, 'newtask'); };
+  $('#next').onclick = () => { nextLeader(state, kind, state.iron ? 1 : levelOf(stats.xp[kind]), heir); equip(); save(); gameScreen(); showNews(); toast(`Úkol: ${taskById(state.task.id).text}`, 'newtask'); };
   $('#chron').onclick = () => chronicleScreen(deathScreen);
+}
+
+// ── Graf vlády a sdílení ─────────────────────────────
+const LINE_C = { fin: '#e0b84a', lid: '#e07a5f', sil: '#9aa8bd', ved: '#5fa8e0', pri: '#6cc070', vir: '#b48ae0', dip: '#4ac0b0' };
+/** Průběh všech ukazatelů za vládu: pásmo klidu, čáry a značky (krize, válka, velké rozhodnutí). */
+function reignGraph(trace = state.trace ?? [], marks = state.marks ?? []) {
+  if (trace.length < 2) return '';
+  const W = 300, H = 110, n = trace.length - 1, x = (i) => ((i / n) * W).toFixed(1), y = (v) => (H - (v / 100) * H).toFixed(1);
+  const lines = METERS.map((m, j) => `<polyline points="${trace.map((row, i) => `${x(i)},${y(row[j])}`).join(' ')}" stroke="${LINE_C[m.id]}"/>`).join('');
+  const mk = marks.filter((k) => k.t <= n).map((k) => k.kind === 'big'
+    ? `<circle cx="${x(k.t)}" cy="${H - 3}" r="2.2" class="gm big"/>` : `<line x1="${x(k.t)}" x2="${x(k.t)}" y1="0" y2="${H}" class="gm ${k.kind}"/>`).join('');
+  return `<div class="graph"><svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-label="Graf vlády">
+      <rect x="0" y="${y(70)}" width="${W}" height="${(H * 0.4).toFixed(1)}" class="calm"/><line x1="0" x2="${W}" y1="${y(50)}" y2="${y(50)}" class="mid"/>${mk}<g class="gl">${lines}</g></svg>
+    <div class="glegend">${METERS.map((m) => `<span><i style="background:${LINE_C[m.id]}"></i>${m.name}</span>`).join('')}<span><i class="gk crisis"></i>krize</span><span><i class="gk war"></i>válka</span><span><i class="gk big"></i>velké rozhodnutí</span></div></div>`;
+}
+/** Obrázek s výsledkem vlády (erb, délka vlády, konec, graf) – sdílet, nebo uložit. */
+async function shareReign() {
+  const d = state.dead, l = state.leader, c = document.createElement('canvas');
+  c.width = 1080; c.height = 1350;
+  const g = c.getContext('2d');
+  const bg = g.createLinearGradient(0, 0, 0, 1350);
+  bg.addColorStop(0, '#1d1a16'); bg.addColorStop(1, '#0d0c0b');
+  g.fillStyle = bg; g.fillRect(0, 0, 1080, 1350);
+  // Erb: štít s iniciálou a barvou typu vůdce.
+  const hue = [...l.kind].reduce((a, ch) => a + ch.charCodeAt(0), 0) % 360;
+  g.save(); g.translate(540, 250);
+  g.beginPath(); g.moveTo(-130, -150); g.lineTo(130, -150); g.lineTo(130, 10); g.quadraticCurveTo(130, 120, 0, 170); g.quadraticCurveTo(-130, 120, -130, 10); g.closePath();
+  g.fillStyle = `hsl(${hue} 40% 32%)`; g.fill(); g.lineWidth = 12; g.strokeStyle = '#d8b25a'; g.stroke();
+  g.fillStyle = '#f3e7c9'; g.font = 'bold 150px Georgia, serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.fillText((l.name[0] ?? '?').toUpperCase(), 0, 0);
+  g.restore();
+  g.textAlign = 'center'; g.textBaseline = 'alphabetic';
+  g.fillStyle = '#d8b25a'; g.font = 'bold 44px system-ui, sans-serif'; g.fillText('ROVNOVÁHA', 540, 500);
+  g.fillStyle = '#f3efe6'; g.font = 'bold 72px system-ui, sans-serif'; g.fillText(l.name, 540, 600);
+  g.fillStyle = '#b9b2a3'; g.font = '38px system-ui, sans-serif';
+  g.fillText(`${l.n}. ${leaderTitle(state)}${(state.world ?? state.mode) === 'dejiny' ? ` · ${ageOf(state).name}` : ''}${state.repNow ? ` · ${repName(state.repNow, l.female)}` : ''}`, 540, 660);
+  g.fillStyle = '#f3efe6'; g.font = 'bold 96px system-ui, sans-serif'; g.fillText(tenure(d.months), 540, 800);
+  g.fillStyle = '#e07a5f'; g.font = 'bold 50px system-ui, sans-serif'; g.fillText(d.title, 540, 880);
+  // Graf
+  const tr = state.trace ?? [];
+  if (tr.length > 1) {
+    const X = 90, Y = 950, W = 900, H = 280;
+    g.fillStyle = 'rgba(255,255,255,.06)'; g.fillRect(X, Y + H * 0.3, W, H * 0.4);
+    METERS.forEach((m, j) => {
+      g.beginPath();
+      tr.forEach((row, i) => { const px = X + (i / (tr.length - 1)) * W, py = Y + H - (row[j] / 100) * H; if (i) g.lineTo(px, py); else g.moveTo(px, py); });
+      g.strokeStyle = LINE_C[m.id]; g.lineWidth = 5; g.stroke();
+    });
+  }
+  g.fillStyle = '#7d776b'; g.font = '30px system-ui, sans-serif'; g.fillText(new Date().toLocaleDateString('cs-CZ'), 540, 1310);
+  const blob = await new Promise((r) => c.toBlob(r, 'image/png'));
+  const file = new File([blob], 'rovnovaha.png', { type: 'image/png' });
+  const text = `${l.name} vládl${l.female ? 'a' : ''} ${tenure(d.months)} – ${d.title}. Rovnováha`;
+  try {
+    if (navigator.canShare?.({ files: [file] })) { await navigator.share({ files: [file], text }); return; }
+  } catch (e) { if (e?.name === 'AbortError') return; }
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = 'rovnovaha.png';
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+  toast('Obrázek uložen', 'perk');
 }
 
 /** Frakce, stavby, čekající důsledky, úroveň vůdce a prestiž. */
@@ -1249,6 +1365,34 @@ function depthBox() {
     ${(state.later ?? []).length ? `<div class="small">${icon('crisis', 'ico sm')} Na zemi čeká ${(state.later ?? []).length}× důsledek dřívějších rozhodnutí.</div>` : ''}
     ${state.echoes?.length ? `<h3>${icon('book', 'ico')} Ozvěny minulosti</h3>${state.echoes.slice(-4).reverse().map((e) => `<div class="small">• ${esc(e.text)}</div>`).join('')}` : ''}
     <div class="small">Vůdce: úroveň ${lv}${lv >= 3 ? ` (mistr: ${MASTERY[state.leader.kind]})` : ''}${state.prestige ? ` · Prestiž ${ROMAN[state.prestige]}` : ''}${state.meta?.relics?.length ? ` · Relikvie: ${state.meta.relics.map((r) => RELICS[r].name).join(', ')}` : ''}</div>`;
+}
+
+/** Dvůr: pověst, ambice, královská rada, děti a sousední rod. */
+function courtBox() {
+  const female = state.leader.female, out = [];
+  const a = ambById(state.amb?.id), ap = ambProgress(state);
+  if (a) out.push(`<h3>${icon('task', 'ico')} Osobní ambice</h3><div class="box"><p>${esc(a.text)}${state.amb.done ? ' <b class="ok">✓ splněno</b>' : ''}</p>
+    <div class="bar"><i style="width:${Math.round((ap.now / ap.of) * 100)}%"></i></div><div class="small">${ap.now} / ${ap.of} · za splnění ${AMB_POINTS} body${state.iron ? '' : ''}</div></div>`);
+  const rep = state.repNow, pts = Object.entries(state.rep ?? {}).sort((x, y) => y[1] - x[1]);
+  out.push(`<h3>${icon('people', 'ico')} Pověst</h3><div class="small">${rep ? `Lidé ti říkají <b>${repName(rep, female)}</b>. ${REPS[rep].text}`
+    : 'Lidé si o tobě ještě neudělali jasný obrázek.'}${pts.length ? `<br>${pts.slice(0, 3).map(([id, n]) => `${repName(id, female)} ${n}`).join(' · ')} (pověst platí od 8 a musí vést)` : ''}</div>`);
+  const council = state.council ?? [], cand = councilCandidates(state);
+  const cname = (who) => esc(PEOPLE[who]?.name ?? who), cm = (who) => METERS.find((m) => m.id === CARES[who]);
+  out.push(`<h3>${icon('rada', 'ico')} Královská rada (${council.length} / ${COUNCIL_MAX})</h3>
+    <div class="small">Rádce tlumí pokles „svého“ ukazatele o pětinu. Když se na tebe rozzlobí, zradí tě. Jmenovat můžeš jen ty, kdo ti věří.</div>
+    ${council.map((who) => `<div class="past"><span>${cname(who)} ${mood(state.rel?.[who] ?? 0, REL_LOYAL)} <span class="dim">· hlídá ${cm(who)?.name ?? ''}</span></span><button class="unlock" data-dis="${who}">Odvolat</button></div>`).join('')}
+    ${council.length < COUNCIL_MAX && !state.dead ? (cand.length ? cand.slice(0, 5).map((who) => `<div class="past"><span>${cname(who)} ${mood(state.rel?.[who] ?? 0, REL_LOYAL)} <span class="dim">· ${cm(who)?.name ?? ''}</span></span><button class="unlock" data-app="${who}">Jmenovat</button></div>`).join('')
+      : '<div class="small dim">Zatím ti nikdo nevěří natolik, aby usedl do rady.</div>') : ''}`);
+  const kids = state.kids ?? [];
+  out.push(`<h3>${icon('people', 'ico')} Děti</h3>${kids.length ? kids.map((k) => `<div class="past"><span>${esc(k.name)} <span class="dim">${k.female ? 'dcera' : 'syn'}</span></span><span>${k.female ? TRAITS[k.trait].f : TRAITS[k.trait].name}${k.edu ? ` · ${EDU[k.edu]} výchova` : ' · bez výchovy'}</span></div>`).join('')
+    : '<div class="small">Zatím žádné. Děti se rodí během vlády – jedno z nich může po tobě převzít vládu.</div>'}`);
+  if (!state.rival?.absorbed) {
+    const pacts = [state.flags.includes('pakt_snatek') ? 'sňatek' : '', state.flags.includes('pakt_obchod') ? 'obchodní smlouva' : ''].filter(Boolean);
+    const mood2 = state.rel?.riv ?? 0;
+    out.push(`<h3>${icon('globe', 'ico')} Sousední rod</h3><div class="small">Vládne <b>${esc(rivalName(state))}</b>${(state.rival?.ruler?.gen ?? 1) > 1 ? ` (${state.rival.ruler.gen}. generace)` : ''} · ${mood2 >= 3 ? 'spojenec' : mood2 <= -3 ? 'nepřítel' : mood2 > 0 ? 'přátelský' : mood2 < 0 ? 'nevraživý' : 'neutrální'}${pacts.length ? ` · ${pacts.join(', ')}` : ''}.
+      Sousední rod si pamatuje, jak ses k němu choval{a} – i po tvém pádu.</div>`.replace('{a}', female ? 'a' : ''));
+  }
+  return out.join('');
 }
 
 /** Sousední říše, divy světa, cesta dějin, zrádce a ztížení. */
@@ -1309,7 +1453,7 @@ function ageSplash() {
       <p class="dim">${what}</p>
       <button class="primary">Vládnout</button>
     </div>`;
-  p.onclick = (e) => { if (e.target.closest('button')) { p.remove(); if (ui) { render(false); tips(); } } };
+  p.onclick = (e) => { if (e.target.closest('button')) { p.remove(); if (ui) { render(false); coach(); } } };
   document.body.appendChild(p);
 }
 
@@ -1325,6 +1469,7 @@ function realmScreen(back) {
   app.innerHTML = `
     <div class="sheet realm">
       ${(state.world ?? state.mode) === 'dejiny' ? timeline() : ''}
+      ${courtBox()}
       ${worldBox()}
       ${depthBox()}
       ${(state.age ?? 7) >= 7 ? `<h3>${icon('era', 'ico')} Éra: ${era.name}</h3>
@@ -1343,6 +1488,15 @@ function realmScreen(back) {
       <button class="primary" id="back">Zpět</button>
     </div>`;
   $('#back').onclick = back;
+  for (const b of app.querySelectorAll('[data-app]')) b.onclick = () => { if (appoint(state, b.dataset.app)) { save(); toast(`Nový člen rady: ${PEOPLE[b.dataset.app]?.name}`, 'friend'); realmScreen(back); } };
+  for (const b of app.querySelectorAll('[data-dis]')) b.onclick = () => { if (dismiss(state, b.dataset.dis)) { save(); toast(`Odvoláno z rady: ${PEOPLE[b.dataset.dis]?.name} (vztah −2)`, 'enemy'); realmScreen(back); } };
+}
+
+/** Rodokmen: současný vládce na konci řady. */
+function currentLine() {
+  const l = state.leader;
+  return `<div class="ln${l.heir ? ' blood' : ''}"><div class="lnlink">${l.heir ? `${l.female ? 'dcera' : 'syn'} předchůdce` : l.n === 1 ? 'zakladatel' : 'nový rod'} · vládne</div>
+    <div class="lnbox">${icon(l.kind, 'ico sm')}<div><b>${l.n}. ${esc(l.name)}</b><small>${tenure(state.turn)}${state.kids?.length ? ` · děti: ${state.kids.map((k) => esc(k.name)).join(', ')}` : ''}</small></div></div></div>`;
 }
 
 // ── Kronika ──────────────────────────────────────────
@@ -1354,8 +1508,11 @@ function chronicleScreen(back) {
   const total = ends.length + 1 + Object.keys(SPECIAL).length;
   app.innerHTML = `
     <div class="sheet">
-      <h3>Vůdci republiky</h3>
-      ${past.length ? past.map((h) => `<div class="past"><span>${h.n}. ${esc(h.name)}</span><span>${tenure(h.months)} · ${esc(h.title)}</span></div>`).join('')
+      <h3>Rodokmen</h3>
+      ${past.length || !state.dead ? `<div class="lineage">${[...past].reverse().map((h) => `<div class="ln${h.heir ? ' blood' : ''}">
+        <div class="lnlink">${h.n === 1 ? 'zakladatel' : h.heir ? `${h.female ? 'dcera' : 'syn'} předchůdce` : 'nový rod'}</div>
+        <div class="lnbox">${h.kind ? icon(h.kind, 'ico sm') : ''}<div><b>${h.n}. ${esc(h.name)}</b><small>${tenure(h.months)} · ${esc(h.title)}${h.rep ? ` · ${repName(h.rep, h.female)}` : ''}</small>
+          ${h.amb ? `<small>${icon('task', 'ico sm')} ${esc(h.amb)}</small>` : ''}${h.kids?.length ? `<small>Děti: ${h.kids.map(esc).join(', ')}</small>` : ''}</div></div></div>`).join('')}${state.dead ? '' : currentLine()}</div>`
         : '<div class="small">Zatím nikdo nepadl. Vládni dlouho!</div>'}
       <h3>Konce (${state.endings.length} z ${total})</h3>
       <div class="endings">${ends.map(({ key, m, s, e }) => `
@@ -1530,13 +1687,21 @@ function helpScreen(back) {
         <li><b>Cesta dějin:</b> každý přelom nabízí dva objevy (třeba knihtisk, nebo střelný prach). Tvoje volba otevře jiné karty v další době.</li>
         <li><b>Divy světa:</b> v každé době můžeš postavit velkou stavbu. Stavba trvá několik karet; hotový div navždy drží jeden ukazatel u rovnováhy.</li>
         <li><b>Sousední říše</b> (v dávných dobách) sílí s časem. Obchoduj, uzavírej spojenectví, plať tribut, nebo válči – válku rozhoduje tvoje Síla proti síle souseda. Slabého souseda můžeš pohltit.</li>
-        <li><b>Roční období:</b> zima ubírá zásoby, podzim přináší úrodu a každé období má vlastní karty.</li>
+        <li><b>Roční období:</b> zima ubírá zásoby, jaro pomáhá přírodě, léto lidem, podzim přináší úrodu. Občas přijde tuhá zima, povodně, sucho nebo bohatá úroda. Každé období má vlastní karty.</li>
         <li><b>Zrádci:</b> občas někdo z tvých blízkých začne vynášet tajemství. Když ho vyšetřovatel včas neodhalí, zradí tě.</li>
         <li><b>Dynastie:</b> každý typ vůdce sbírá zkušenost (měsíce vlády) a roste na úroveň 2–4 – na úrovni 3 je mistr se silnější schopností. Za body kupuješ trvalá vylepšení stromu dynastie.</li>
         <li><b>Sbírka:</b> album postav, galerie konců, relikvie (najdeš je za dlouhé vlády, legendy, divy a nové doby; nasadíš dvě) a vzhledy karet.</li>
         <li><b>Frakce</b> (Kněží, Kupci, Vojsko, Učenci) se zlobí, když jejich ukazatel dlouho klesá – nakonec se vzbouří. <b>Zvěsti</b> můžou a nemusí být pravda, a některá rozhodnutí se ti vrátí až po letech.</li>
         <li><b>Velké stavby:</b> na začátku vlády můžeš začít stavět. Stavba stojí zásoby každý měsíc a po dokončení navždy drží svůj ukazatel u rovnováhy. Kdo vládne aspoň 3 roky, předá nástupci jednu výhodu a věrné lidi.</li>
         <li><b>Kampaň:</b> 10 kapitol s pevným zadáním, hodnocení hvězdami. <b>Prestiž:</b> po dosažení budoucnosti začni znovu od pravěku – těžší, ale s víc body.</li>
+        <li><b>Pověst:</b> podle tvých rozhodnutí ti lidé začnou říkat Tyran, Dobrotivý, Lakomec, Učenec nebo Zbožný. Pověst mění, jak silně na tebe ukazatele reagují, a přivádí vlastní karty.</li>
+        <li><b>Děti a dědicové:</b> během vlády se rodí děti s vlastností; výchovou (vojenská, církevní, učená, dvorská) je připravíš. Po pádu si můžeš vybrat dědice z rodu – dostane výhodu podle vlastnosti a jeho ukazatel se mění méně. V kronice uvidíš rodokmen.</li>
+        <li><b>Královská rada:</b> ve Stavu republiky jmenuj až 3 rádce z lidí, kteří ti věří. Každý tlumí pokles svého ukazatele. Rozzlobený rádce zradí.</li>
+        <li><b>Sousední rod</b> má vlastního vládce a pamatuje si tě i po tvém pádu. Sňatek drží mír, obchodní smlouva přináší zásoby.</li>
+        <li><b>Příběhy:</b> delší linie na několik karet s větvením a více konci (Sbírka → Příběhy). <b>Balíčky karet</b> (Mořeplavci, Mor, Průmyslová revoluce, Vesmírná kolonie) koupíš v obchodě.</li>
+        <li><b>Osobní ambice:</b> každý vůdce má vlastní cíl – za splnění body a zápis do kroniky. <b>Tituly rodu</b> (Dynastie) dávají malý trvalý bonus.</li>
+        <li><b>Železný režim:</b> žádné záchrany, pomůcky ani rady – ale dvojnásobek bodů. <b>Karta dne</b> na úvodní obrazovce: jedna karta pro všechny a jak by volilo 100 simulovaných vládců.</li>
+        <li>Po pádu vlády uvidíš <b>graf vlády</b> a výsledek můžeš <b>sdílet</b> jako obrázek.</li>
         <li><b>Čti karty.</b> Kdo odpoví rychleji než za vteřinu, nečte – další karta (s červeným rámečkem) mu pak jen uškodí, ať zvolí cokoli. V bleskovce to neplatí.</li>
         <li><b>Čím déle vládneš, tím víc rozhodnutí váží</b> – na začátku vlády mají účinek 1,8×, po čtyřech letech 2,6×. Nový vůdce začíná zase mírněji.</li>
         <li><b>Dlouhé krajnosti</b> mají následky (hladomor, fanatici, vojáci nad zákonem…), dlouhý klid přinese zlatý věk.</li>
@@ -1599,6 +1764,14 @@ function dynastyScreen(back) {
         <div class="small">Máš <b>${stats.points} ${bodu(stats.points)}</b>. Vylepšení platí v hlavní hře pro všechny další vůdce.</div></div>
       <h3>Strom dynastie</h3>
       <div class="shoplist">${tree}</div>
+      <h3>Tituly rodu</h3>
+      <div class="small">Přídomky za milníky. Jeden si zvol jako aktivní – dává malý bonus v hlavní hře.</div>
+      <div class="shoplist">${Object.entries(TITLES).map(([id, t]) => {
+        const got = titleGot(id), on = titleOn() === id;
+        const have = t.stat === 'arcs' ? new Set(stats.arcs.map((a) => a.split('.')[0])).size : stats[t.stat] ?? 0;
+        return `<div class="shopitem${got ? ' got' : ''}">${icon(got ? 'trophy' : 'key', 'ico')}<div><b>${t.name}</b><small>${got ? t.text : `${t.need} (${Math.min(have, t.n)} / ${t.n})`}</small></div>
+          ${got ? `<button class="unlock${on ? ' on' : ''}" data-title="${id}">${on ? 'Aktivní' : 'Zvolit'}</button>` : ''}</div>`;
+      }).join('')}</div>
       <h3>Úrovně vůdců</h3>
       <div class="small">Zkušenost = měsíce vlády s daným typem. Úroveň 2: mírnější začátek vlády. Úroveň 3: mistrovství (silnější schopnost). Úroveň 4: bod navíc za každou vládu delší než rok.</div>
       ${KINDS.map(row).join('')}
@@ -1616,6 +1789,7 @@ function dynastyScreen(back) {
     toast(`${TREE[id].name}: stupeň ${n + 1}`, 'ach');
     dynastyScreen(back);
   };
+  for (const b of app.querySelectorAll('[data-title]')) b.onclick = () => { stats.title = stats.title === b.dataset.title ? null : b.dataset.title; saveStats(); dynastyScreen(back); };
   $('#back').onclick = back;
 }
 
@@ -1623,7 +1797,7 @@ function dynastyScreen(back) {
 function collectionScreen(back, tab = 'lide') {
   ui = null;
   document.body.classList.remove('game');
-  const tabs = { lide: 'Postavy', konce: 'Konce', relikvie: 'Relikvie', vzhled: 'Vzhledy' };
+  const tabs = { lide: 'Postavy', konce: 'Konce', pribehy: 'Příběhy', relikvie: 'Relikvie', vzhled: 'Vzhledy' };
   let body = '';
   if (tab === 'lide') {
     const groups = albumPeople();
@@ -1643,6 +1817,11 @@ function collectionScreen(back, tab = 'lide') {
     })).join('')}`;
     body = list(ENDINGS_PAST, 'Dávné doby') + list(ENDINGS, 'Nová republika')
       + `<h3>Legendy</h3>${Object.entries(SPECIAL).map(([id, e]) => { const got = stats.ends[`x.${id}`] || state?.endings?.includes(`x.${id}`); return `<div class="endrow${got ? '' : ' locked'}">${icon(id, 'ico')}<div><b>${got ? esc(e.title) : '???'}</b><small>${got ? 'tajný konec' : 'Tajný příběh – sleduj podivné karty a odemčené volby.'}</small></div></div>`; }).join('')}`;
+  }
+  if (tab === 'pribehy') {
+    body = `<div class="small">Delší příběhy na několik karet, které se větví. Každý má víc konců – za každý nový konec bod.</div>
+      ${Object.entries(ARCS).map(([id, a]) => `<h3>${esc(a.name)} <span class="dim">${a.age && a.age < 7 ? AGES[a.age - 1].name : 'Nová republika'} · ${Object.keys(a.ends).filter((e) => stats.arcs.includes(`${id}.${e}`)).length} / ${Object.keys(a.ends).length}</span></h3>
+        ${Object.entries(a.ends).map(([e, t]) => `<div class="endrow${stats.arcs.includes(`${id}.${e}`) ? '' : ' locked'}">${icon('book', 'ico')}<div><b>${stats.arcs.includes(`${id}.${e}`) ? esc(t) : '???'}</b></div></div>`).join('')}`).join('')}`;
   }
   if (tab === 'relikvie') {
     body = `<div class="small">Relikvie najdeš za dlouhou vládu (5 let), legendu, dokončený div světa nebo stavbu a příchod nové doby. Nasadit můžeš nejvýš ${RELIC_SLOTS} – platí v hlavní hře od další vlády.</div>
@@ -1692,7 +1871,7 @@ function prestigeStart() {
   if (!confirm(`Začít znovu od pravěku s prestiží ${ROMAN[lvl]}? Rozhodnutí budou vážit víc, ale za vládu dostaneš o ${Math.round(PRESTIGE_BONUS * lvl * 100)} % víc bodů. Odemčené konce zůstanou.`)) return;
   const keep = { endings: state.endings, best: state.best };
   const kind = state.leader.kind;
-  state = newGame({ female: state.leader.female, kind, mode: 'dejiny', world: 'dejiny', mods: state.mods ?? [], ...metaFor(kind), prestige: lvl }, (Math.random() * 2 ** 32) >>> 0);
+  state = newGame({ female: state.leader.female, kind, mode: 'dejiny', world: 'dejiny', mods: state.mods ?? [], ...metaFor(kind, !!state.iron), prestige: lvl }, (Math.random() * 2 ** 32) >>> 0);
   Object.assign(state, keep);
   stats.prestige = Math.max(stats.prestige ?? 0, lvl);
   stats.games += 1;
@@ -1701,6 +1880,53 @@ function prestigeStart() {
   save();
   gameScreen();
   ageSplash();
+}
+
+// ── Karta dne ────────────────────────────────────────
+function dailyCardScreen() {
+  ui = null;
+  document.body.classList.remove('game');
+  const key = today(), id = dailyCard(key), card = cardById(id), age = card.age ?? 7;
+  const tmp = newGame({ world: age < 7 ? 'dejiny' : null }, 7);
+  tmp.age = age; tmp.leader.age = age; tmp.leader.female = state?.leader?.female ?? false; tmp.card = id;
+  const c = currentCard(tmp), picked = stats.dcard[key];
+  const words = { left: '←', right: '→', up: '↑', down: '↓' };
+  let body;
+  if (!picked) {
+    body = `<div class="small" style="text-align:center">Jedna karta denně, stejná pro všechny. Jak by ses rozhodl${tmp.leader.female ? 'a' : ''}?</div>
+      <div class="dopts">${DIRS4.map((d) => `<button class="mi" data-d="${d}"><span class="chap">${words[d]}</span><span><b>${esc(optionOf(tmp, card, d).t)}</b></span></button>`).join('')}</div>`;
+  } else {
+    const votes = simVotes(id, daily(key).seed), after = outcome(tmp, picked);
+    const eff = METERS.filter((m) => after[m.id] !== 50).map((m) => `<span class="${after[m.id] > 50 ? 'up' : 'down'}">${glyph(m.id, 'glyph sm')} ${after[m.id] > 50 ? '▲' : '▼'}${Math.abs(after[m.id] - 50)}</span>`).join(' ');
+    body = `<div class="small" style="text-align:center">Tvoje volba: <b>${esc(optionOf(tmp, card, picked).t)}</b></div>
+      <div class="deff">${eff}</div>
+      <div class="label" style="text-align:left">Jak by volilo 100 simulovaných vládců</div>
+      ${DIRS4.map((d) => `<div class="vote${d === picked ? ' me' : ''}"><span>${words[d]} ${esc(optionOf(tmp, card, d).t)}</span><span class="wk"><i style="width:${votes[d]}%"></i><b>${votes[d]} %</b></span></div>`).join('')}
+      <div class="small dim">Odhad: hra běží bez internetu, takže skutečné hráče nevidí. Simuluje 100 vládců, každého v jinak rozházené zemi. Zítra přijde nová karta.</div>`;
+  }
+  app.innerHTML = `
+    <div class="sheet">
+      <h2 class="legend" style="text-align:center">Karta dne</h2>
+      <div class="small" style="text-align:center">${new Date().toLocaleDateString('cs-CZ')} · ${age < 7 ? AGES[age - 1].name : 'Rok 2089'} · série ${dcardStreak()}</div>
+      <div class="dcardbox age${age}">${portrait(c.person, age)}<div><b>${esc(c.person.name)}</b><p>${esc(c.text)}</p></div></div>
+      ${body}
+      <button class="primary" id="back">Zpět</button>
+    </div>`;
+  for (const b of app.querySelectorAll('[data-d]')) b.onclick = () => {
+    stats.dcard[key] = b.dataset.d;
+    saveStats();
+    award(1, 'karta dne');
+    dailyCardScreen();
+  };
+  $('#back').onclick = startScreen;
+}
+const DIRS4 = ['left', 'right', 'up', 'down'];
+function dcardStreak() {
+  const d = new Date();
+  if (!stats.dcard[today(d)]) d.setDate(d.getDate() - 1);
+  let n = 0;
+  while (stats.dcard[today(d)]) { n++; d.setDate(d.getDate() - 1); }
+  return n;
 }
 
 // ── Kampaň ───────────────────────────────────────────
