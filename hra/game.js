@@ -54,6 +54,14 @@ const OWN_BONDS = [...new Set(EXTRA.filter((c) => c.rel).map((c) => c.who))];
 const BONDS = bondCards(CARES, PERSON_AGE, OWN_BONDS, REL_LOYAL);
 const CARDS = [...BASE, ...EXTRA, ...AGE_CARDS, ...AGE_CARDS_MORE, ...BONDS, ...SEASON_CARDS, ...STATE_CARDS, ...RIVAL_CARDS, ...TRAITOR_CARDS, ...BRANCH_CARDS, ...WONDER_CARDS, ...FACTION_CARDS, ...RUMOR_CARDS, ...ECHO_CARDS, ...PROJECT_CARDS];
 export { PROJECTS, PROJECT_MONTHS };
+/** Album postav: kdo se v které době může objevit (postavy z karet i zástupné postavy podle doby). */
+export function albumPeople() {
+  const out = {};
+  const put = (who, age) => { if (!PEOPLE[who] || who === 'riv') return; (out[age] ??= new Set()).add(who); };
+  for (const c of CARDS) if (c.who && !c.who.startsWith('@')) put(c.who, c.age ?? PERSON_AGE[c.who] ?? 7);
+  for (const map of Object.values(DYN)) for (const [age, who] of Object.entries(map)) put(who, Number(age));
+  return Object.fromEntries(Object.entries(out).map(([a, set]) => [a, [...set]]));
+}
 /// Frakce: když jejich ukazatel dlouho klesá, roste jejich hněv a nakonec se vzbouří.
 export const FACTIONS = {
   kneze: { name: 'Kněží', m: 'vir' },
@@ -188,6 +196,7 @@ export function newGame({ name = '', female = false, kind = 'vize', mode = 'norm
     dead: null,
   };
   assignTask(s);
+  s.queue.push({ id: PROJECT_CARDS[Math.floor(random(s) * PROJECT_CARDS.length)].id, at: 5 });
   return s;
 }
 
