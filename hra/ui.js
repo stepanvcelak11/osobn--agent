@@ -1,5 +1,6 @@
 // Rovnováha – zobrazení a ovládání (tažení karty do čtyř stran, šipky, klávesy, uložení hry).
 import { portrait, meterIcon, glyph, icon, mood, mix } from './art.js';
+import { duelSetup } from './duel.js';
 import { newGame, newBlitz, newRun, daily, touches, seesAhead, personOf, seasonOf, SEASON_NAMES, RIVALS, MODS, BRANCHES, WONDERS, modBonus, ageOf, leaderTitle, hasElections, lawAllowed, AGES, AGE_LEN, choose, nextLeader, currentCard, cardById, preview, outcome, optionOf, unlocked, skip, nudge, reformLaw, choosePerk, ready, tenure, timeLabel, danger, kindOf, upgrade, activeLaws, seals, taskById, taskProgress, seesDirection, toElection, support, KINDS, ACTIVE, CHARGE, NUDGE, METERS, ENDINGS, LAWS, TASKS, ERAS, SPECIAL, PEOPLE, REL_LOYAL, PERKS, CRISES, ELECTION, VOTE_MIN, BLITZ_START, BLITZ_BONUS, BLITZ_FALL } from './game.js';
 
 const SAVE = 'rovnovaha.save';
@@ -55,7 +56,6 @@ function loadDaily(ch = 'd2089') {
 /** Zpět do hlavní nabídky – vždy s hlavní hrou (ne s bleskovkou ani denní výzvou). */
 function home() {
   if (blitz) { clearInterval(blitz.id); blitz = null; }
-  duel = null;
   state = load();
   startScreen();
 }
@@ -208,7 +208,7 @@ function startScreen() {
           <button class="ghost" id="blitz">${icon('timer', 'ico sm')}<span><b>Bleskovka</b><small>3 minuty na čas</small></span></button>
         </div>
         <div class="row2 modes">
-          <button class="ghost" id="duel">${icon('people', 'ico sm')}<span><b>Hra pro dva</b><small>na jednom telefonu</small></span></button>
+          <button class="ghost" id="duel">${icon('people', 'ico sm')}<span><b>Hra pro dva</b><small>bleskovka na půl obrazovky</small></span></button>
           <button class="ghost" id="stats">${icon('stats', 'ico sm')}<span><b>Statistiky</b><small>hodnocení a úspěchy</small></span></button>
         </div>
         <button class="ghost" id="help">${icon('help', 'ico sm')} Jak hrát</button>
@@ -218,7 +218,7 @@ function startScreen() {
   $('#stats').onclick = () => statsScreen(startScreen);
   $('#blitz').onclick = () => setupScreen('blitz');
   $('#daily').onclick = challengePicker;
-  $('#duel').onclick = duelSetup;
+  $('#duel').onclick = () => duelSetup({ app, home, sfx });
   if (state) $('#cont').onclick = () => (state.dead ? deathScreen() : gameScreen());
   $('#new').onclick = setupScreen;
 }
@@ -361,89 +361,6 @@ function dailyEnd() {
     </div>`;
   $('#again').onclick = () => { startDaily(ch); };
   $('#home').onclick = home;
-}
-
-// ── Hra pro dva ──────────────────────────────────────
-let duel = null; // {names, seed, kind, world, player, round, scores: [[],[]]}
-function duelSetup() {
-  app.innerHTML = `
-    <div class="start setup">
-      <h2 class="title">Hra pro dva</h2>
-      <div class="small">Oba hrajete stejný svět se stejným začátkem a stejným typem vůdce, jeden po druhém. Kdo vydrží déle, vyhrává kolo.</div>
-      <input id="p1" maxlength="20" placeholder="Hráč 1" autocomplete="off">
-      <input id="p2" maxlength="20" placeholder="Hráč 2" autocomplete="off">
-      <div class="seg world"><button id="w1" class="on">${icon('era', 'ico sm')} Dějiny<small>od pravěku</small></button><button id="w2">${icon('kontakt', 'ico sm')} Rok 2089<small>Nová republika</small></button></div>
-      <div class="col">
-        <button class="primary" id="go">Začít souboj</button>
-        <button class="ghost" id="back">Zpět</button>
-      </div>
-    </div>`;
-  let world = 'dejiny';
-  const pick = (w) => { world = w; $('#w1').classList.toggle('on', w === 'dejiny'); $('#w2').classList.toggle('on', w === '2089'); };
-  $('#w1').onclick = () => pick('dejiny');
-  $('#w2').onclick = () => pick('2089');
-  $('#back').onclick = startScreen;
-  $('#go').onclick = () => {
-    duel = { names: [$('#p1').value.trim() || 'Hráč 1', $('#p2').value.trim() || 'Hráč 2'], world, round: 0, scores: [[], []] };
-    duelRound();
-  };
-}
-function duelRound() {
-  duel.round += 1;
-  duel.seed = (Math.random() * 2 ** 32) >>> 0;
-  duel.kind = KINDS[Math.floor(Math.random() * KINDS.length)].id;
-  duel.order = duel.round % 2 ? [0, 1] : [1, 0]; // začíná se střídavě
-  duel.step = 0;
-  duelHandover();
-}
-/** Předání telefonu dalšímu hráči. */
-function duelHandover() {
-  const p = duel.order[duel.step];
-  ui = null;
-  document.body.classList.remove('game');
-  const k = KINDS.find((x) => x.id === duel.kind);
-  app.innerHTML = `
-    <div class="sheet">
-      <div class="big">${icon('people', 'ico xl')}</div>
-      <h2 class="legend">${duel.round}. kolo</h2>
-      <div class="score"><b>${esc(duel.names[p])}</b><span>je na tahu</span></div>
-      <p>Typ vůdce v tomto kole: <b>${k.m}</b> – ${k.text}</p>
-      ${duel.step === 1 ? `<div class="small" style="text-align:center">${esc(duel.names[duel.order[0]])} vydržel/a ${tenure(duel.scores[duel.order[0]].at(-1))}. Překonej to!</div>` : ''}
-      <button class="primary" id="go">Hraju – ${esc(duel.names[p])}</button>
-      <button class="ghost" id="home">Ukončit souboj</button>
-    </div>`;
-  $('#go').onclick = () => {
-    state = newRun({ name: duel.names[p], kind: duel.kind, world: duel.world }, duel.seed, 'duel');
-    gameScreen();
-  };
-  $('#home').onclick = () => { duel = null; home(); };
-}
-function duelFall() {
-  const p = duel.order[duel.step];
-  duel.scores[p].push(state.dead.months);
-  sfx('end');
-  if (duel.step === 0) { duel.step = 1; duelHandover(); return; }
-  ui = null;
-  document.body.classList.remove('game');
-  const [a, b] = duel.order, sa = duel.scores[a].at(-1), sb = duel.scores[b].at(-1);
-  const wins = [0, 1].map((i) => duel.scores[i].filter((v, r) => v > duel.scores[1 - i][r]).length);
-  const winner = sa === sb ? null : sa > sb ? a : b;
-  app.innerHTML = `
-    <div class="sheet">
-      <div class="big">${icon('trophy', 'ico xl')}</div>
-      <h2 class="legend">${winner == null ? 'Remíza!' : `Vítěz kola: ${esc(duel.names[winner])}`}</h2>
-      <table class="board"><tbody>
-        ${[a, b].map((i) => `<tr><td>${esc(duel.names[i])}</td><td class="r">${tenure(duel.scores[i].at(-1))}</td></tr>`).join('')}
-      </tbody></table>
-      <div class="stats">
-        <div class="stat"><span class="small">${esc(duel.names[0])}</span><b>${wins[0]} ${wins[0] === 1 ? 'výhra' : wins[0] > 1 && wins[0] < 5 ? 'výhry' : 'výher'}</b></div>
-        <div class="stat"><span class="small">${esc(duel.names[1])}</span><b>${wins[1]} ${wins[1] === 1 ? 'výhra' : wins[1] > 1 && wins[1] < 5 ? 'výhry' : 'výher'}</b></div>
-      </div>
-      <button class="primary" id="next">Další kolo</button>
-      <button class="ghost" id="home">Konec souboje</button>
-    </div>`;
-  $('#next').onclick = duelRound;
-  $('#home').onclick = () => { duel = null; home(); };
 }
 
 // ── Hra ──────────────────────────────────────────────
@@ -674,7 +591,6 @@ function commit(dir) {
     save();
     busy = false;
     if (dead && state.mode === 'daily') { dailyFall(); return; }
-    if (dead && state.mode === 'duel') { duelFall(); return; }
     if (dead) { recordReign(); checkAch(); deathScreen(); } else { render(true); flash(before); showNews(); offerPerk(); checkAch(); }
   }, 220);
 }
@@ -808,7 +724,7 @@ function ability() {
     ui.card.style.opacity = '0';
     setTimeout(() => {
       skip(state); save(); busy = false;
-      if (state.dead) { if (state.mode === 'blitz') { blitzFall(state.dead); return; } if (state.mode === 'daily') { dailyFall(); return; } if (state.mode === 'duel') { duelFall(); return; } recordReign(); deathScreen(); return; }
+      if (state.dead) { if (state.mode === 'blitz') { blitzFall(state.dead); return; } if (state.mode === 'daily') { dailyFall(); return; } recordReign(); deathScreen(); return; }
       render(true); toast('Karta odložena'); showNews(); offerPerk();
     }, 220);
   }
@@ -954,7 +870,7 @@ function menu() {
         ${bl ? '' : item('stats', 'trophy', 'Statistiky a úspěchy', 'hodnocení a rekordy')}
         ${item('help', 'help', 'Jak hrát')}
         ${item('sound', soundOn ? 'sound' : 'mute', 'Zvuk a vibrace')}
-        ${bl ? item('endblitz', 'timer', 'Ukončit bleskovku') : state.mode === 'duel' ? item('start', 'home', 'Ukončit souboj') : item('start', 'home', 'Hlavní nabídka')}
+        ${bl ? item('endblitz', 'timer', 'Ukončit bleskovku') : item('start', 'home', 'Hlavní nabídka')}
       </div>
       <div class="small mnote">${bl ? 'Bleskovka se neukládá. Tvoje hlavní hra zůstává, jak byla.' : state.mode === 'daily' ? 'Denní výzva se ukládá zvlášť – můžeš ji kdykoli dohrát.' : 'Hra se ukládá sama po každém rozhodnutí.'}</div>
     </div>`;
@@ -1292,7 +1208,8 @@ function helpScreen(back) {
         <li><b>Zrádci:</b> občas někdo z tvých blízkých začne vynášet tajemství. Když ho vyšetřovatel včas neodhalí, zradí tě.</li>
         <li><b>Dlouhé krajnosti</b> mají následky (hladomor, fanatici, vojáci nad zákonem…), dlouhý klid přinese zlatý věk.</li>
         <li><b>Ztížení</b> (při založení hry) – hladová léta, nevraživí sousedé, bouřlivá doba, hnízdo zrádců – násobí skóre vlády.</li>
-        <li><b>Výzvy:</b> denní výzva v roce 2089 i v Dějinách a týdenní výzva se třemi vládci. <b>Hra pro dva:</b> oba hrajete stejný začátek, kdo vydrží déle, vyhrává kolo.</li>
+        <li><b>Výzvy:</b> denní výzva v roce 2089 i v Dějinách a týdenní výzva se třemi vládci.</li>
+        <li><b>Hra pro dva:</b> bleskovka pro dva naráz. Obrazovka se rozdělí – jeden hraje zespodu, druhý shora (jeho polovina je otočená). Každý má vlastního vůdce a vlastní hodiny; vyhrává, kdo se dostane nejdál.</li>
         <li><b>Výhody:</b> za splněný úkol si vybereš jednu ze tří výhod (třeba Brzda, Druhá šance nebo Zvědové). Platí do konce vlády.</li>
         <li><b>Volby</b> jsou každé 4 roky. Hlasy ti dají Lid a Spojenci – když je jejich průměr pod ${VOTE_MIN} %, prohraješ a vláda končí. Půl roku předem tě varují.</li>
         <li><b>Krize</b> (epidemie, povodeň, útok na síť) trvají několik karet. Když zvládneš většinu kroků, země z toho vyjde silnější, jinak to bolí.</li>

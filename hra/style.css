@@ -394,3 +394,52 @@ body:not(.game) .toast, body:has(.pop) .toast, body:has(.menu) .toast { bottom: 
 .mod small { display: block; font-size: 12px; color: var(--dim); margin-top: 2px; }
 .mod.on { border-color: var(--warn); background: #e3b86014; }
 .pop .mlist { max-height: 60vh; overflow-y: auto; }
+
+/* ── Souboj pro dva (rozdělená obrazovka) ─ */
+body.duelmode #app { padding: 0; max-width: none; }
+.duel { position: relative; flex: 1; display: grid; grid-template-rows: 1fr 1fr; grid-template-columns: 100%; min-height: 0; }
+.half { position: relative; width: 100%; display: flex; flex-direction: column; min-height: 0; overflow: hidden;
+  padding: 10px 14px 8px; background: var(--scene, var(--bg)); transition: background-color .5s; }
+.half.bottom { padding-bottom: max(8px, env(safe-area-inset-bottom)); border-top: 1px solid #ffffff1a; }
+.half.top { transform: rotate(180deg); padding-bottom: max(8px, env(safe-area-inset-top)); }
+.dhead { width: 100%; display: flex; align-items: center; gap: 8px; min-height: 30px; }
+.dname { font-family: var(--serif); font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 34%; }
+.dsub { flex: 1; font-size: 12px; color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dclock { font-variant-numeric: tabular-nums; font-weight: 700; font-size: 17px; }
+.dclock.hurry { color: var(--bad); }
+.dab { width: 34px; height: 34px; padding: 0; border-radius: 50%; display: grid; place-items: center; background: #ffffff0d; color: var(--dim); }
+.dab .ico { width: 18px; height: 18px; }
+.dab.ready { color: var(--accent); box-shadow: 0 0 0 2px var(--accent); }
+.dmeters { display: grid; grid-template-columns: repeat(7, 1fr); padding: 2px 0; }
+.dm { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.dm .micon { width: 24px; height: 24px; }
+.dm .dot { width: 4px; height: 4px; }
+.dq { flex: none; height: 3.9em; font-size: 15px; display: flex; align-items: center; justify-content: center; overflow: hidden; padding: 2px 4px; }
+.dq p { margin: 0; font-family: var(--serif); line-height: 1.3; text-align: center; }
+.dstage { position: relative; width: 100%; flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; touch-action: none; container-type: size; padding: 4px 0; }
+.ddeck { position: relative; width: min(100cqw, 80cqh); aspect-ratio: 4 / 5; }
+.dover[hidden] { display: none; }
+.dcard { position: absolute; inset: 0; }
+.dcard .opt { font-size: 14px; padding: 9px 10px; }
+.dwho { text-align: center; font-size: 13px; padding-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dwho b { font-family: var(--serif); }
+.dwho span { color: var(--dim); }
+.dwho .ico { color: var(--accent); }
+.dtoast { position: absolute; left: 50%; bottom: 34%; transform: translateX(-50%); max-width: 86%; width: max-content; z-index: 5; pointer-events: none;
+  background: var(--bg2); border: 1px solid var(--line); border-radius: 12px; padding: 8px 12px; font-size: 13px; text-align: center; opacity: 0; transition: opacity .2s; }
+.dtoast.on { opacity: 1; }
+.dover { position: absolute; inset: 0; z-index: 6; background: #0d0c0be6; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; padding: 16px; text-align: center; }
+.dover b { font-family: var(--serif); font-size: 28px; color: var(--accent); }
+.dover span { font-size: 14px; }
+.dover small { color: var(--dim); }
+.dover.win b { color: var(--grass); } .dover.lose b { color: var(--bad); }
+.drow { display: flex; gap: 8px; margin-top: 10px; }
+.drow button { padding: 11px 18px; }
+.dpause { position: absolute; z-index: 7; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 40px; height: 40px; border-radius: 50%; padding: 0;
+  background: var(--bg2); border: 1px solid #ffffff2a; font-weight: 700; font-size: 13px; box-shadow: 0 4px 14px #0008; }
+.duel.paused .half { filter: blur(6px) brightness(.6); }
+.dpausebox { position: absolute; z-index: 8; left: 50%; top: 50%; transform: translate(-50%, -50%); display: flex; flex-direction: column; gap: 8px; margin-top: 50px; width: 220px; }
+.duelsetup .dpick { display: flex; flex-direction: column; gap: 8px; background: var(--bg1); border: 1px solid var(--line); border-radius: 16px; padding: 10px; }
+.duelsetup .dpick input { padding: 11px; font-size: 16px; }
+.duelsetup .kind .ico { width: 22px; height: 22px; }
+.duelsetup .dk { text-align: left; font-size: 12.5px; line-height: 1.35; min-height: 2.7em; }

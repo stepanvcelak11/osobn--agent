@@ -22,7 +22,7 @@ jobs:
       - name: Sestavení (verze mezipaměti = commit)
         run: |
           rm -rf site && mkdir site
-          cp -R hra/index.html hra/style.css hra/ui.js hra/game.js hra/cards.js hra/art.js hra/world.js hra/ages.js hra/ages_more.js hra/bonds.js hra/events.js hra/history_more.js hra/manifest.webmanifest hra/sw.js hra/icons site/
+          cp -R hra/index.html hra/style.css hra/ui.js hra/game.js hra/cards.js hra/art.js hra/world.js hra/ages.js hra/ages_more.js hra/bonds.js hra/events.js hra/history_more.js hra/duel.js hra/manifest.webmanifest hra/sw.js hra/icons site/
           sed -i "s/__VERSION__/${GITHUB_SHA::7}/" site/sw.js
           touch site/.nojekyll
       - name: Nasazení do větve gh-pages
