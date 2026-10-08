@@ -2,6 +2,7 @@
 import { portrait, meterIcon, glyph, icon, mood, mix } from './art.js';
 import { duelSetup } from './duel.js';
 import { AMB_POINTS } from './court.js';
+import { sceneSVG } from './scene.js';
 import { OBJECTS, VERBS, MANNERS, TARGETS, Q_VERBS, Q_OBJECTS, Q_MANNERS, PEN_EVERY, penLeft, canCustom, cardTakesWords, customOption, questOption, reaction, sentence } from './words.js';
 import { PROVINCES, HERO_CLASSES, ATTRS, THREATS, canHire, hire, startQuest, questRoll, questHero, stepById, chance, attrOf, heroTitle, ready as heroReady, lostCount, LOST_MAX, WOUNDS_MAX, HEROES_MAX, HIRE_COST, NEED, STEPS } from './realm.js';
 import { LEVELS, levelOf, MASTERY, LEVEL_TEXT, TREE, TREE_MAX, RELICS, RELIC_SLOTS, SKINS, PRESTIGE_BONUS, ROMAN, CAMPAIGN } from './meta.js';
@@ -733,7 +734,8 @@ function gameScreen() {
       <button class="pen" id="pen" aria-label="Vlastní odpověď"></button>
       <div class="deck"><div class="card next" id="nextcard"></div><div class="card" id="card"></div></div>
     </section>
-    <div class="name"><b><span id="person"></span><span id="mood"></span></b><div class="advice" id="adv"></div></div>`;
+    <div class="name"><b><span id="person"></span><span id="mood"></span></b><div class="advice" id="adv"></div></div>
+    <button class="diorama" id="world" aria-label="Mapa říše"></button>`;
   ui = {
     card: $('#card'),
     next: $('#nextcard'),
@@ -748,6 +750,7 @@ function gameScreen() {
   $('#ab').onclick = ability;
   $('#bag').onclick = bag;
   $('#pen').onclick = penPicker;
+  $('#world').onclick = () => { if (!busy && !['blitz', 'duel'].includes(state.mode)) mapScreen(gameScreen); };
   for (const b of app.querySelectorAll('.meter')) b.onclick = () => meterInfo(b.dataset.m);
   for (const b of Object.values(ui.chev)) b.onclick = () => tapDir(b.dataset.dir);
   setupDrag(ui.card);
@@ -785,6 +788,7 @@ function render(enter) {
   if (state.mode === 'blitz') updateClock();
   updateBag();
   updatePen();
+  $('#world').innerHTML = sceneSVG(state);
   // Vpravo nahoře: ikona typu vůdce. U aktivních schopností kroužek ukazuje nabití.
   const ab = $('#ab'), active = ACTIVE.includes(k.id);
   if (ab.dataset.k !== k.id) { ab.querySelector('i').innerHTML = icon(k.id); ab.dataset.k = k.id; }
@@ -1778,6 +1782,7 @@ function helpScreen(back) {
         <li>Po rozhodnutí se dotčené ukazatele na chvíli obarví: <b style="color:var(--sky)">modře, když stouply</b> (nebe nahoře),
           <b style="color:var(--grass)">zeleně, když klesly</b> (tráva dole).</li>
         <li>Klepnutím na ukazatel zjistíš jeho stav, co znamená a co ho zvyšuje nebo snižuje.</li>
+        <li><b>Živá scéna</b> pod kartou ukazuje tvou říši: město roste s Financemi a mění se podle doby, lesy s Přírodou, chrám s Vírou, hradby se Silou, lidé s Lidem. Kouř na obzoru = hrozba v kraji. Klepnutím otevřeš mapu.</li>
         <li><b>Mapa říše:</b> sedm krajů, každý drží jeden ukazatel. Spokojenost kraje tíhne k tomu, jak je jeho ukazatel v rovnováze. V krajích vznikají hrozby (bandité, šelma, nákaza, vzpoura, kult) nebo zvěsti o pokladu. Nevyřešená hrozba kraj rozzlobí, až se odtrhne – a když se odtrhnou 3 kraje, říše se rozpadne. Karta ukazuje, ze kterého kraje mluvčí je.</li>
         <li><b>Hrdinové a výpravy:</b> u dvora máš až 3 hrdiny (Válečník, Zloděj, Čaroděj, Bard, Lovec) se čtyřmi vlastnostmi. Na mapě je pošleš na výpravu: tři riskantní kroky, každá volba je hod kostkou k20 + vlastnost a vidíš šanci. Stačí 2 úspěchy; nezdar hrdinu zraní, 3 zranění = padne. Úspěšní hrdinové sílí.</li>
         <li><b>Vlastní odpověď</b> (tlačítko s perem u karty): místo čtyř nabízených voleb si odpověď složíš ze slov – <i>Co udělám</i> (Zvýšit, Postavit, Zakázat…) + <i>S čím</i> (daně, vojsko, chrámy, lesy…) + <i>Jak</i> (opatrně, silou, tajně…) + <i>Pro koho</i>. Hra větu pochopí podle významu slov. Když neřeší, s čím postava přišla, problém se vrátí. Dobije se po 5 rozhodnutích. Ve výpravě takhle složíš vlastní čin hrdiny – sloveso určí, jaká vlastnost se hází.</li>
