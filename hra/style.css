@@ -312,3 +312,7 @@ body.game { background: var(--scene, var(--bg)); transition: background-color .5
 .tips .dots i.on { background: var(--accent); }
 /* Mimo hrací plochu a nad okny se oznámení ukazuje nahoře, aby nezakrývalo tlačítka. */
 body:not(.game) .toast, body:has(.pop) .toast { bottom: auto; top: calc(env(safe-area-inset-top, 0px) + 12px); }
+
+/* Ukazatel blízko kraje pulzuje */
+.micon.edge { animation: edge 1.1s ease-in-out infinite; }
+@keyframes edge { 50% { transform: scale(1.12); filter: drop-shadow(0 0 6px #d4553f); } }

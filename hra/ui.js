@@ -255,6 +255,7 @@ function startDaily() {
   toast(`Denní výzva: ${k.short}. Vydrž co nejdéle!`, 'sun');
 }
 function dailyEnd() {
+  sfx('end');
   const d = state.dead, day = state.day, months = d.months;
   const prev = stats.daily[day];
   stats.daily[day] = Math.max(prev ?? 0, months);
@@ -328,6 +329,8 @@ function gameScreen() {
 /** Krátký průvodce při první hře (jen jednou). */
 const TIPS = 'rovnovaha.tips';
 function tips() {
+  // Jen na úplném začátku nové hry a nikdy přes jiné okno.
+  if (state.mode !== 'normal' || state.total > 1 || document.querySelector('.pop')) return;
   try { if (localStorage.getItem(TIPS)) return; } catch { return; }
   const steps = [
     ['Táhni kartu', 'Každá karta má čtyři volby: doleva, doprava, nahoru a dolů. Při tažení uvidíš, co volba udělá, a tečky ukážou, kterých ukazatelů se dotkne.'],
@@ -387,6 +390,7 @@ function render(enter) {
     ui.levels[m.id].style.transform = `translateY(${((100 - v) * 0.24).toFixed(2)}px)`;
     ui.icons[m.id].classList.toggle('warn', d >= 0.45 && d < 0.7);
     ui.icons[m.id].classList.toggle('bad', d >= 0.7);
+    ui.icons[m.id].classList.toggle('edge', d >= 0.82); // blízko kraje: varovné pulzování
     ui.icons[m.id].parentElement.setAttribute('aria-label', `${m.name}: ${v} %`);
   }
   const c = currentCard(state);
@@ -478,6 +482,7 @@ function commit(dir) {
   busy = true;
   const card = ui.card;
   const far = { left: 'translate(-150%, 30px) rotate(-16deg)', right: 'translate(150%, 30px) rotate(16deg)', up: 'translate(0, -140%)', down: 'translate(0, 140%)' }[dir];
+  sfx('swipe'); vibrate(8);
   card.className = 'card fly';
   card.style.transform = far;
   card.style.opacity = '0';
@@ -548,7 +553,39 @@ document.addEventListener('keydown', (e) => {
 
 // ── Schopnosti: odložit kartu / posunout ukazatel ─────
 const toasts = [];
+// ── Zvuk (jemné syntetické tóny, dá se vypnout v nabídce) ──
+const SOUND = 'rovnovaha.sound';
+let soundOn = (() => { try { return localStorage.getItem(SOUND) !== '0'; } catch { return true; } })();
+let actx = null;
+function sfx(kind) {
+  if (!soundOn) return;
+  try {
+    actx ??= new (window.AudioContext || window.webkitAudioContext)();
+    if (actx.state === 'suspended') actx.resume();
+    const t = actx.currentTime;
+    const tone = (f, at, dur, vol = 0.05, type = 'sine') => {
+      const o = actx.createOscillator(), g = actx.createGain();
+      o.type = type; o.frequency.setValueAtTime(f, t + at);
+      g.gain.setValueAtTime(0, t + at);
+      g.gain.linearRampToValueAtTime(vol, t + at + 0.01);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + at + dur);
+      o.connect(g).connect(actx.destination);
+      o.start(t + at); o.stop(t + at + dur + 0.02);
+    };
+    if (kind === 'swipe') { tone(520, 0, 0.09, 0.03, 'triangle'); tone(390, 0.05, 0.12, 0.025, 'triangle'); }
+    if (kind === 'good') { tone(660, 0, 0.18); tone(880, 0.1, 0.25); }
+    if (kind === 'ach') { tone(660, 0, 0.15); tone(880, 0.09, 0.15); tone(1320, 0.18, 0.35); }
+    if (kind === 'end') { tone(220, 0, 0.6, 0.06); tone(165, 0.15, 0.9, 0.05); }
+    if (kind === 'tick') tone(1200, 0, 0.05, 0.03, 'square');
+    if (kind === 'warn') tone(300, 0, 0.2, 0.04, 'sawtooth');
+  } catch { /* zvuk není k dispozici */ }
+}
+const vibrate = (ms) => { try { if (soundOn) navigator.vibrate?.(ms); } catch { /* nic */ } };
+
 function toast(text, kind = '') {
+  if (['task', 'crisis', 'election', 'perk', 'rescue', 'era'].includes(kind)) sfx('good');
+  if (kind === 'ach') sfx('ach');
+  if (['crisisLost', 'fall', 'electionSoon'].includes(kind)) sfx('warn');
   toasts.push({ text, kind });
   if (toasts.length === 1) nextToast();
 }
@@ -729,12 +766,20 @@ function menu() {
     <button data-a="realm">Stav republiky</button>
     ${bl ? '' : '<button data-a="chron">Kronika a konce</button><button data-a="stats">Statistiky a hodnocení</button>'}
     <button data-a="help">Jak hrát</button>
+    <button class="ghost" data-a="sound">${soundOn ? 'Zvuk: zapnutý' : 'Zvuk: vypnutý'}</button>
     ${bl ? '<button class="ghost" data-a="endblitz">Ukončit bleskovku</button>' : '<button class="ghost" data-a="start">Hlavní nabídka</button>'}
     ${state.mode === 'daily' ? '<div class="small">Denní výzva se ukládá zvlášť – můžeš ji kdykoli dohrát.</div>' : ''}
     <div class="small">${bl ? 'Bleskovka se neukládá. Tvoje hlavní hra zůstává, jak byla.' : 'Hra se ukládá sama po každém rozhodnutí.'}</div>`;
   m.onclick = (e) => {
     const a = e.target.dataset?.a;
     if (!a && e.target !== m) return;
+    if (a === 'sound') {
+      soundOn = !soundOn;
+      try { localStorage.setItem(SOUND, soundOn ? '1' : '0'); } catch { /* nic */ }
+      e.target.textContent = soundOn ? 'Zvuk: zapnutý' : 'Zvuk: vypnutý';
+      sfx('good');
+      return;
+    }
     m.remove();
     if (a === 'chron') chronicleScreen(gameScreen);
     if (a === 'realm') realmScreen(gameScreen);
@@ -748,6 +793,7 @@ function menu() {
 
 // ── Konec vlády ──────────────────────────────────────
 function deathScreen() {
+  sfx('end'); vibrate([30, 60, 30]);
   ui = null;
   document.body.classList.remove('game');
   const d = state.dead, l = state.leader, m = METERS.find((x) => x.id === d.meter);
@@ -857,6 +903,7 @@ function updateClock() {
   const sec = Math.max(0, Math.ceil(blitz.left / 1000));
   el.textContent = `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')} · ${state.decisions} rozhodnutí`;
   el.classList.toggle('hurry', sec <= 15);
+  if (sec <= 10 && sec !== blitz.lastTick) { blitz.lastTick = sec; sfx('tick'); }
 }
 /** Pád vlády v bleskovce: hned nastupuje další, ale stojí to čas. */
 function blitzFall(d) {
