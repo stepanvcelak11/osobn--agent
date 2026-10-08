@@ -752,3 +752,19 @@ test('síla rozhodnutí roste s délkou vlády', () => {
   nextLeader(s);
   assert.equal(intensity(s), INTENSITY_START, 'nový vůdce začíná zase mírněji');
 });
+
+test('kdo nečte (rush), tomu každá volba jen uškodí', () => {
+  for (let i = 0; i < 50; i++) {
+    const s = newGame({}, 900 + i);
+    choose(s, 'left');
+    for (let k = 0; k < 5 && !s.dead; k++) choose(s, DIRS[k % 4]);
+    if (s.dead) continue;
+    s.rush = true;
+    for (const d of DIRS) {
+      const o = outcome(s, d);
+      for (const m of Object.keys(o)) assert.ok(Math.abs(o[m] - 50) >= Math.abs(s.meters[m] - 50), `${m} se nepřiblížil k rovnováze`);
+    }
+    choose(s, 'up');
+    assert.equal(s.rush, false, 'trest platí jen na jednu kartu');
+  }
+});

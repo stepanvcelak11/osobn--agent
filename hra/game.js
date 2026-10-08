@@ -333,6 +333,8 @@ export function outcome(state, dir) {
       const doubled = from + 2 * d;
       d = d > 0 ? Math.max(d, Math.min(doubled, START) - from) : Math.min(d, Math.max(doubled, START) - from);
     }
+    // Trest za odpověď bez čtení: každá změna odtlačí ukazatel od rovnováhy.
+    if (state.rush && d) d = Math.abs(d) * (from > START ? 1 : -1);
     out[k] = clamp(from + d);
   }
   return out;
@@ -388,6 +390,7 @@ export function skipCard(state) {
 }
 function passCard(state) {
   const card = cardById(state.card);
+  state.rush = false;
   if (card?.crisis) crisisStep(state, card, {}); // odložený krok krize se počítá jako nezvládnutý
   state.recent = [...state.recent, state.card].slice(-RECENT);
   state.turn += 1;
@@ -445,6 +448,7 @@ export function choose(state, dir) {
   if (!card.opts[dir]) throw new Error(`neznámý směr ${dir}`);
   const o = optionOf(state, card, dir);
   state.meters = outcome(state, dir);
+  state.rush = false;
   state.charge = Math.min(CHARGE, (state.charge ?? 0) + (has(state, 'nabiti') ? 2 : 1));
   if (o.set && !state.flags.includes(o.set)) state.flags.push(o.set);
   if (o.unset) state.flags = state.flags.filter((f) => f !== o.unset);

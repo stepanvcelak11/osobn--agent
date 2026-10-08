@@ -504,3 +504,4 @@ body.duelmode #app { padding: 0; max-width: none; }
 .shiftrow .glyph { width: 20px; height: 20px; }
 .shiftrow button { padding: 8px 10px; font-size: 13px; border-radius: 12px; min-width: 62px; }
 .shiftrow button:disabled { opacity: .35; }
+.stage.rush .card:not(.next) { box-shadow: 0 0 0 3px #d9534fcc, 0 0 28px #d9534f66, 0 14px 34px #0009; }

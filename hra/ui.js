@@ -79,7 +79,10 @@ const TOOLS = {
   posun: { name: 'Posunout ukazatel', icon: 'kormidlo', price: 3, text: `Posuneš libovolný ukazatel o ${SHIFT} nahoru, nebo dolů – kam potřebuješ.` },
   zpet: { name: 'Vrátit tah', icon: 'undo', price: 4, text: 'Vezme zpět poslední rozhodnutí – karta se vrátí a můžeš volit znovu.' },
 };
-let undoSnap = null; // stav před posledním rozhodnutím (pro „Vrátit tah“)
+let undoSnap = null;
+/// Kdo odpoví rychleji než za vteřinu, nečte – další karta mu jen uškodí (ne v bleskovce).
+const RUSH_MS = 1000;
+let shownAt = 0; // stav před posledním rozhodnutím (pro „Vrátit tah“)
 const bodu = (n) => (n === 1 ? 'bod' : n >= 2 && n <= 4 ? 'body' : 'bodů');
 const emptyStats = () => ({ points: 0, unlocked: [...START_KINDS], items: {}, games: 0, decisions: 0, reigns: 0, months: 0, tasks: 0, elections: 0, crises: 0, ends: {}, top: [], blitz: [], daily: {}, weekly: {}, ach: {}, kinds: [], wonders: 0, wars: 0, traitors: 0 });
 let stats = loadStats();
@@ -670,6 +673,7 @@ function render(enter) {
   ab.classList.toggle('ready', active && ready(state));
   ab.setAttribute('aria-label', kindName(k, l.female));
   const c0 = currentCard(state), chips = [];
+  if (state.rush) chips.push(`<span class="warn">${icon('crisis', 'ico sm')} Nečetl{a} jsi – každá volba teď škodí</span>`.replace('{a}', state.leader.female ? 'a' : ''));
   if (state.advice) chips.push(`${icon('rada', 'ico sm')} Rádce radí: <b>${DIR_WORD[state.advice]}</b>`);
   else if (state.hints > 0) {
     const key = `${state.total}:${state.card}`;
@@ -705,6 +709,8 @@ function render(enter) {
   ui.next.innerHTML = np ? `${portrait(np, age)}<div class="nextname">${esc(np.name)}</div>` : '';
   const card = ui.card;
   card.className = `card age${age}` + (enter ? ' enter' : '');
+  if (enter) shownAt = performance.now();
+  app.querySelector('.stage').classList.toggle('rush', !!state.rush);
   card.style.transform = '';
   card.style.opacity = '';
   card.innerHTML = portrait(c.person, age) +
@@ -805,7 +811,9 @@ function commit(dir) {
   setTimeout(() => {
     undoSnap = ['normal', 'dejiny'].includes(state.mode) ? JSON.stringify(state) : null;
     if (state.hints > 0) state.hints -= 1;
+    const fast = state.mode !== 'blitz' && !['intro', 'dej_intro'].includes(state.card) && performance.now() - shownAt < RUSH_MS;
     const dead = choose(state, dir);
+    if (fast && !dead) { state.rush = true; toast('Moc rychle! Nečteš – další karta ti jen uškodí. Veď zemi pořádně.', 'fall'); vibrate([20, 40, 20]); }
     stats.decisions += 1; saveStats();
     if (state.mode === 'blitz') {
       blitz.left += BLITZ_BONUS * 1000;
@@ -1438,6 +1446,7 @@ function helpScreen(back) {
         <li><b>Sousední říše</b> (v dávných dobách) sílí s časem. Obchoduj, uzavírej spojenectví, plať tribut, nebo válči – válku rozhoduje tvoje Síla proti síle souseda. Slabého souseda můžeš pohltit.</li>
         <li><b>Roční období:</b> zima ubírá zásoby, podzim přináší úrodu a každé období má vlastní karty.</li>
         <li><b>Zrádci:</b> občas někdo z tvých blízkých začne vynášet tajemství. Když ho vyšetřovatel včas neodhalí, zradí tě.</li>
+        <li><b>Čti karty.</b> Kdo odpoví rychleji než za vteřinu, nečte – další karta (s červeným rámečkem) mu pak jen uškodí, ať zvolí cokoli. V bleskovce to neplatí.</li>
         <li><b>Čím déle vládneš, tím víc rozhodnutí váží</b> – na začátku vlády mají účinek 1,8×, po čtyřech letech 2,6×. Nový vůdce začíná zase mírněji.</li>
         <li><b>Dlouhé krajnosti</b> mají následky (hladomor, fanatici, vojáci nad zákonem…), dlouhý klid přinese zlatý věk.</li>
         <li><b>Ztížení</b> (při založení hry) – hladová léta, nevraživí sousedé, bouřlivá doba, hnízdo zrádců – násobí skóre vlády.</li>
