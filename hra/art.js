@@ -184,6 +184,11 @@ export function glyph(id, cls = 'glyph') {
 
 // Kreslené ikony (tahy, 24×24) – typy vůdců, zákony, nálady, tajné konce.
 const LINE = {
+  map: '<path d="M3 6.5l6-2.5 6 2.5 6-2.5v13.5l-6 2.5-6-2.5-6 2.5z"/><path d="M9 4v13.5M15 6.5V20"/>',
+  dice: '<rect x="3.5" y="3.5" width="17" height="17" rx="3.5"/><path d="M8.5 8.5h.01M15.5 8.5h.01M12 12h.01M8.5 15.5h.01M15.5 15.5h.01" stroke-width="2.8"/>',
+  cyklus: '<circle cx="12" cy="12" r="4"/><path d="M12 2.5v3M12 18.5v3M3.6 7.2l2.6 1.5M17.8 15.3l2.6 1.5M3.6 16.8l2.6-1.5M17.8 8.7l2.6-1.5M12 12l2.2-2.2"/>',
+  heart: '<path d="M12 20.5S3 15 3 9a4.5 4.5 0 0 1 9-1.6A4.5 4.5 0 0 1 21 9c0 6-9 11.5-9 11.5z"/>',
+  flag: '<path d="M5 21V4M5 4h11l-2 4 2 4H5"/>',
   vize: '<path d="M2 12s3.8-7 10-7 10 7 10 7-3.8 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3.2"/>',
   krize: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/><path d="M5.6 5.6l3.6 3.6M18.4 5.6l-3.6 3.6M5.6 18.4l3.6-3.6M18.4 18.4l-3.6-3.6"/>',
   odklad: '<path d="M4 6l7 6-7 6zM11 6l7 6-7 6z"/><path d="M20.5 5.5v13"/>',

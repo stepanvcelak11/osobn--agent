@@ -12,6 +12,8 @@ import { FACTION_CARDS, RUMOR_CARDS, ECHO_CARDS } from './depth.js';
 import { PROJECT_CARDS, PROJECTS, PROJECT_MONTHS } from './projects.js';
 import { RELICS, PRESTIGE_STEP } from './meta.js';
 import { ARC_CARDS, ARCS, REP_CARDS, SOK_CARDS, SEASON2_CARDS, PACK_CARDS, PACK_PEOPLE, PACKS, HEIR_CARDS } from './saga.js';
+import { PROVINCES, freshProvinces, provinceMonth, lostCount, LOST_MAX, newHero, provinceFor } from './realm.js';
+import { CLUES, CLUE_CARDS, FINALE_CARD, CYCLE_END } from './mystery.js';
 import { REPS, REP_MIN, repOf, repMult, TRAITS, EDU, KIDS_MAX, HEIR_DAMP, COUNCIL_MAX, COUNCIL_MIN_REL, COUNCIL_DAMP, AMBITIONS, TITLES } from './court.js';
 
 Object.assign(PEOPLE, AGE_PEOPLE, PACK_PEOPLE, {
@@ -42,6 +44,7 @@ export const RIVALS = {
 export const MODS = {
   hlad: { name: 'Hladová léta', text: 'Zásoby (Finance) každý měsíc trochu ubývají.', bonus: 0.25 },
   sousede: { name: 'Nevraživí sousedé', text: 'Diplomacie každý měsíc klesá a sousední říše sílí rychleji.', bonus: 0.25 },
+  mlha: { name: 'Mlha', text: 'Přesné hodnoty ukazatelů neuvidíš – jen jestli je klid, napětí, nebo krize. Čti, co ti lidé říkají.', bonus: 0.3 },
   boure: { name: 'Bouřlivá doba', text: 'Všechna rozhodnutí mají o čtvrtinu větší účinek.', bonus: 0.4 },
   zradci: { name: 'Hnízdo zrádců', text: 'Zrádci se objevují třikrát častěji.', bonus: 0.2 },
 };
@@ -49,6 +52,7 @@ export const BRANCHES = {
   b_pole: 'Zemědělství', b_stada: 'Chov stád', b_klastery: 'Kláštery a víra', b_hrady: 'Hrady a léna', b_tisk: 'Knihtisk', b_prach: 'Střelný prach',
   b_elektrina: 'Elektřina', b_ropa: 'Ropa a motory', b_sit: 'Internet', b_vesmir: 'Vesmírný program', b_nula: 'Začátek od nuly', b_republika: 'Pevná ruka',
 };
+Object.assign(SPECIAL, { cyklus: CYCLE_END });
 const WONDER_BY_ID = Object.fromEntries(WONDERS.map((w) => [w.id, w]));
 Object.assign(CARES, AGE_CARES);
 // Kdo žije ve které době (podle karet) – karty vztahů se objeví jen tam.
@@ -57,8 +61,10 @@ for (const c of [...AGE_CARDS, ...AGE_CARDS_MORE, ...AGE_CARDS_EXTRA]) PERSON_AG
 const OWN_BONDS = [...new Set(EXTRA.filter((c) => c.rel).map((c) => c.who))];
 const BONDS = bondCards(CARES, PERSON_AGE, OWN_BONDS, REL_LOYAL);
 const CARDS = [...BASE, ...EXTRA, ...AGE_CARDS, ...AGE_CARDS_MORE, ...AGE_CARDS_EXTRA, ...BONDS, ...SEASON_CARDS, ...STATE_CARDS, ...RIVAL_CARDS, ...TRAITOR_CARDS, ...BRANCH_CARDS, ...WONDER_CARDS, ...FACTION_CARDS, ...RUMOR_CARDS, ...ECHO_CARDS, ...PROJECT_CARDS,
-  ...ARC_CARDS, ...REP_CARDS, ...SOK_CARDS, ...SEASON2_CARDS, ...PACK_CARDS, ...HEIR_CARDS];
-export { PROJECTS, PROJECT_MONTHS, ARCS, PACKS, REPS, TRAITS, EDU, AMBITIONS, TITLES, COUNCIL_MAX, COUNCIL_MIN_REL, CARES };
+  ...ARC_CARDS, ...REP_CARDS, ...SOK_CARDS, ...SEASON2_CARDS, ...PACK_CARDS, ...HEIR_CARDS, ...CLUE_CARDS, FINALE_CARD];
+/** Která stopa tajemství leží na kartě (podle volby se stopou). */
+const CLUE_OF = Object.fromEntries(CLUE_CARDS.map((c) => [c.id, Object.values(c.opts).find((o) => o.clue)?.clue]));
+export { CLUES, PROVINCES, PROJECTS, PROJECT_MONTHS, ARCS, PACKS, REPS, TRAITS, EDU, AMBITIONS, TITLES, COUNCIL_MAX, COUNCIL_MIN_REL, CARES };
 /** Album postav: kdo se v které době může objevit (postavy z karet i zástupné postavy podle doby). */
 export function albumPeople() {
   const out = {};
@@ -163,7 +169,7 @@ export function newGame({ name = '', female = false, kind = 'vize', mode = 'norm
     v: 1,
     seed: seed >>> 0 || 1,
     leader: { name: leaderName, female: !!female, n: 1, kind, age: history ? 1 : 7, lvl },
-    meta: { tree: { ...(meta?.tree ?? {}) }, relics: [...(meta?.relics ?? [])], title: meta?.title ?? null }, // trvalý postup hráče (strom, relikvie, titul)
+    meta: { tree: { ...(meta?.tree ?? {}) }, relics: [...(meta?.relics ?? [])], title: meta?.title ?? null, clues: [...(meta?.clues ?? [])] }, // trvalý postup hráče (strom, relikvie, titul)
     packs: packs.filter((p) => PACKS[p]), // odemčené balíčky karet
     iron: !!iron, // železný režim: žádné záchrany, pomůcky ani rady
     rep: {}, // body pověsti současného vůdce
@@ -174,6 +180,11 @@ export function newGame({ name = '', female = false, kind = 'vize', mode = 'norm
     arcs: [], // dokončené příběhy 'arc.konec'
     trace: [], // průběh ukazatelů po měsících (graf vlády)
     marks: [], // velká rozhodnutí a krize v grafu {t, kind}
+    prov: freshProvinces(), // kraje říše {sat, lost, threat}
+    heroes: [], // hrdinové u dvora
+    quest: null, // probíhající výprava
+    deeds: [], // výpravy (kronika)
+    clues: [], // stopy tajemství nalezené v této hře
     prestige, // kolikrát svět začal znovu od pravěku
     fac: { kneze: 0, kupci: 0, vojsko: 0, ucenci: 0 }, // hněv frakcí
     later: [], // odložené důsledky {at, e, text}
@@ -223,6 +234,7 @@ export function newGame({ name = '', female = false, kind = 'vize', mode = 'norm
   assignTask(s);
   assignAmb(s);
   newRival(s);
+  s.heroes.push(newHero(s));
   if (s.meta.title === 'mirotvurci') s.rel.riv = 2;
   s.trace.push(snap(s));
   s.queue.push({ id: PROJECT_CARDS[Math.floor(random(s) * PROJECT_CARDS.length)].id, at: 5 });
@@ -251,6 +263,10 @@ function newRival(state, heir = false) {
   const gen = heir ? (state.rival.ruler?.gen ?? 1) + 1 : 1;
   state.rival.ruler = { name, female, gen, since: state.total ?? 0, at: (state.total ?? 0) + 60 + Math.floor(random(state) * 40) };
 }
+/** Stopy tajemství: ze všech her (meta) i z té současné. */
+export const knownClues = (state) => [...new Set([...(state.meta?.clues ?? []), ...(state.clues ?? [])])];
+/** Kraj, odkud karta přichází (podle toho, o co se mluvčí stará). */
+export const cardProvince = (state) => { const c = cardById(state.card); return c && !c.who?.startsWith('@') ? provinceFor(CARES[whoOf(state, c)]) : null; };
 const kidUnraised = (state) => (state.kids ?? []).find((k) => !k.edu);
 
 const MOOD_BAD = ['Bez pozdravu', 'Chladně', 'Nevraživě', 'Úsečně'];
@@ -302,6 +318,8 @@ function eligible(state, c) {
   const timeless = c.season || c.traitor || c.anyAge || c.who?.startsWith('@');
   if (c.pack && !(state.packs ?? []).includes(c.pack)) return false;
   if (c.rep && state.repNow !== c.rep) return false;
+  if (CLUE_OF[c.id] && knownClues(state).includes(CLUE_OF[c.id])) return false;
+  if (c.finale && (age < 7 || knownClues(state).length < CLUES.length)) return false;
   if (c.anyAge && state.rival?.absorbed) return false;
   if (c.age) { if (c.age !== age) return false; }
   else if (c.pastOnly) { if (age >= 7 || state.rival?.absorbed) return false; }
@@ -330,6 +348,10 @@ function draw(state) {
   state.luck = state.leader.kind === 'hazard' ? 0.5 + Math.round(random(state) * (master(state) ? 7 : 10)) / 10 : 1;
   state.peek = peekCard(state);
   state.advice = state.leader.kind === 'rada' && !state.iron ? advise(state) : null;
+  // Naléhavá karta: občas je třeba rozhodnout do pár vteřin (ne v bleskovce, souboji ani na úvodu).
+  const c = cardById(state.card);
+  state.urgent = !['blitz', 'duel'].includes(state.mode) && (state.turn ?? 0) >= 6 && c && !c.milestone && !c.finale && !c.id.startsWith('dej_') && c.id !== INTRO.id
+    && (c.urgent || random(state) < URGENT_P);
 }
 
 /** Prorok: kdo přijde příště (pokračování příběhu, nebo předem vylosovaná karta). */
@@ -463,6 +485,7 @@ export function sageHint(state, rnd = Math.random) {
 }
 
 /** Posun ukazatele (jednorázová pomůcka): o SHIFT tam, kam hráč chce – nikdy ne až na kraj. */
+export const URGENT_P = 0.07, URGENT_S = 7; // jak často je karta naléhavá a kolik je na ni vteřin
 export const SHIFT = 15;
 export function shiftMeter(state, id, sign) {
   if (state.dead || !(id in state.meters)) return false;
@@ -551,6 +574,10 @@ export function choose(state, dir) {
   factionMood(state, before, o);
   reputation(state, before);
   if (METERS.reduce((a, m) => a + Math.abs(state.meters[m.id] - before[m.id]), 0) >= 30) mark(state, 'big');
+  if (o.clue && !knownClues(state).includes(o.clue)) {
+    (state.clues ??= []).push(o.clue);
+    news(state, 'clue', `Stopa tajemství: ${CLUES.find((x) => x.id === o.clue)?.title ?? o.clue} (${knownClues(state).length} z ${CLUES.length})`);
+  }
   if (o.edu && EDU[o.edu]) {
     const kid = kidUnraised(state);
     if (kid) { kid.edu = o.edu; news(state, 'kid', `${kid.name} dostane ${EDU[o.edu]} výchovu.`); }
@@ -818,6 +845,12 @@ function monthPasses(state) {
       state.project = null;
     }
   }
+  // Kraje: spokojenost, hrozby, odtržení. Rozpad říše končí vládu.
+  provinceMonth(state, (k, t) => news(state, k, t));
+  if (lostCount(state) >= LOST_MAX) {
+    endReign(state, { rozpad: true, title: 'Rozpad říše', text: 'Kraj za krajem se odtrhl. Z mapy zmizela říše, kterou jsi měl{a} chránit – zůstalo jen pár vesnic, které ti ještě věří.' }, 'rozpad');
+    return;
+  }
   // Odložené důsledky dřívějších rozhodnutí.
   for (const l of (state.later ?? []).filter((x) => x.at <= state.total)) {
     for (const [k, v] of Object.entries(l.e ?? {})) state.meters[k] = clamp(state.meters[k] + effect(k, v));
@@ -986,7 +1019,7 @@ function advanceAge(state) {
 }
 
 function endReign(state, e, key) {
-  state.dead = { meter: e.meter ?? null, side: e.side ?? null, special: e.special ?? null, election: !!e.election, title: e.title, text: fill(e.text, state.leader), months: state.turn };
+  state.dead = { meter: e.meter ?? null, side: e.side ?? null, special: e.special ?? null, election: !!e.election, rozpad: !!e.rozpad, title: e.title, text: fill(e.text, state.leader), months: state.turn };
   const score = Math.round(state.turn * modBonus(state));
   state.dead.score = score;
   state.history.push({ name: state.leader.name, female: state.leader.female, n: state.leader.n, months: state.turn, score, ending: key, title: e.title, kind: state.leader.kind,
@@ -1078,6 +1111,7 @@ export function nextLeader(state, kind = state.leader.kind, lvl = 1, heir = null
   state.heirM = kid?.edu ?? null;
   if (kid && TRAITS[kid.trait] && !state.perks.includes(TRAITS[kid.trait].perk)) state.perks.push(TRAITS[kid.trait].perk);
   if (kid) news(state, 'kid', `Vlády se ujímá ${kid.female ? 'dcera' : 'syn'} ${kid.name} – ${(kid.female ? TRAITS[kid.trait].f : TRAITS[kid.trait].name).toLowerCase()}${kid.edu ? `, s ${EDU[kid.edu]} výchovou` : ''}.`);
+  state.quest = null;
   state.kids = [];
   state.rep = {};
   state.repNow = null;
@@ -1199,6 +1233,12 @@ export function upgrade(state) {
   state.marks ??= [];
   if (!state.amb && !state.dead) assignAmb(state);
   if (!state.rival.ruler) newRival(state);
+  state.prov ??= freshProvinces();
+  state.heroes ??= [newHero(state)];
+  state.quest ??= null;
+  state.deeds ??= [];
+  state.clues ??= [];
+  (state.meta ??= { tree: {}, relics: [] }).clues ??= [];
   return state;
 }
 

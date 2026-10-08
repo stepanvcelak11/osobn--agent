@@ -2,8 +2,9 @@
 import { portrait, meterIcon, glyph, icon, mood, mix } from './art.js';
 import { duelSetup } from './duel.js';
 import { AMB_POINTS } from './court.js';
+import { PROVINCES, HERO_CLASSES, ATTRS, THREATS, canHire, hire, startQuest, questRoll, questHero, stepById, chance, attrOf, heroTitle, ready as heroReady, lostCount, LOST_MAX, WOUNDS_MAX, HEROES_MAX, HIRE_COST, NEED, STEPS } from './realm.js';
 import { LEVELS, levelOf, MASTERY, LEVEL_TEXT, TREE, TREE_MAX, RELICS, RELIC_SLOTS, SKINS, PRESTIGE_BONUS, ROMAN, CAMPAIGN } from './meta.js';
-import { ARCS, PACKS, REPS, TRAITS, EDU, AMBITIONS, TITLES, COUNCIL_MAX, CARES, repName, councilCandidates, appoint, dismiss, ambById, ambProgress, rivalName, dailyCard, simVotes, FACTIONS, FACTION_REVOLT, PROJECTS, PROJECT_MONTHS, albumPeople, whoOf, master, chargeOf, ENDINGS_PAST, offerPerks, skipCard, bestDir, sageHint, shiftMeter, SHIFT, newGame, newBlitz, newRun, daily, touches, seesAhead, personOf, seasonOf, SEASON_NAMES, RIVALS, MODS, BRANCHES, WONDERS, modBonus, ageOf, leaderTitle, hasElections, lawAllowed, AGES, AGE_LEN, choose, nextLeader, currentCard, cardById, preview, outcome, optionOf, unlocked, skip, nudge, reformLaw, choosePerk, ready, tenure, timeLabel, danger, kindOf, upgrade, activeLaws, seals, taskById, taskProgress, seesDirection, revealed, toElection, support, KINDS, ACTIVE, CHARGE, NUDGE, METERS, ENDINGS, LAWS, TASKS, ERAS, SPECIAL, PEOPLE, REL_LOYAL, PERKS, CRISES, ELECTION, VOTE_MIN, BLITZ_START, BLITZ_BONUS, BLITZ_FALL } from './game.js';
+import { CLUES, knownClues, cardProvince, URGENT_S, rankDirs, ARCS, PACKS, REPS, TRAITS, EDU, AMBITIONS, TITLES, COUNCIL_MAX, CARES, repName, councilCandidates, appoint, dismiss, ambById, ambProgress, rivalName, dailyCard, simVotes, FACTIONS, FACTION_REVOLT, PROJECTS, PROJECT_MONTHS, albumPeople, whoOf, master, chargeOf, ENDINGS_PAST, offerPerks, skipCard, bestDir, sageHint, shiftMeter, SHIFT, newGame, newBlitz, newRun, daily, touches, seesAhead, personOf, seasonOf, SEASON_NAMES, RIVALS, MODS, BRANCHES, WONDERS, modBonus, ageOf, leaderTitle, hasElections, lawAllowed, AGES, AGE_LEN, choose, nextLeader, currentCard, cardById, preview, outcome, optionOf, unlocked, skip, nudge, reformLaw, choosePerk, ready, tenure, timeLabel, danger, kindOf, upgrade, activeLaws, seals, taskById, taskProgress, seesDirection, revealed, toElection, support, KINDS, ACTIVE, CHARGE, NUDGE, METERS, ENDINGS, LAWS, TASKS, ERAS, SPECIAL, PEOPLE, REL_LOYAL, PERKS, CRISES, ELECTION, VOTE_MIN, BLITZ_START, BLITZ_BONUS, BLITZ_FALL } from './game.js';
 
 const SAVE = 'rovnovaha.save';
 const calm = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -102,7 +103,7 @@ let shownAt = 0; // stav před posledním rozhodnutím (pro „Vrátit tah“)
 const bodu = (n) => (n === 1 ? 'bod' : n >= 2 && n <= 4 ? 'body' : 'bodů');
 const emptyStats = () => ({ points: 0, unlocked: [...START_KINDS], items: {}, games: 0, decisions: 0, reigns: 0, months: 0, tasks: 0, elections: 0, crises: 0, ends: {}, top: [], blitz: [], daily: {}, weekly: {}, ach: {}, kinds: [], wonders: 0, wars: 0, traitors: 0,
   xp: {}, tree: {}, relics: [], equip: [], skins: ['klasik'], skin: 'klasik', met: [], albums: [], camp: {}, prestige: 0, weekAward: {},
-  packs: [], title: null, built: 0, pacts: 0, heirs: 0, golden: 0, arcs: [], ironTop: [], dcard: {}, tut: 0 });
+  packs: [], clues: [], quests: 0, title: null, built: 0, pacts: 0, heirs: 0, golden: 0, arcs: [], ironTop: [], dcard: {}, tut: 0 });
 let stats = loadStats();
 function loadStats() {
   let s = null;
@@ -130,8 +131,8 @@ const isMain = () => state && ['normal', 'dejiny'].includes(state.mode) && !stat
 /** Hlavní hra s pomocí (ne železný režim): vybavení, pomůcky, strom, relikvie. */
 const assisted = () => isMain() && !state.iron;
 /** Postup hráče, který si vůdce bere do hlavní hry: úroveň typu, strom dynastie, nasazené relikvie, titul, balíčky. */
-const metaFor = (kind, iron = false) => (iron ? { lvl: 1, meta: null, packs: [...stats.packs], iron: true }
-  : { lvl: levelOf(stats.xp[kind]), meta: { tree: { ...stats.tree }, relics: [...stats.equip], title: titleOn() }, packs: [...stats.packs] });
+const metaFor = (kind, iron = false) => (iron ? { lvl: 1, meta: { clues: [...stats.clues] }, packs: [...stats.packs], iron: true }
+  : { lvl: levelOf(stats.xp[kind]), meta: { tree: { ...stats.tree }, relics: [...stats.equip], title: titleOn(), clues: [...stats.clues] }, packs: [...stats.packs] });
 /** Aktivní titul dynastie (jen pokud je opravdu získaný). */
 const titleOn = () => (stats.title && titleGot(stats.title) ? stats.title : null);
 const titleGot = (id) => {
@@ -605,7 +606,7 @@ function gearLine() {
 function equip() {
   state.hints = 0;
   if (!assisted()) return;
-  state.meta = { tree: { ...stats.tree }, relics: [...stats.equip], title: titleOn() };
+  state.meta = { tree: { ...stats.tree }, relics: [...stats.equip], title: titleOn(), clues: [...stats.clues] };
   const pred = stats.tree.predkove ?? 0, dech = stats.tree.dech ?? 0;
   if (pred) state.hints = 5 * pred;
   if (dech >= 3) (state.perks ??= []).push('sance');
@@ -712,6 +713,7 @@ let selected = null; // směr vybraný klepnutím na šipku (druhé klepnutí po
 let busy = false;    // karta právě odlétá
 
 function gameScreen() {
+  if (state.quest && !state.dead) { questScreen(); return; }
   document.body.classList.add('game');
   window.scrollTo(0, 0); // iOS po zavření klávesnice někdy nechá obrazovku posunutou
   app.innerHTML = `
@@ -803,21 +805,28 @@ function render(enter) {
   if (state.turn > 0 && toElection(state) <= 6) chips.push(`${icon('vote', 'ico sm')} Volby za ${toElection(state)} m. · podpora <b class="${support(state) >= VOTE_MIN ? 'ok' : 'bad'}">${support(state)} %</b>`);
   const nx = state.peek && cardById(state.peek);
   if (nx && seesAhead(state)) chips.push(`${icon('prorok', 'ico sm')} Příště ovlivní: ${touches(state, state.peek).map((k) => glyph(k, 'glyph sm')).join('')}`);
+  const threats = Object.entries(state.prov ?? {}).filter(([, p]) => p.threat || p.lost);
+  if (threats.length && !['blitz', 'duel'].includes(state.mode)) {
+    const [id, p] = threats.sort((a, b) => a[1].sat - b[1].sat)[0];
+    chips.push(`<span class="warn tap" data-map="${id}">${icon(p.lost ? 'flag' : 'map', 'ico sm')} ${p.lost ? 'Odtržen' : THREATS[p.threat.type].name}: ${PROVINCES[id].name}${threats.length > 1 ? ` +${threats.length - 1}` : ''} ›</span>`);
+  }
   $('#adv').innerHTML = chips.map((x) => `<span>${x}</span>`).join('');
+  for (const b of $('#adv').querySelectorAll('[data-map]')) b.onclick = () => { if (!busy) mapScreen(gameScreen, b.dataset.map); };
   for (const m of METERS) {
-    const v = state.meters[m.id], d = danger(v);
+    const v = fog() ? fogged(state.meters[m.id]) : state.meters[m.id], d = danger(v);
     ui.levels[m.id].style.transform = `translateY(${((100 - v) * 0.24).toFixed(2)}px)`;
     ui.icons[m.id].classList.toggle('warn', d >= 0.45 && d < 0.7);
     ui.icons[m.id].classList.toggle('bad', d >= 0.7);
     ui.icons[m.id].classList.toggle('edge', d >= 0.82); // blízko kraje: varovné pulzování
     bar(app.querySelector(`.mbar[data-b="${m.id}"]`), v);
-    ui.icons[m.id].parentElement.setAttribute('aria-label', `${m.name}: ${v} %`);
+    ui.icons[m.id].parentElement.setAttribute('aria-label', fog() ? `${m.name}: ${zone(v)}` : `${m.name}: ${v} %`);
   }
   const c = currentCard(state);
   document.body.style.setProperty('--scene', mix(c.person.color, '#0d0c0b', 0.8));
   ui.q.firstElementChild.textContent = c.text;
   if (enter) { const q = ui.q.firstElementChild; q.style.animation = 'none'; void q.offsetWidth; q.style.animation = ''; }
-  ui.person.textContent = c.person.name;
+  const pv = cardProvince(state);
+  ui.person.innerHTML = `${esc(c.person.name)}${pv ? `<small class="prov">${esc(PROVINCES[pv].name)}</small>` : ''}`;
   $('#mood').innerHTML = mood(state.rel?.[c.who] ?? 0, REL_LOYAL);
   // Pod kartou leží další: je vidět, kdo přijde (při tažení se odkryje celá).
   const np = nx ? personOf(state, nx) : null;
@@ -828,7 +837,7 @@ function render(enter) {
   ui.next.innerHTML = np ? `${portrait(np, age)}<div class="nextname">${esc(np.name)}</div>` : '';
   const card = ui.card;
   card.className = `card age${age}` + (enter ? ' enter' : '');
-  if (enter) shownAt = performance.now();
+  if (enter) { shownAt = performance.now(); startUrgent(); }
   app.querySelector('.stage').classList.toggle('rush', !!state.rush);
   card.style.transform = '';
   card.style.opacity = '';
@@ -843,6 +852,47 @@ function render(enter) {
   current = null;
   highlight(null, 0);
 }
+
+// ── Naléhavá karta: rozhodni do pár vteřin, jinak se stane to nejhorší ──
+let urgentT = 0, urgentLeft = 0;
+function stopUrgent() {
+  clearInterval(urgentT); urgentT = 0;
+  app.querySelector('.urgent')?.remove();
+  app.querySelector('.stage')?.classList.remove('hurry');
+}
+function startUrgent() {
+  stopUrgent();
+  if (!state.urgent || state.dead || !ui) return;
+  urgentLeft = URGENT_S * 1000;
+  const el = document.createElement('div');
+  el.className = 'urgent';
+  el.innerHTML = `${icon('timer', 'ico sm')}<b>Naléhavé!</b><span>${URGENT_S}</span><i><u></u></i>`;
+  app.querySelector('.stage').appendChild(el);
+  app.querySelector('.stage').classList.add('hurry');
+  sfx('warn'); vibrate([30, 30, 30]);
+  let last = performance.now();
+  urgentT = setInterval(() => {
+    const now = performance.now(), dt = now - last;
+    last = now;
+    if (!ui || !document.contains(el)) { stopUrgent(); return; }
+    if (document.hidden || busy || document.querySelector('.pop:not(.closing), .menu:not(.closing)')) return; // čas stojí v oknech
+    urgentLeft -= dt;
+    const sec = Math.max(0, Math.ceil(urgentLeft / 1000));
+    if (el.querySelector('span').textContent !== String(sec)) { el.querySelector('span').textContent = sec; if (sec <= 3) { sfx('tick'); vibrate(15); } }
+    el.querySelector('u').style.transform = `scaleX(${Math.max(0, urgentLeft / (URGENT_S * 1000))})`;
+    if (urgentLeft <= 0) {
+      const worst = rankDirs(state).at(-1);
+      toast('Nerozhodl{a} jsi včas – stalo se to nejhorší.'.replace('{a}', state.leader.female ? 'a' : ''), 'fall');
+      highlight(worst, 1);
+      commit(worst);
+    }
+  }, 100);
+}
+
+/** Mlha: místo přesné hodnoty jen pásmo (klid / napětí / krize) – a na které straně. */
+const fog = () => !!state?.mods?.includes('mlha');
+const fogged = (v) => { const d = danger(v); return d < 0.45 ? 50 : d < 0.7 ? (v < 50 ? 30 : 70) : (v < 50 ? 10 : 90); };
+const zone = (v) => { const d = danger(v); return d < 0.45 ? 'klid' : `${d < 0.7 ? 'napětí' : 'krize'} – ${v < 50 ? 'příliš nízko' : 'příliš vysoko'}`; };
 
 /** Proužek hodnoty pod ikonou: výplň do aktuální hodnoty, ryska uprostřed = ideál, barva podle nebezpečí. */
 function bar(el, v) {
@@ -917,6 +967,8 @@ function tapDir(dir) {
 }
 
 function commit(dir) {
+  const wasUrgent = !!urgentT;
+  stopUrgent();
   busy = true;
   const card = ui.card;
   const far = { left: 'translate(-150%, 30px) rotate(-16deg)', right: 'translate(150%, 30px) rotate(16deg)', up: 'translate(0, -140%)', down: 'translate(0, 140%)' }[dir];
@@ -930,7 +982,7 @@ function commit(dir) {
   setTimeout(() => {
     undoSnap = ['normal', 'dejiny'].includes(state.mode) ? JSON.stringify(state) : null;
     if (state.hints > 0) state.hints -= 1;
-    const fast = state.mode !== 'blitz' && (stats.tut ?? 0) >= COACH.length && !['intro', 'dej_intro'].includes(state.card) && performance.now() - shownAt < RUSH_MS;
+    const fast = !wasUrgent && state.mode !== 'blitz' && (stats.tut ?? 0) >= COACH.length && !['intro', 'dej_intro'].includes(state.card) && performance.now() - shownAt < RUSH_MS;
     if (isMain() && (stats.tut ?? 0) < COACH.length && !['intro', 'dej_intro'].includes(state.card)) stats.tut = (stats.tut ?? 0) + 1;
     const dead = choose(state, dir);
     if (fast && !dead) { state.rush = true; toast('Moc rychle! Nečteš – další karta ti jen uškodí. Veď zemi pořádně.', 'fall'); vibrate([20, 40, 20]); }
@@ -1040,6 +1092,8 @@ function feel(before) {
 function toast(text, kind = '') {
   if (['task', 'crisis', 'election', 'perk', 'rescue', 'era', 'wonder', 'war', 'traitor', 'built', 'pact', 'golden', 'kid', 'arc', 'amb'].includes(kind)) sfx('good');
   if (kind === 'ach') sfx('ach');
+  if (['threat', 'provLost'].includes(kind)) sfx('warn');
+  if (kind === 'clue') sfx('ach');
   if (['crisisLost', 'fall', 'electionSoon', 'warLost', 'traitorStrike', 'traitorHint'].includes(kind)) sfx('warn');
   toasts.push({ text, kind });
   if (toasts.length === 1) nextToast();
@@ -1050,7 +1104,7 @@ function nextToast() {
   const t = document.createElement('div');
   t.className = `toast ${m.kind}`;
   const ic = { law: 'law', task: 'task', era: 'era', crisis: 'crisis', crisisLost: 'crisis', election: 'vote', electionSoon: 'vote', rescue: 'rescue', perk: 'perk', fall: 'crisis', ach: 'trophy', points: 'trophy', sun: 'sun', age: 'era', enemy: 'crisis', friend: 'people', wonder: 'era', war: 'trophy', warLost: 'crisis', rival: 'globe',
-    traitor: 'key', traitorHint: 'key', traitorStrike: 'crisis', built: 'era', pact: 'globe', golden: 'sun', season: 'sun', kid: 'people', rep: 'people', arc: 'book', amb: 'task', echo: 'book' }[m.kind];
+    traitor: 'key', traitorHint: 'key', traitorStrike: 'crisis', built: 'era', pact: 'globe', golden: 'sun', season: 'sun', kid: 'people', rep: 'people', arc: 'book', amb: 'task', echo: 'book', threat: 'crisis', provLost: 'flag', clue: 'cyklus', quest: 'dice' }[m.kind];
   t.innerHTML = (ic ? icon(ic, 'ico sm') : '') + `<span>${esc(m.text)}</span>`;
   document.body.appendChild(t);
   const life = m.kind ? 2600 : 1600;
@@ -1071,6 +1125,7 @@ function showNews() {
     if (n.kind === 'traitor') stats.traitors = (stats.traitors ?? 0) + 1;
     if (n.kind === 'built') { stats.built = (stats.built ?? 0) + 1; if (isMain() && Math.random() < 0.5) dropRelic('stavba dokončena'); }
     if (n.kind === 'pact') stats.pacts = (stats.pacts ?? 0) + 1;
+    if (n.kind === 'clue') for (const c of state.clues ?? []) if (!stats.clues.includes(c)) stats.clues.push(c);
     if (n.kind === 'golden') stats.golden = (stats.golden ?? 0) + 1;
     if (n.kind === 'arc') for (const a of state.arcs ?? []) if (!stats.arcs.includes(a)) { stats.arcs.push(a); if (isMain()) award(1, 'nový konec příběhu'); }
     if (n.kind === 'amb' && isMain()) award(AMB_POINTS + (state.meta?.title === 'kronikari' ? 1 : 0), 'splněná ambice');
@@ -1178,7 +1233,7 @@ function steerPicker() {
       <b class="pane-title">${icon('kormidlo', 'ico')} Který ukazatel posunout k rovnováze?</b>
       <div class="steer">${rows.map((m) => {
         const v = state.meters[m.id], to = v < 50 ? Math.min(50, v + NUDGE) : Math.max(50, v - NUDGE);
-        return `<button data-m="${m.id}"><span>${glyph(m.id)} ${m.name}</span><span>${v} % → <b>${to} %</b></span></button>`;
+        return `<button data-m="${m.id}"><span>${glyph(m.id)} ${m.name}</span><span>${fog() ? `${zone(v)} → <b>blíž klidu</b>` : `${v} % → <b>${to} %</b>`}</span></button>`;
       }).join('') || '<div class="small">Všechno je přesně uprostřed.</div>'}</div>
       <button class="ghost" data-x>Zatím ne</button>
     </div>`;
@@ -1201,14 +1256,14 @@ function steer(id, pop) {
 // ── Ukazatel: stav, význam a co ho ovlivňuje ─────────
 function meterInfo(id) {
   if (busy || document.querySelector('.pop:not(.closing)')) return;
-  const m = METERS.find((x) => x.id === id), v = state.meters[id], d = danger(v);
+  const m = METERS.find((x) => x.id === id), v = fog() ? fogged(state.meters[id]) : state.meters[id], d = danger(v);
   const side = v < 50 ? m.low : m.high;
   const status = d < 0.45 ? ['ok', 'V rovnováze'] : d < 0.7 ? ['warn', `Pozor – blíží se ${side.toLowerCase()}`] : ['bad', `Nebezpečí – hrozí ${side.toLowerCase()}`];
   const p = document.createElement('div');
   p.className = 'pop';
   p.innerHTML = `
     <div class="pane" role="dialog" aria-label="${m.name}">
-      <div class="pane-head">${meterIcon(id).replace(/clip-/g, 'pclip-')}<div><b>${m.name}</b><span class="${status[0]}">${status[1]}</span></div><em>${v} %</em></div>
+      <div class="pane-head">${meterIcon(id).replace(/clip-/g, 'pclip-')}<div><b>${m.name}</b><span class="${status[0]}">${status[1]}</span></div><em>${fog() ? '≈' : `${v} %`}</em></div>
       <div class="scale"><i style="left:${v}%"></i></div>
       <div class="ends"><span>0 % · ${m.low}</span><span>ideál</span><span>${m.high} · 100 %</span></div>
       <p>${m.about}</p>
@@ -1237,6 +1292,7 @@ function menu() {
       <div class="mhead"><img src="icons/icon-192.png" alt=""><div><b>${esc(state.leader.name)}</b><small>${state.leader.n}. ${leaderTitle(state)}${(state.world ?? state.mode) === 'dejiny' ? ` · ${ageOf(state).name}` : ''}</small></div></div>
       <button class="primary mplay" data-a="back">${icon('play', 'ico')} ${bl ? 'Pokračovat (čas stojí)' : 'Zpět do hry'}</button>
       <div class="mlist">
+        ${bl ? '' : item('map', 'map', 'Mapa říše', 'kraje, hrozby, hrdinové a výpravy')}
         ${item('realm', 'globe', 'Stav republiky', 'úkol, zákony, lidé, volby')}
         ${bl ? '' : item('chron', 'book', 'Kronika a konce', 'vůdci a odemčené konce')}
         ${bl ? '' : item('stats', 'trophy', 'Statistiky a úspěchy', 'hodnocení a rekordy')}
@@ -1268,6 +1324,7 @@ function menu() {
     m.remove();
     if (a === 'chron') chronicleScreen(gameScreen);
     if (a === 'realm') realmScreen(gameScreen);
+    if (a === 'map') mapScreen(gameScreen);
     if (a === 'help') helpScreen(gameScreen);
     if (a === 'stats') statsScreen(gameScreen);
     if (a === 'endblitz') endBlitz();
@@ -1284,10 +1341,10 @@ function deathScreen() {
   document.body.classList.remove('game');
   const d = state.dead, l = state.leader, m = METERS.find((x) => x.id === d.meter);
   const total = 15 + Object.keys(SPECIAL).length;
-  const why = d.special ? 'Tajný konec – legenda' : d.election ? `Podpora Lidu a Spojenců klesla pod ${VOTE_MIN} %` : `Ukazatel ${m.name} ${d.side === 'low' ? 'klesl na nulu' : 'vystoupal na maximum'}`;
+  const why = d.special ? 'Tajný konec – legenda' : d.rozpad ? `Odtrhly se ${LOST_MAX} kraje` : d.election ? `Podpora Lidu a Spojenců klesla pod ${VOTE_MIN} %` : `Ukazatel ${m.name} ${d.side === 'low' ? 'klesl na nulu' : 'vystoupal na maximum'}`;
   app.innerHTML = `
     <div class="sheet">
-      <div class="big">${d.special ? icon(d.special, 'ico xl') : d.election ? icon('vote', 'ico xl bad') : glyph(m.id, 'glyph xl')}</div>
+      <div class="big">${d.special ? icon(d.special, 'ico xl') : d.rozpad ? icon('flag', 'ico xl bad') : d.election ? icon('vote', 'ico xl bad') : glyph(m.id, 'glyph xl')}</div>
       <h2 class="${d.special ? 'legend' : ''}">${esc(d.title)}</h2>
       <div class="small" style="text-align:center">${why}</div>
       <p>${esc(d.text)}</p>
@@ -1647,6 +1704,7 @@ function statsScreen(back) {
   const total = 15 + Object.keys(SPECIAL).length;
   const endName = (key) => {
     if (key === 'volby') return ELECTION.title;
+    if (key === 'rozpad') return 'Rozpad říše';
     if (key.startsWith('x.')) return SPECIAL[key.slice(2)]?.title ?? key;
     const [m, side] = key.split('.');
     return ENDINGS[m]?.[side]?.title ?? key;
@@ -1714,6 +1772,11 @@ function helpScreen(back) {
         <li>Po rozhodnutí se dotčené ukazatele na chvíli obarví: <b style="color:var(--sky)">modře, když stouply</b> (nebe nahoře),
           <b style="color:var(--grass)">zeleně, když klesly</b> (tráva dole).</li>
         <li>Klepnutím na ukazatel zjistíš jeho stav, co znamená a co ho zvyšuje nebo snižuje.</li>
+        <li><b>Mapa říše:</b> sedm krajů, každý drží jeden ukazatel. Spokojenost kraje tíhne k tomu, jak je jeho ukazatel v rovnováze. V krajích vznikají hrozby (bandité, šelma, nákaza, vzpoura, kult) nebo zvěsti o pokladu. Nevyřešená hrozba kraj rozzlobí, až se odtrhne – a když se odtrhnou 3 kraje, říše se rozpadne. Karta ukazuje, ze kterého kraje mluvčí je.</li>
+        <li><b>Hrdinové a výpravy:</b> u dvora máš až 3 hrdiny (Válečník, Zloděj, Čaroděj, Bard, Lovec) se čtyřmi vlastnostmi. Na mapě je pošleš na výpravu: tři riskantní kroky, každá volba je hod kostkou k20 + vlastnost a vidíš šanci. Stačí 2 úspěchy; nezdar hrdinu zraní, 3 zranění = padne. Úspěšní hrdinové sílí.</li>
+        <li><b>Naléhavé karty:</b> občas je potřeba rozhodnout do 7 vteřin – jinak se stane to nejhorší.</li>
+        <li><b>Mlha</b> (ztížení): neuvidíš přesné hodnoty, jen klid, napětí, nebo krizi. Čti, co ti lidé říkají.</li>
+        <li><b>Tajemství Velkého výpadku:</b> ve všech dobách jsou ukryté stopy (volby „Prozkoumat…“). Stopy se pamatují napříč hrami (Sbírka → Tajemství). Kdo najde všech 12, v roce 2089 může prolomit cyklus.</li>
         <li><b>Čti karty.</b> Kdo odpoví rychleji než za vteřinu, nečte – další karta (s červeným rámečkem) mu pak jen uškodí, ať zvolí cokoli. V bleskovce to neplatí.</li>
         <li><b>Čím déle vládneš, tím víc rozhodnutí váží</b> – na začátku vlády mají účinek 1,8×, po čtyřech letech 2,6×. Nový vůdce začíná zase mírněji.</li>
         <li>Rozhodnutí mají následky – některá se ti vrátí za pár měsíců. Když padneš, úřad převezme nástupce, ale svět si pamatuje, co se stalo.</li>
@@ -1844,7 +1907,7 @@ function dynastyScreen(back) {
 function collectionScreen(back, tab = 'lide') {
   ui = null;
   document.body.classList.remove('game');
-  const tabs = { lide: 'Postavy', konce: 'Konce', pribehy: 'Příběhy', relikvie: 'Relikvie', vzhled: 'Vzhledy' };
+  const tabs = { lide: 'Postavy', konce: 'Konce', pribehy: 'Příběhy', tajemstvi: 'Tajemství', relikvie: 'Relikvie', vzhled: 'Vzhledy' };
   let body = '';
   if (tab === 'lide') {
     const groups = albumPeople();
@@ -1869,6 +1932,13 @@ function collectionScreen(back, tab = 'lide') {
     body = `<div class="small">Delší příběhy na několik karet, které se větví. Každý má víc konců – za každý nový konec bod.</div>
       ${Object.entries(ARCS).map(([id, a]) => `<h3>${esc(a.name)} <span class="dim">${a.age && a.age < 7 ? AGES[a.age - 1].name : 'Nová republika'} · ${Object.keys(a.ends).filter((e) => stats.arcs.includes(`${id}.${e}`)).length} / ${Object.keys(a.ends).length}</span></h3>
         ${Object.entries(a.ends).map(([e, t]) => `<div class="endrow${stats.arcs.includes(`${id}.${e}`) ? '' : ' locked'}">${icon('book', 'ico')}<div><b>${stats.arcs.includes(`${id}.${e}`) ? esc(t) : '???'}</b></div></div>`).join('')}`).join('')}`;
+  }
+  if (tab === 'tajemstvi') {
+    const got = stats.clues.length;
+    body = `<div class="small">Co způsobilo Velký výpadek? Stopy jsou ukryté ve všech dobách – hledej podivné karty a volby „Prozkoumat“. Nalezeno <b>${got} z ${CLUES.length}</b>.${got >= CLUES.length ? ' <b class="ok">Všechny stopy pohromadě – v roce 2089 tě čeká rozuzlení.</b>' : ''}</div>
+      <div class="journal">${CLUES.map((c, i) => stats.clues.includes(c.id)
+        ? `<div class="jentry"><span class="chap">${i + 1}</span><div><b>${esc(c.title)}</b><small>${AGES[c.age - 1].name}</small><p>${esc(c.journal)}</p></div></div>`
+        : `<div class="jentry locked"><span class="chap">${i + 1}</span><div><b>???</b><small>${AGES[c.age - 1].name}</small></div></div>`).join('')}</div>`;
   }
   if (tab === 'relikvie') {
     body = `<div class="small">Relikvie najdeš za dlouhou vládu (5 let), legendu, dokončený div světa nebo stavbu a příchod nové doby. Nasadit můžeš nejvýš ${RELIC_SLOTS} – platí v hlavní hře od další vlády.</div>
@@ -1974,6 +2044,137 @@ function dcardStreak() {
   let n = 0;
   while (stats.dcard[today(d)]) { n++; d.setDate(d.getDate() - 1); }
   return n;
+}
+
+// ── Mapa říše, hrdinové a výpravy ────────────────────
+const ROADS = [['hlavni', 'nizina'], ['hlavni', 'hory'], ['hlavni', 'les'], ['hlavni', 'pristav'], ['hlavni', 'udoli'], ['hlavni', 'akademie'],
+  ['hory', 'akademie'], ['akademie', 'les'], ['les', 'pristav'], ['pristav', 'udoli'], ['udoli', 'nizina'], ['nizina', 'hory']];
+const satColor = (p) => (p.lost ? '#6b6560' : p.sat >= 60 ? '#7ccb5e' : p.sat >= 35 ? '#e3b860' : '#d4553f');
+const qfill = (t, h, prov) => String(t).replaceAll('{hrdina}', h?.name ?? 'Hrdina').replaceAll('{kraj}', PROVINCES[prov]?.name ?? '').replaceAll('{a}', h?.female ? 'a' : '');
+const attrRow = (h) => Object.entries(ATTRS).map(([a, n]) => `<span class="at${attrOf(h, a) >= 2 ? ' hi' : attrOf(h, a) < 0 ? ' lo' : ''}">${n.slice(0, 3)} ${attrOf(h, a) > 0 ? '+' : ''}${attrOf(h, a)}</span>`).join('');
+const wounds = (h) => Array.from({ length: WOUNDS_MAX }, (_, i) => `<i class="hp${i < WOUNDS_MAX - h.wounds ? ' on' : ''}"></i>`).join('');
+function heroCard(h, act = '') {
+  return `<div class="hero">${icon(HERO_CLASSES[h.cls].icon, 'ico')}<div><b>${esc(h.name)} <span class="dim">${heroTitle(h)} · úr. ${h.lvl}</span></b>
+    <div class="ats">${attrRow(h)}</div><small><span class="hps">${wounds(h)}</span>${h.rest > 0 ? ` odpočívá ${h.rest} m.` : h.deeds ? ` ${h.deeds}× hrdinský čin` : ''}</small></div>${act}</div>`;
+}
+/** Mapa: sedm krajů se spokojeností, hrozbami a odtrženými kraji; pod ní detail vybraného kraje a hrdinové. */
+function mapScreen(back, sel = null) {
+  ui = null;
+  stopUrgent();
+  document.body.classList.remove('game');
+  const prov = state.prov ?? {};
+  sel ??= Object.keys(prov).find((id) => prov[id].threat || prov[id].lost) ?? 'hlavni';
+  const P = PROVINCES[sel], p = prov[sel], m = METERS.find((x) => x.id === P.m);
+  const nodes = Object.entries(PROVINCES).map(([id, q]) => {
+    const st = prov[id];
+    return `<g class="pv${id === sel ? ' sel' : ''}${st.lost ? ' lost' : ''}${st.threat ? ' th' : ''}" data-pv="${id}" transform="translate(${q.x} ${q.y})">
+      ${st.threat || st.lost ? '<circle r="9.5" class="pulse"/>' : ''}<circle r="6.4" class="ring" style="stroke:${satColor(st)}"/>
+      <circle r="5" class="core"/><g transform="translate(-3.2 -3.2) scale(.27)" style="color:${satColor(st)}">${glyph(q.m, 'g').replace(/<svg[^>]*>|<\/svg>/g, '')}</g>
+      <text y="11.5">${esc(q.name)}</text></g>`;
+  }).join('');
+  const roads = ROADS.map(([a, b]) => `<line x1="${PROVINCES[a].x}" y1="${PROVINCES[a].y}" x2="${PROVINCES[b].x}" y2="${PROVINCES[b].y}" class="road"/>`).join('');
+  const heroes = state.heroes ?? [];
+  const target = p.lost || (p.threat && true);
+  const status = p.lost ? `<b class="bad">Odtržený kraj.</b> Pošli hrdinu, ať ho získá zpět (výprava proti vzpouře).`
+    : p.threat ? `<b class="${p.threat.type === 'treasure' ? 'ok' : 'bad'}">${THREATS[p.threat.type].name}.</b> ${esc(qfill(THREATS[p.threat.type].text, null, sel))}`
+    : 'Kraj je klidný.';
+  app.innerHTML = `
+    <div class="sheet mapsheet">
+      <h2 class="legend" style="text-align:center">Mapa říše</h2>
+      <div class="small" style="text-align:center">Odtržené kraje: <b class="${lostCount(state) ? 'bad' : ''}">${lostCount(state)} z ${LOST_MAX}</b> – při ${LOST_MAX} se říše rozpadne.</div>
+      <svg class="map" viewBox="0 0 100 100" aria-label="Mapa krajů">
+        <defs><radialGradient id="land" cx="50%" cy="45%" r="60%"><stop offset="0" stop-color="#3a3326"/><stop offset="1" stop-color="#231f19"/></radialGradient></defs>
+        <path class="land" d="M14 14 C30 2 62 4 82 10 C96 16 98 40 93 58 C90 76 80 94 58 96 C36 98 14 92 7 74 C1 58 4 28 14 14 Z"/>
+        <path class="sea" d="M93 58 C90 76 80 94 58 96 L100 100 L100 50 Z"/>
+        ${roads}${nodes}
+      </svg>
+      <div class="box pvbox">
+        <div class="pvhead">${glyph(P.m, 'glyph')}<div><b>${P.name} <span class="dim">· ${P.desc}</span></b><small>drží ${m.name} · spokojenost ${p.lost ? '—' : `${Math.round(p.sat)} %`}</small></div></div>
+        ${p.lost ? '' : `<div class="bar"><i style="width:${Math.round(p.sat)}%;background:${satColor(p)}"></i></div>`}
+        <p class="small">${status}</p>
+        <div class="small dim">Spokojenost kraje tíhne k tomu, jak je jeho ukazatel v rovnováze. Hrozba ji každý měsíc ubírá; na nule se kraj odtrhne.</div>
+      </div>
+      <h3>${icon('people', 'ico')} Hrdinové (${heroes.length} / ${HEROES_MAX})</h3>
+      ${heroes.map((h) => heroCard(h, target ? `<button class="unlock" data-go="${h.id}"${heroReady(h) && !state.dead ? '' : ' disabled'}>Vyslat</button>` : '')).join('') || '<div class="small">Žádný hrdina. Najmi si nějakého.</div>'}
+      ${canHire(state) ? `<button class="ghost" id="hire">${icon('people', 'ico sm')} Najmout hrdinu (Finance ${Object.values(HIRE_COST)[0]})</button>` : heroes.length < HEROES_MAX ? '<div class="small dim">Dalšího hrdinu půjde najmout za pár měsíců.</div>' : ''}
+      ${(state.deeds ?? []).length ? `<h3>${icon('book', 'ico')} Výpravy</h3>${state.deeds.slice(-5).reverse().map((d) => `<div class="past"><span>${esc(d.hero)} · ${PROVINCES[d.prov]?.name}</span><span class="${d.win ? 'ok' : 'bad'}">${d.win ? 'úspěch' : d.dead ? 'padl' + (d.female ? 'a' : '') : 'nezdar'}</span></div>`).join('')}` : ''}
+      <button class="primary" id="back">Zpět</button>
+    </div>`;
+  for (const g of app.querySelectorAll('[data-pv]')) g.onclick = () => mapScreen(back, g.dataset.pv);
+  for (const b of app.querySelectorAll('[data-go]')) b.onclick = () => {
+    if (!startQuest(state, sel, b.dataset.go)) return;
+    save(); sfx('good');
+    questScreen(back);
+  };
+  $('#hire')?.addEventListener('click', () => { const h = hire(state); if (!h) return; save(); toast(`Ke dvoru přišel${h.female ? 'a' : ''} ${heroTitle(h).toLowerCase()} ${h.name}`, 'friend'); mapScreen(back, sel); });
+  $('#back').onclick = back;
+}
+
+/** Výprava: tři riskantní kroky, každá volba je hod kostkou podle vlastnosti hrdiny. */
+function questScreen(back = gameScreen, last = null) {
+  ui = null;
+  stopUrgent();
+  document.body.classList.remove('game');
+  const q = state.quest, h = questHero(state);
+  if (!q || !h) { back(); return; }
+  const step = stepById(q.steps[q.i]), T = THREATS[q.type];
+  const dots = Array.from({ length: STEPS }, (_, i) => { const r = q.log[i]; return `<i class="${r ? (r.success ? 'ok' : 'bad') : i === q.i ? 'now' : ''}"></i>`; }).join('');
+  app.innerHTML = `
+    <div class="sheet quest">
+      <div class="qhead">${icon('dice', 'ico lg')}<div><small>Výprava · ${PROVINCES[q.prov].name}</small><b>${q.regain ? 'Získat kraj zpět' : T.name}</b></div><div class="qdots">${dots}</div></div>
+      ${heroCard(h)}
+      ${q.i === 0 && !last ? `<p class="qintro">${esc(qfill(q.regain ? `Kraj ${PROVINCES[q.prov].name} se odtrhl a vzbouřenci drží brány. {hrdina} se vydal{a} vyjednat, nebo vybojovat návrat.` : T.text, h, q.prov))}</p>` : ''}
+      <div class="qcard"><p>${esc(qfill(step.text, h, q.prov))}</p></div>
+      <div class="qopts">${['left', 'right', 'up', 'down'].map((d) => { const o = step.opts[d], c = Math.round(chance(h, o) * 100);
+        return `<button class="qopt" data-q="${d}"><span><b>${esc(o.t)}</b><small>${ATTRS[o.a]} ${attrOf(h, o.a) > 0 ? '+' : ''}${attrOf(h, o.a)}</small></span><em class="${c >= 65 ? 'ok' : c >= 40 ? 'warn' : 'bad'}">${c} %</em></button>`; }).join('')}</div>
+      <div class="small dim" style="text-align:center">K úspěchu výpravy stačí ${NEED} zdařilé kroky ze ${STEPS}. Každý nezdar hrdinu zraní (${WOUNDS_MAX} zranění = padne).</div>
+    </div>`;
+  for (const b of app.querySelectorAll('[data-q]')) b.onclick = () => rollScreen(back, b.dataset.q);
+}
+/** Hod kostkou s animací, pak výsledek kroku (nebo celé výpravy). */
+function rollScreen(back, dir) {
+  const h = questHero(state), q = state.quest, prov = q.prov;
+  const step = stepById(q.steps[q.i]), o = step.opts[dir];
+  const r = questRoll(state, dir);
+  save();
+  sfx('swipe');
+  app.querySelector('.qopts').innerHTML = `<div class="roll"><div class="die" id="die">?</div><div class="small" id="rtext">${ATTRS[o.a]}: k20 ${r.bonus >= 0 ? '+' : '−'} ${Math.abs(r.bonus)} proti ${r.target}</div></div>`;
+  const die = $('#die');
+  let n = 0;
+  const spin = setInterval(() => { die.textContent = 1 + Math.floor(Math.random() * 20); if (++n > 9) { clearInterval(spin); land(); } }, calm() ? 0 : 60);
+  function land() {
+    die.textContent = r.die;
+    die.className = `die ${r.success ? 'ok' : 'bad'}${r.crit ? ' crit' : ''}`;
+    sfx(r.success ? 'good' : 'warn'); vibrate(r.success ? 20 : [30, 40, 30]);
+    const res = document.createElement('div');
+    res.className = `qres ${r.success ? 'ok' : 'bad'}`;
+    res.innerHTML = `<b>${r.die === 20 ? 'Kritický úspěch!' : r.die === 1 ? 'Kritický nezdar!' : r.success ? 'Úspěch' : 'Nezdar'} (${r.die + r.bonus})</b><p>${esc(qfill(r.text, h, prov))}</p>
+      <button class="primary" id="qnext">${r.end ? 'Výsledek výpravy' : 'Pokračovat'}</button>`;
+    app.querySelector('.roll').after(res);
+    $('#qnext').onclick = () => (r.end ? questEnd(back, r.end, h) : questScreen(back, r));
+  }
+}
+function questEnd(back, res, h) {
+  const T = THREATS[res.type], P = PROVINCES[res.prov];
+  if (res.win) {
+    stats.quests = (stats.quests ?? 0) + 1;
+    if (isMain()) award(res.type === 'treasure' ? 2 : 1, 'výprava');
+    if (isMain() && (res.type === 'treasure' || Math.random() < 0.2)) dropRelic('výprava');
+  }
+  saveStats();
+  sfx(res.win ? 'ach' : 'end');
+  app.innerHTML = `
+    <div class="sheet quest">
+      <div class="big">${icon(res.win ? 'trophy' : res.dead ? 'crisis' : 'flag', 'ico xl')}</div>
+      <h2 class="${res.win ? 'legend' : ''}">${res.win ? 'Výprava se zdařila' : res.dead ? `${esc(h.name)} padl${h.female ? 'a' : ''}` : 'Výprava selhala'}</h2>
+      <p>${esc(qfill(res.win ? (res.regain ? `Kraj ${P.name} se vrací do říše. Lidé vítají {hrdina} jako osvoboditele.` : T.win) : (res.regain ? `Kraj ${P.name} zůstává odtržený. {hrdina} se vrací s nepořízenou.` : T.lose), h, res.prov))}</p>
+      <div class="stats">
+        <div class="stat"><span class="small">Kraj</span><b>${P.name}</b><span class="small">${res.win ? (res.regain ? 'znovu v říši' : 'hrozba zažehnána, spokojenost +30') : res.regain ? 'stále odtržený' : 'spokojenost −15'}</span></div>
+        <div class="stat"><span class="small">Hrdina</span><b>${esc(h.name)}</b><span class="small">${res.dead ? 'padl v boji' : res.lvlUp ? `postup na úroveň ${h.lvl}!` : `zranění ${h.wounds} z ${WOUNDS_MAX}`}</span></div>
+      </div>
+      <button class="primary" id="back">Zpět do vlády</button>
+    </div>`;
+  $('#back').onclick = () => (back === gameScreen || !back ? gameScreen() : back());
 }
 
 // ── Kampaň ───────────────────────────────────────────

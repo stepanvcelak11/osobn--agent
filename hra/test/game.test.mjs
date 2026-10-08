@@ -145,7 +145,7 @@ test('navazující příběhy opravdu navazují', () => {
   for (const id of ['vrana2', 'ork2', 'ork3', 'prorok2', 'fed2', 'fed3', 'stin2', 'hlad', 'epidemie', 'vakcina', 'nula2', 'vrana_dluh', 'pristav2', 'vlci', 'intro2']) {
     assert.ok(seen.has(id), `pokračování ${id} se nikdy neobjevilo`);
   }
-  const never = CARDS.filter((c) => !c.generated && !c.rep && !seen.has(c.id)).map((c) => c.id); // pověst závisí na stylu hry
+  const never = CARDS.filter((c) => !c.generated && !c.rep && !c.finale && !seen.has(c.id)).map((c) => c.id); // pověst závisí na stylu hry
   assert.deepEqual(never, [], 'každá karta se někdy objeví');
 });
 
@@ -902,4 +902,42 @@ test('přeskočená výchova dítěte se vrátí, remíza pověst nesmaže', () 
   r.meters = Object.fromEntries(METERS.map((m) => [m.id, 50]));
   choose(r, 'left');
   if (r.rep.zbozny === r.rep.ucenec) assert.equal(r.repNow, 'ucenec');
+});
+
+test('kraje, hrdinové a výpravy; naléhavé karty; stopy tajemství', async () => {
+  const g = await import('../game.js'), r = await import('../realm.js');
+  const s = newGame({ mode: 'dejiny', world: 'dejiny' }, 41); choose(s, 'left');
+  assert.equal(Object.keys(s.prov).length, 7); assert.equal(s.heroes.length, 1);
+  // hrozba a výprava
+  s.prov.hory.threat = { type: 'bandits', since: 0 };
+  const h = s.heroes[0];
+  assert.ok(r.startQuest(s, 'hory', h.id));
+  assert.equal(s.quest.steps.length, 3);
+  let res = null;
+  for (let i = 0; i < 3 && s.quest; i++) res = r.questRoll(s, 'left');
+  assert.ok(res.end, 'výprava skončila');
+  assert.equal(s.quest, null);
+  if (res.end.win) assert.equal(s.prov.hory.threat, null); else assert.ok(h.wounds >= 1);
+  // šance odpovídá vlastnosti
+  const w = { cls: 'valecnik', lvl: 1, boost: {} };
+  assert.ok(r.chance(w, { a: 'sila', d: 0 }) > r.chance(w, { a: 'duvtip', d: 0 }));
+  // odtržení kraje a rozpad říše
+  const t = newGame({}, 42); choose(t, 'left');
+  t.prov.hory.sat = 1; t.prov.hory.threat = { type: 'beast', since: 0 }; t.meters.sil = 2;
+  t.card = 'stavka'; t.meters = { ...t.meters, sil: 10 };
+  for (const id of ['les', 'pristav']) t.prov[id].lost = true;
+  t.prov.hory.sat = 0.5;
+  choose(t, DIRS.find((d) => !(cardById('stavka').opts[d].e.sil > 0)) ?? 'left');
+  if (t.prov.hory.lost) assert.equal(t.dead?.title, 'Rozpad říše');
+  // naléhavé karty se objevují
+  const u = newGame({}, 43); choose(u, 'left'); let urg = 0;
+  for (let i = 0; i < 300 && !u.dead; i++) { choose(u, bestDir(u)); if (u.urgent) urg++; }
+  assert.ok(urg > 0, 'aspoň jedna naléhavá karta');
+  // stopy: karta se stopou zmizí, když je stopa známá; finále až se všemi stopami
+  const c = newGame({ mode: 'dejiny', world: 'dejiny' }, 44); choose(c, 'left');
+  c.card = 'taj_c1'; const d = DIRS.find((x) => cardById('taj_c1').opts[x].clue);
+  choose(c, d);
+  assert.ok(g.knownClues(c).includes('c1'));
+  const f = newGame({ meta: { clues: g.CLUES.map((x) => x.id) } }, 45);
+  assert.equal(g.knownClues(f).length, 12);
 });
