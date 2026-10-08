@@ -5,15 +5,51 @@ import { AGES, AGE_LEN, AGE_PEOPLE, AGE_CARES, AGE_NAMES, AGE_CARDS, ENDINGS_PAS
 
 import { bondCards } from './bonds.js';
 import { AGE_CARDS_MORE } from './ages_more.js';
+import { SEASON_CARDS, STATE_CARDS, RIVAL_CARDS, TRAITOR_CARDS } from './events.js';
+import { BRANCH_CARDS, WONDERS, WONDER_CARDS } from './history_more.js';
 
-Object.assign(PEOPLE, AGE_PEOPLE);
+Object.assign(PEOPLE, AGE_PEOPLE, {
+  // Zástupné postavy: skutečnou osobu určí doba (viz DYN) – tady jen pro jistotu.
+  '@kraj': { name: 'Posel z kraje', icon: '🧺', color: '#9a8466', look: 'straw' },
+  '@rada': { name: 'Rádce', icon: '📜', color: '#8a8f98', look: 'hair' },
+  '@vysetr': { name: 'Vyšetřovatel', icon: '🕵️', color: '#6d6d6d', look: 'shades' },
+  '@zradce': { name: 'Zrádce', icon: '🗡️', color: '#5a4a5a', look: 'hood' },
+  riv: { name: 'Vyslanec sousedů', icon: '🏳️', color: '#7a6a9a', look: 'tophat' },
+});
+/// Kdo za zástupnou postavu mluví v které době.
+const DYN = {
+  '@kraj': { 1: 'sber', 2: 'pis', 3: 'sedl', 4: 'rev', 5: 'novin', 6: 'klim', 7: 'far' },
+  '@rada': { 1: 'star', 2: 'pis', 3: 'bisk', 4: 'hrabe', 5: 'dipl', 6: 'tech', 7: 'tajemnik' },
+  '@vysetr': { 1: 'sam', 2: 'knez', 3: 'bisk', 4: 'hrabe', 5: 'genl', 6: 'infl', 7: 'stin' },
+};
+/// Sousední říše v jednotlivých dobách (Dějiny lidstva).
+export const RIVALS = {
+  1: { name: 'Sokol, náčelník kmene za řekou', look: 'hood', color: '#7a6a5a' },
+  2: { name: 'Vyslanec říše za pouští', look: 'bald', color: '#b08a4a' },
+  3: { name: 'Vévoda ze sousedního království', look: 'cap', color: '#6a5a8a' },
+  4: { name: 'Velvyslanec sousedního císařství', look: 'tophat', color: '#7a6a9a' },
+  5: { name: 'Vyslanec sousední mocnosti', look: 'hair', color: '#5a6a7a' },
+  6: { name: 'Premiérka sousední země', look: 'long', color: '#5a8a9a' },
+};
+/// Ztížení: víc bodů za těžší hru.
+export const MODS = {
+  hlad: { name: 'Hladová léta', text: 'Zásoby (Finance) každý měsíc trochu ubývají.', bonus: 0.25 },
+  sousede: { name: 'Nevraživí sousedé', text: 'Diplomacie každý měsíc klesá a sousední říše sílí rychleji.', bonus: 0.25 },
+  boure: { name: 'Bouřlivá doba', text: 'Všechna rozhodnutí mají o čtvrtinu větší účinek.', bonus: 0.4 },
+  zradci: { name: 'Hnízdo zrádců', text: 'Zrádci se objevují třikrát častěji.', bonus: 0.2 },
+};
+export const BRANCHES = {
+  b_pole: 'Zemědělství', b_stada: 'Chov stád', b_klastery: 'Kláštery a víra', b_hrady: 'Hrady a léna', b_tisk: 'Knihtisk', b_prach: 'Střelný prach',
+  b_elektrina: 'Elektřina', b_ropa: 'Ropa a motory', b_sit: 'Internet', b_vesmir: 'Vesmírný program', b_nula: 'Začátek od nuly', b_republika: 'Pevná ruka',
+};
+const WONDER_BY_ID = Object.fromEntries(WONDERS.map((w) => [w.id, w]));
 Object.assign(CARES, AGE_CARES);
 // Kdo žije ve které době (podle karet) – karty vztahů se objeví jen tam.
 const PERSON_AGE = {};
 for (const c of [...AGE_CARDS, ...AGE_CARDS_MORE]) PERSON_AGE[c.who] ??= c.age;
 const OWN_BONDS = [...new Set(EXTRA.filter((c) => c.rel).map((c) => c.who))];
 const BONDS = bondCards(CARES, PERSON_AGE, OWN_BONDS, REL_LOYAL);
-const CARDS = [...BASE, ...EXTRA, ...AGE_CARDS, ...AGE_CARDS_MORE, ...BONDS];
+const CARDS = [...BASE, ...EXTRA, ...AGE_CARDS, ...AGE_CARDS_MORE, ...BONDS, ...SEASON_CARDS, ...STATE_CARDS, ...RIVAL_CARDS, ...TRAITOR_CARDS, ...BRANCH_CARDS, ...WONDER_CARDS];
 
 export const DIRS = ['left', 'right', 'up', 'down'];
 export const START = 50;
@@ -67,8 +103,8 @@ export function random(state) {
 
 function freshMeters() { return Object.fromEntries(METERS.map((m) => [m.id, START])); }
 
-export function newGame({ name = '', female = false, kind = 'vize', mode = 'normal' } = {}, seed = Date.now() >>> 0) {
-  const history = mode === 'dejiny';
+export function newGame({ name = '', female = false, kind = 'vize', mode = 'normal', world = null, mods = [] } = {}, seed = Date.now() >>> 0) {
+  const history = mode === 'dejiny' || world === 'dejiny';
   const leaderName = name.trim().slice(0, 30) || (history ? (female ? 'Ara' : 'Brok') : female ? 'Jana Nová' : 'Jan Nový');
   const s = {
     v: 1,
@@ -91,6 +127,12 @@ export function newGame({ name = '', female = false, kind = 'vize', mode = 'norm
     crisis: null, // probíhající krize {id, step, score}
     tally: { elections: 0, crises: 0 }, // vyhrané volby a zvládnuté krize (celá hra)
     mode,
+    world: history ? 'dejiny' : '2089',
+    mods: mods.filter((m) => MODS[m]),
+    rival: { power: 30, absorbed: false }, // sousední říše (jen v dávných dobách)
+    traitor: null, // skrytý zrádce {who, since, known}
+    ext: {}, // jak dlouho je který ukazatel v krajnosti
+    wonders: [], // dokončené divy světa
     age: history ? 1 : 7, // doba (Dějiny lidstva: 1 = pravěk … 7 = budoucnost)
     ageStart: 0, // kdy začala současná doba (počet karet)
     futureAt: history ? null : 0, // kdy svět dorazil do budoucnosti (éry Nové republiky se počítají od té chvíle)
@@ -101,7 +143,7 @@ export function newGame({ name = '', female = false, kind = 'vize', mode = 'norm
     used: [],
     turn: 0, // měsíce vlády současného vůdce
     total: 0, // karty za celou hru
-    card: history ? 'dej_intro' : INTRO.id,
+    card: history && mode === 'dejiny' ? 'dej_intro' : INTRO.id,
     history: [], // dřívější vůdci
     endings: [], // odemčené konce "fin.low"…
     best: 0,
@@ -123,17 +165,35 @@ export function fill(text, leader) {
 
 const MOOD_BAD = ['Bez pozdravu', 'Chladně', 'Nevraživě', 'Úsečně'];
 const MOOD_GOOD = ['S úsměvem', 'Přátelsky', 'Srdečně'];
+/** Kdo kartu skutečně přináší (zástupné postavy podle doby, zrádce). */
+export function whoOf(state, c) {
+  if (!c?.who?.startsWith('@')) return c?.who;
+  if (c.who === '@zradce') return state.traitor?.who ?? 'tajemnik';
+  return DYN[c.who]?.[state.age ?? 7] ?? 'tajemnik';
+}
+export function personOf(state, c) {
+  const who = whoOf(state, c);
+  if (who === 'riv') return { ...PEOPLE.riv, ...(RIVALS[state.age ?? 7] ?? {}) };
+  return PEOPLE[who];
+}
+export function seasonOf(state) {
+  const m = (state.turn % 12) + 1;
+  return m === 12 || m <= 2 ? 'zima' : m <= 5 ? 'jaro' : m <= 8 ? 'leto' : 'podzim';
+}
+export const SEASON_NAMES = { zima: 'zima', jaro: 'jaro', leto: 'léto', podzim: 'podzim' };
+
 export function currentCard(state) {
-  const c = cardById(state.card) || INTRO;
+  const c0 = cardById(state.card) || INTRO;
+  const c = { ...c0, who: whoOf(state, c0) };
   let text = fill(c.text, state.leader);
   // Rozzlobení a věrní lidé mluví jinak.
   const r = state.rel?.[c.who] ?? 0;
-  if (!c.rel && c.who !== 'tajemnik') {
+  if (!c.rel && c.who !== 'tajemnik' && !c.traitor) {
     const h = [...c.id].reduce((x, ch) => x + ch.charCodeAt(0), 0);
     if (r <= -REL_LOYAL) text = `${MOOD_BAD[h % MOOD_BAD.length]}: „${text}“`;
     else if (r >= REL_LOYAL) text = `${MOOD_GOOD[h % MOOD_GOOD.length]}: „${text}“`;
   }
-  return { ...c, person: PEOPLE[c.who], text };
+  return { ...c, person: personOf(state, c0), text };
 }
 
 /** Které ukazatele ovlivní karta (kterákoli volba) – pro Proroka. */
@@ -148,7 +208,15 @@ export function touches(state, id) {
 function eligible(state, c) {
   if ((c.weight ?? 1) <= 0) return false;
   // Dějiny lidstva: karta dávné doby jen ve své době, karty budoucnosti až v budoucnosti.
-  if (c.age ? c.age !== (state.age ?? 7) : (state.age ?? 7) < 7) return false;
+  const age = state.age ?? 7;
+  const timeless = c.season || c.traitor || c.who?.startsWith('@');
+  if (c.age) { if (c.age !== age) return false; }
+  else if (c.pastOnly) { if (age >= 7 || state.rival?.absorbed) return false; }
+  else if (!timeless && age < 7) return false;
+  if (c.season && seasonOf(state) !== c.season) return false;
+  if (c.traitor === 'hunt' && !(state.traitor && !state.traitor.known)) return false;
+  if (c.rivalMin != null && (state.rival?.power ?? 0) < c.rivalMin) return false;
+  if (c.rivalMax != null && (state.rival?.power ?? 0) > c.rivalMax) return false;
   if (state.recent.includes(c.id)) return false;
   if (c.once && state.used.includes(c.id)) return false;
   if (c.req && !c.req.every((f) => state.flags.includes(f))) return false;
@@ -207,7 +275,7 @@ export function pickCard(state) {
   // Méně viděné karty mají přednost (méně opakování); rozzlobení lidé chodí častěji.
   const seen = state.seen ?? {};
   const weights = pool.map((c) => (c.weight ?? 1) * (c.req ? 2 : 1) * (c.rel ? 3 : 1) / (1 + 0.8 * (seen[c.id] ?? 0))
-    * ((state.rel?.[c.who] ?? 0) <= -REL_LOYAL ? 1.5 : 1));
+    * ((state.rel?.[c.who] ?? 0) <= -REL_LOYAL ? 1.5 : 1) * (c.season ? 2.5 : 1) * (c.traitor ? 3 : 1));
   let r = random(state) * weights.reduce((a, b) => a + b, 0);
   for (let i = 0; i < pool.length; i++) {
     r -= weights[i];
@@ -245,6 +313,7 @@ export function outcome(state, dir) {
   const crisis = state.leader.kind === 'krize';
   let mult = state.leader.kind === 'byro' ? 0.75 : state.leader.kind === 'hazard' ? state.luck ?? 1 : 1;
   if (has(state, 'tlumic')) mult *= 0.8;
+  if (state.mods?.includes('boure')) mult *= 1.25;
   if ((state.age ?? 7) < 7) mult *= PAST_SOFT;
   for (const [k, v] of Object.entries(optionOf(state, card, dir).e || {})) {
     const from = out[k];
@@ -356,8 +425,29 @@ export function choose(state, dir) {
     if (o.advance) advanceAge(state);
     else state.queue.push({ id: card.id, at: state.total + 9 }); // objev se vrátí později
   }
-  relate(state, card, o);
+  relate(state, { ...card, who: whoOf(state, card) }, o);
   if (card.crisis) crisisStep(state, card, o);
+  if (o.wonder && WONDER_BY_ID[o.wonder] && !state.wonders.includes(o.wonder)) {
+    const w = WONDER_BY_ID[o.wonder];
+    state.wonders.push(o.wonder);
+    if (!state.flags.includes(`div_${o.wonder}`)) state.flags.push(`div_${o.wonder}`);
+    news(state, 'wonder', `Div světa dokončen: ${w.name}! Navždy bude držet ${METERS.find((m) => m.id === w.m).name} v rovnováze.`);
+  }
+  if (o.power) state.rival.power = Math.max(0, Math.min(100, state.rival.power + o.power));
+  if (o.war) war(state);
+  if (o.absorb) {
+    state.rival.absorbed = true;
+    news(state, 'rival', 'Sousední říše se spojila s tvou. Hranice zmizely a země je větší než kdy dřív.');
+  }
+  if (o.expose && state.traitor) {
+    state.traitor.known = true;
+    news(state, 'traitor', `Zrádce odhalen: ${PEOPLE[state.traitor.who]?.name ?? state.traitor.who}!`);
+    state.queue.unshift({ id: 'zrada_trest', at: state.total + 1 });
+  }
+  if (card.traitor === 'punish' && state.traitor) {
+    state.rel[state.traitor.who] = -REL_MAX;
+    state.traitor = null;
+  }
   if (card.once && !state.used.includes(card.id)) state.used.push(card.id);
   (state.seen ??= {})[card.id] = (state.seen[card.id] ?? 0) + 1;
   state.recent = [...state.recent, card.id].slice(-RECENT);
@@ -373,6 +463,23 @@ export function choose(state, dir) {
 }
 
 function news(state, kind, text) { (state.news ??= []).push({ kind, text }); }
+
+/** Válka se sousední říší: rozhoduje Síla proti síle soupeře (a trocha štěstí). */
+function war(state) {
+  const r = state.rival;
+  const won = state.meters.sil + random(state) * 40 > r.power + 20;
+  const apply = (e) => { for (const [k, v] of Object.entries(e)) state.meters[k] = clamp(state.meters[k] + effect(k, v)); };
+  if (won) {
+    apply({ fin: 10, lid: 5, sil: -5 });
+    r.power = Math.max(0, r.power - 25);
+    news(state, 'war', 'Válka vyhrána! Soused je oslaben a lid slaví.');
+  } else {
+    apply({ fin: -10, lid: -10, sil: -10 });
+    r.power = Math.min(100, r.power + 10);
+    news(state, 'warLost', 'Válka prohrána. Soused zesílil a země truchlí.');
+  }
+  state.rel.riv = Math.max(-REL_MAX, (state.rel.riv ?? 0) - 2);
+}
 
 /** Lidé si pamatují: komu volba pomohla, toho si naklonila. */
 function relate(state, card, o) {
@@ -425,6 +532,17 @@ function monthPasses(state) {
   if (has(state, 'stabilita') && state.turn % 12 === 0) {
     for (const m of METERS) { const v = state.meters[m.id]; state.meters[m.id] = v < START ? Math.min(START, v + 3) : Math.max(START, v - 3); }
   }
+  const add = (k, v) => { state.drift[k] = (state.drift[k] ?? 0) + v; };
+  const season = seasonOf(state);
+  if (season === 'zima') add('fin', -0.3);
+  if (season === 'podzim') add('fin', 0.3);
+  if (state.mods?.includes('hlad')) add('fin', -0.4);
+  if (state.mods?.includes('sousede')) add('dip', -0.3);
+  // Divy světa drží svůj ukazatel u rovnováhy.
+  for (const id of state.wonders ?? []) {
+    const m = WONDER_BY_ID[id]?.m, v = state.meters[m];
+    if (m && v !== START) add(m, v < START ? 0.5 : -0.5);
+  }
   for (const [k, v] of Object.entries(state.drift)) {
     const whole = Math.trunc(v);
     if (whole) { state.meters[k] = clamp(state.meters[k] + whole); state.drift[k] = v - whole; }
@@ -453,6 +571,7 @@ function monthPasses(state) {
     news(state, 'electionSoon', `Za půl roku jsou volby. Hlasy ti dají Lid a Spojenci (teď ${support(state)} %, potřebuješ ${VOTE_MIN} %).`);
   }
   progressTask(state);
+  worldEvents(state);
   const age = state.age ?? 7;
   if (age < 7) {
     // Přelom: po čase v dané době přijde objev, který může svět posunout dál.
@@ -469,6 +588,47 @@ function monthPasses(state) {
   }
 }
 
+/** Svět žije: soused sílí, zrádci se objevují, dlouhé krajnosti mají následky. */
+function worldEvents(state) {
+  const age = state.age ?? 7;
+  state.rival ??= { power: 30, absorbed: false };
+  if (age < 7 && !state.rival.absorbed) state.rival.power = Math.min(100, state.rival.power + (state.mods?.includes('sousede') ? 0.6 : 0.3));
+  // Zrádce
+  if (!state.traitor && state.turn >= 8 && random(state) < (state.mods?.includes('zradci') ? 0.06 : 0.02)) {
+    const people = [...new Set(Object.keys(state.seen ?? {}).map((id) => cardById(id)).filter((c) => c && !c.who.startsWith('@') && !['tajemnik', 'riv'].includes(c.who)
+      && (c.age ? c.age === age : age === 7)).map((c) => c.who))];
+    if (people.length) {
+      const who = people[Math.floor(random(state) * people.length)];
+      state.traitor = { who, since: state.total, known: false };
+      news(state, 'traitorHint', 'Šíří se šeptanda: někdo z tvých blízkých vynáší tajemství. Kdo to jen může být?');
+    }
+  } else if (state.traitor && !state.traitor.known && state.total - state.traitor.since >= 20) {
+    const name = PEOPLE[state.traitor.who]?.name ?? state.traitor.who;
+    for (const [k, v] of Object.entries({ fin: -10, sil: -10 })) state.meters[k] = clamp(state.meters[k] + effect(k, v));
+    state.rel[state.traitor.who] = -REL_MAX;
+    news(state, 'traitorStrike', `Zrada! ${name} prodává tvá tajemství cizím a mizí. Pokladna i stráže to pocítí.`);
+    state.traitor = null;
+  }
+  // Dlouhé krajnosti a zlatý věk
+  state.ext ??= {};
+  let calm = true;
+  for (const m of METERS) {
+    const v = state.meters[m.id], e = (state.ext[m.id] ??= { low: 0, high: 0 });
+    e.low = v <= 20 ? e.low + 1 : 0;
+    e.high = v >= 80 ? e.high + 1 : 0;
+    if (v < 40 || v > 60) calm = false;
+    for (const side of ['low', 'high']) {
+      const id = `stav_${m.id}_${side}`;
+      if (e[side] === 4 && cardById(id) && !state.queue.some((q) => q.id === id)) state.queue.push({ id, at: state.total });
+    }
+  }
+  state.ext.calm = calm ? (state.ext.calm ?? 0) + 1 : 0;
+  if (state.ext.calm === 8 && !state.queue.some((q) => q.id === 'zlaty_vek')) state.queue.push({ id: 'zlaty_vek', at: state.total });
+}
+
+/** Skóre vlády: měsíce × bonus za ztížení. */
+export const modBonus = (state) => 1 + (state.mods ?? []).reduce((a, m) => a + (MODS[m]?.bonus ?? 0), 0);
+
 /** Ve které době se volí: v moderní době a později (a vždy v hlavní hře). */
 export const hasElections = (state) => (state.age ?? 7) >= 5;
 export const ageOf = (state) => AGES[(state.age ?? 7) - 1];
@@ -483,6 +643,9 @@ function advanceAge(state) {
   state.ageStart = state.total;
   state.leader.age = state.age;
   state.queue = state.queue.filter((q) => !q.id.startsWith('prelom'));
+  state.rival = { power: 30, absorbed: false }; // nová doba = nový soused
+  if (state.rel) state.rel.riv = 0;
+  if (state.traitor && !state.traitor.known) state.traitor = null;
   if (state.age === 7) {
     state.futureAt = state.total;
     state.era = 1;
@@ -492,7 +655,9 @@ function advanceAge(state) {
 
 function endReign(state, e, key) {
   state.dead = { meter: e.meter ?? null, side: e.side ?? null, special: e.special ?? null, election: !!e.election, title: e.title, text: fill(e.text, state.leader), months: state.turn };
-  state.history.push({ name: state.leader.name, female: state.leader.female, n: state.leader.n, months: state.turn, ending: key, title: e.title });
+  const score = Math.round(state.turn * modBonus(state));
+  state.dead.score = score;
+  state.history.push({ name: state.leader.name, female: state.leader.female, n: state.leader.n, months: state.turn, score, ending: key, title: e.title, kind: state.leader.kind });
   if (!state.endings.includes(key)) state.endings.push(key);
   state.best = Math.max(state.best, state.turn);
   return state.dead;
@@ -573,7 +738,7 @@ export function nextLeader(state, kind = state.leader.kind) {
   state.crisis = null;
   state.peek = null;
   // Nový vůdce = nová šance: vztahy vychladnou na polovinu.
-  for (const k of Object.keys(state.rel ?? {})) state.rel[k] = Math.trunc(state.rel[k] / 2);
+  for (const k of Object.keys(state.rel ?? {})) state.rel[k] = Math.trunc(state.rel[k] / 2) || 0;
   state.meters = freshMeters();
   state.queue = state.queue.filter((q) => q.id.startsWith('era') || q.id.startsWith('prelom')); // nová éra ani přelom nezapadne
   state.turn = 0;
@@ -635,6 +800,12 @@ export function upgrade(state) {
   state.tally ??= { elections: 0, crises: 0 };
   state.luck ??= 1;
   state.seen ??= {};
+  state.world ??= state.mode === 'dejiny' ? 'dejiny' : '2089';
+  state.mods ??= [];
+  state.rival ??= { power: 30, absorbed: false };
+  state.traitor ??= null;
+  state.ext ??= {};
+  state.wonders ??= [];
   state.mode ??= 'normal';
   state.age ??= 7;
   state.ageStart ??= 0;
@@ -644,4 +815,4 @@ export function upgrade(state) {
   return state;
 }
 
-export { METERS, ENDINGS, PEOPLE, CARDS, INTRO, LAWS, TASKS, ERAS, SPECIAL, REL_LOYAL, PERKS, CRISES, ELECTION, AGES, AGE_LEN, ENDINGS_PAST };
+export { WONDERS, METERS, ENDINGS, PEOPLE, CARDS, INTRO, LAWS, TASKS, ERAS, SPECIAL, REL_LOYAL, PERKS, CRISES, ELECTION, AGES, AGE_LEN, ENDINGS_PAST };

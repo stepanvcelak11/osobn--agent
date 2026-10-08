@@ -27,6 +27,8 @@ Sedm ukazatelů drží zemi pohromadě. **Ideál je uprostřed – oba kraje jso
 
 ## Hloubka hry
 
+- **Cesta dějin** (dva objevy na každém přelomu), **divy světa**, **sousední říše** (válka, tribut, pohlcení), **roční období**, **zrádci**, **následky dlouhých krajností a zlatý věk** (`hra/events.js`, `hra/history_more.js`), **ztížení** za vyšší skóre, **výzvy** (denní 2089 / Dějiny, týdenní) a **hra pro dva** na jednom telefonu.
+
 - **Karta pod kartou:** je vidět, kdo přijde příště (Prorok navíc vidí, co další karta ovlivní). Rozzlobení lidé mluví nevraživě a přijdou s výčitkami, věrní se odvděčí (`hra/bonds.js`). Méně viděné karty mají přednost.
 
 - **Dějiny lidstva** (výchozí režim): od pravěku přes starověk, středověk, novověk, moderní dobu a současnost až do budoucnosti (Nová republika 2089). Každá doba má vlastní postavy, karty, oslovení, jména nástupců a konce; přelomový objev posune svět dál. Obsah je v `hra/ages.js`.

@@ -116,6 +116,7 @@ export const ENDINGS_PAST = {
 const o = ([t, e, more = {}]) => ({ t, e, ...more });
 const c = (id, age, who, text, l, r, u, d, extra = {}) => ({ id, age, who, text, opts: { left: o(l), right: o(r), up: o(u), down: o(d) }, ...extra });
 const ADV = { advance: true };
+const adv = (flag) => ({ advance: true, set: flag }); // přelom s volbou cesty dějin
 const milestone = { weight: 0, milestone: true };
 
 export const AGE_CARDS = [
@@ -142,8 +143,8 @@ export const AGE_CARDS = [
     ['Jsme kočovníci', { vir: 5, ved: -5, pri: 5 }], ['Zůstat u řeky', { fin: 10, pri: -10 }], ['Zkusit to jedno léto', { ved: 5, fin: 5, lid: -5 }], ['Sbírat a jít dál', { lid: 5, fin: -5 }]),
   c('p_hrob', 1, 'sam', 'Zemřel nejstarší lovec kmene. Jak ho pohřbíme?',
     ['Se zbraněmi a dary', { vir: 5, fin: -10 }], ['Prostě ho pohřbít', { fin: 5, vir: -5 }], ['Velká mohyla', { vir: 5, lid: 5, fin: -10 }], ['Spálit na hranici', { pri: -5, vir: 5, lid: -5 }]),
-  c('prelom1', 1, 'sber', 'Zrna, která jsme loni zasadili u řeky, vzešla! Můžeme se usadit, stavět domy a pěstovat obilí. Začala by nová doba.',
-    ['Zasít pole', { fin: 10, pri: -10 }, ADV], ['Ještě ne', { pri: 5, vir: 5 }], ['Postavit vesnici', { lid: 10, pri: -5, sil: 5 }, ADV], ['Zůstat lovci', { sil: 5, ved: -5 }], milestone),
+  c('prelom1', 1, 'sber', 'Zrna, která jsme loni zasadili u řeky, vzešla! Můžeme se usadit a pěstovat obilí – nebo ochočit kozy a ovce a chovat stáda. Začala by nová doba.',
+    ['Zasít pole', { fin: 10, pri: -10 }, adv('b_pole')], ['Ještě ne', { pri: 5, vir: 5 }], ['Chovat stáda', { lid: 5, pri: -5, sil: 5 }, adv('b_stada')], ['Zůstat lovci', { sil: 5, ved: -5 }], milestone),
 
   // ── Starověk ──────────────────────────────────────────
   c('s_chram', 2, 'knez', 'Bohové žádají chrám vyšší než hory, {osl}. Stavět se bude dvacet let.',
@@ -167,7 +168,7 @@ export const AGE_CARDS = [
   c('s_filozof', 2, 'filo', 'Učím mladé lidi pochybovat o všem – i o bozích. Kněží chtějí, abych vypil jed.',
     ['Ať vypije jed', { vir: 5, ved: -10 }], ['Nechat ho učit', { ved: 10, vir: -10 }], ['Založit akademii', { ved: 10, fin: -10 }], ['Do vyhnanství', { dip: 5, ved: -5, lid: -5 }]),
   c('prelom2', 2, 'voj', 'Velká říše se rozpadá. Na jejích troskách mniši stavějí kláštery a rytíři hrady. Přijmeme nový řád?',
-    ['Nová doba – kláštery', { vir: 10, fin: -5 }, ADV], ['Udržet starou říši', { sil: 5, fin: -5 }], ['Rozdělit zemi lénům', { sil: 10, lid: -5 }, ADV], ['Ještě počkat', { lid: 5, ved: -5 }], milestone),
+    ['Kláštery a víra', { vir: 10, fin: -5 }, adv('b_klastery')], ['Udržet starou říši', { sil: 5, fin: -5 }], ['Hrady a léna', { sil: 10, lid: -5 }, adv('b_hrady')], ['Ještě počkat', { lid: 5, ved: -5 }], milestone),
 
   // ── Středověk ─────────────────────────────────────────
   c('m_vyprava', 3, 'bisk', 'Papež volá k výpravě do Svaté země. Rytíři se hlásí, ale někdo to musí zaplatit.',
@@ -190,8 +191,8 @@ export const AGE_CARDS = [
     ['Rozsoudit sám', { sil: 5, lid: -5 }], ['Ať rozhodne souboj', { sil: -5, vir: 5 }], ['Vzít půdu oběma', { fin: 10, sil: -10 }], ['Sňatek mezi rody', { dip: 5, sil: 5, fin: -5 }]),
   c('m_kupci', 3, 'kup', 'Kupci z Benátek chtějí trh ve tvém městě. Přinesou koření, hedvábí – a cizí zvyky.',
     ['Otevřít trh', { fin: 10, dip: 5, vir: -5 }], ['Zavřít brány', { dip: -10, vir: -5 }], ['Vysoké clo', { fin: 15, dip: -10 }], ['Trh, ale ne v půstu', { fin: 5, vir: 5, lid: -5 }]),
-  c('prelom3', 3, 'alch', 'Mistr Gutenberg vynalezl knihtisk! Knihy už nebudou ručně opisovat mniši – poznání se rozletí po světě.',
-    ['Tisknout knihy', { ved: 15, vir: -10 }, ADV], ['Zakázat tisk', { vir: 10, ved: -10 }], ['Tisknout i bible', { vir: 5, ved: 10 }, ADV], ['Ještě počkat', { sil: 5, ved: -5 }], milestone),
+  c('prelom3', 3, 'alch', 'Dva vynálezy mění svět: knihtisk, díky kterému se poznání rozletí mezi lidi, a střelný prach, před kterým nevydrží žádné hradby. Do čeho vložíme síly?',
+    ['Knihtisk', { ved: 15, vir: -10 }, adv('b_tisk')], ['Zakázat obojí', { vir: 10, ved: -10 }], ['Střelný prach', { sil: 10, dip: -5 }, adv('b_prach')], ['Ještě počkat', { sil: 5, ved: -5 }], milestone),
 
   // ── Novověk ───────────────────────────────────────────
   c('n_plavba', 4, 'kap', 'Chci plout na západ a najít novou cestu do Indie. Potřebuji tři lodě, {osl}.',
@@ -214,8 +215,8 @@ export const AGE_CARDS = [
     ['Velký bál', { dip: 10, fin: -15 }], ['Skromnost', { fin: 5, dip: -10 }], ['Bál pro měšťany', { lid: 10, fin: -5 }], ['Bál se zásnubami', { dip: 10, vir: 5, lid: -5 }]),
   c('n_novy_svet', 4, 'kap', 'Na novém kontinentu je bohatství. Zabrat tamní půdu, nebo s místními obchodovat?',
     ['Obchodovat', { fin: 5, dip: 10 }], ['Zabrat půdu', { fin: 15, dip: -15, vir: -5 }], ['Poslat misionáře', { vir: 10, dip: -5 }], ['Nechat je být', { vir: 5, fin: -5 }]),
-  c('prelom4', 4, 'vyn', 'Podařilo se mi zkrotit elektřinu! Světlo bez ohně, stroje bez páry. Svět už nebude jako dřív.',
-    ['Elektřinu do měst', { ved: 10, fin: -10 }, ADV], ['Je to nebezpečné', { ved: -10, vir: 5 }], ['Postavit elektrárnu', { fin: 5, pri: -10 }, ADV], ['Nejdřív pokusy', { ved: 5, fin: -5 }], milestone),
+  c('prelom4', 4, 'vyn', 'Podařilo se mi zkrotit elektřinu – světlo bez ohně! Jenže továrník Kraus sází na ropu a spalovací motor. Kudy se dá svět?',
+    ['Elektřina', { ved: 10, fin: -10 }, adv('b_elektrina')], ['Je to nebezpečné', { ved: -10, vir: 5 }], ['Ropa a motory', { fin: 10, pri: -10 }, adv('b_ropa')], ['Nejdřív pokusy', { ved: 5, fin: -5 }], milestone),
 
   // ── Moderní doba ──────────────────────────────────────
   c('x_volebni_pravo', 5, 'novin', 'Ženy chtějí volit. Tradicionalisté varují, že to rozvrátí rodiny.',
@@ -238,8 +239,8 @@ export const AGE_CARDS = [
     ['Dát jim ho', { lid: 10, sil: -5 }], ['Televize je naše', { sil: 5, vir: 5, lid: -10 }], ['Debata naživo', { lid: 5, ved: 5, vir: -5 }], ['Jen zábava', { lid: 5, ved: -10 }]),
   c('x_zelezna_opona', 5, 'genl', 'Za hranicí vyrostla zeď s ostnatým drátem. Špioni jsou všude.',
     ['Stavět kryty', { sil: 5, fin: -10, lid: -5 }], ['Uvolnit napětí', { dip: 10, sil: -10 }], ['Špionáž', { sil: 10, dip: -10 }], ['Otevřít hranice', { lid: 10, sil: -10 }]),
-  c('prelom5', 5, 'inz', 'Spojili jsme počítače do sítě. Zpráva oběhne svět za vteřinu – říkají tomu internet.',
-    ['Internet pro všechny', { ved: 10, lid: 5, vir: -5 }, ADV], ['Je to hračka', { ved: -10, fin: 5 }], ['Státní síť', { sil: 5, ved: 5, lid: -5 }, ADV], ['Počkat na sousedy', { dip: 5, ved: -5 }], milestone),
+  c('prelom5', 5, 'inz', 'Máme peníze jen na jeden velký projekt: spojit počítače do celosvětové sítě, nebo poslat lidi do vesmíru?',
+    ['Internet', { ved: 10, lid: 5, vir: -5 }, adv('b_sit')], ['Ani jedno', { ved: -10, fin: 5 }], ['Vesmírný program', { ved: 10, fin: -10 }, adv('b_vesmir')], ['Počkat na sousedy', { dip: 5, ved: -5 }], milestone),
 
   // ── Současnost ────────────────────────────────────────
   c('c_video', 6, 'infl', 'Moje video o vaší vládě vidělo pět milionů lidí. Mám natočit další?',
@@ -261,5 +262,5 @@ export const AGE_CARDS = [
   c('c_vetrniky', 6, 'klim', 'Postavíme na horách větrné elektrárny? Turisté a ochránci ptáků jsou proti.',
     ['Stavět', { fin: -10, pri: 10, lid: -5 }], ['Ne v horách', { lid: 5, pri: -5 }], ['Na moři', { fin: -10, pri: 10, dip: 5 }], ['Jádro místo větru', { ved: 10, fin: -10, lid: -5 }]),
   c('prelom6', 6, 'tech', 'Celý svět je napojený na jedinou síť – a ta právě spadla. Elektřina, banky, telefony, všechno. Začíná Velký výpadek.',
-    ['Začít znovu od nuly', { lid: -5, ved: -5 }, ADV], ['Restartovat síť', { ved: 5, fin: -10 }], ['Založit Novou republiku', { vir: 5, sil: 5 }, ADV], ['Stav nouze', { sil: 10, lid: -10 }], milestone),
+    ['Začít znovu od nuly', { lid: -5, ved: -5 }, adv('b_nula')], ['Restartovat síť', { ved: 5, fin: -10 }], ['Pevnou rukou', { vir: 5, sil: 5 }, adv('b_republika')], ['Stav nouze', { sil: 10, lid: -10 }], milestone),
 ];

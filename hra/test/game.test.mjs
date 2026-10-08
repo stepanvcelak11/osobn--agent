@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { effect, newGame, choose, nextLeader, currentCard, preview, fill, tenure, DIRS, cardById, METERS, CARDS, INTRO, PEOPLE, ENDINGS, KINDS, outcome, bestDir, skip, nudge, ready, CHARGE, activeLaws, optionOf, taskProgress, upgrade, SPECIAL, TASKS, AGES, AGE_LEN, ENDINGS_PAST, hasElections, leaderTitle, lawAllowed, touches , reformLaw, choosePerk, offerPerks, newBlitz, newRun, daily, toElection, PERKS, CRISES, TERM, VOTE_MIN, RESCUE, seals } from '../game.js';
+import { effect, newGame, choose, nextLeader, currentCard, preview, fill, tenure, DIRS, cardById, METERS, CARDS, INTRO, PEOPLE, ENDINGS, KINDS, outcome, bestDir, skip, nudge, ready, CHARGE, activeLaws, optionOf, taskProgress, upgrade, SPECIAL, TASKS, AGES, AGE_LEN, ENDINGS_PAST, hasElections, leaderTitle, lawAllowed, touches , reformLaw, choosePerk, offerPerks, newBlitz, newRun, daily, toElection, PERKS, CRISES, TERM, VOTE_MIN, RESCUE, seals , whoOf, seasonOf, modBonus, MODS, WONDERS as WD, RIVALS } from '../game.js';
 
 const meterIds = new Set(METERS.map((m) => m.id));
 const all = [INTRO, ...CARDS];
@@ -8,7 +8,7 @@ const all = [INTRO, ...CARDS];
 test('balíček je v pořádku', () => {
   const ids = new Set();
   const setFlags = new Set();
-  for (const c of all) for (const d of DIRS) { const o = c.opts[d]; if (o?.set) setFlags.add(o.set); if (o?.law) setFlags.add(`zakon_${o.law}`); }
+  for (const c of all) for (const d of DIRS) { const o = c.opts[d]; if (o?.set) setFlags.add(o.set); if (o?.law) setFlags.add(`zakon_${o.law}`); if (o?.wonder) setFlags.add(`div_${o.wonder}`); }
   for (const c of all) {
     assert.ok(!ids.has(c.id), `duplicitní karta ${c.id}`);
     ids.add(c.id);
@@ -490,7 +490,7 @@ test('Dějiny lidstva: od pravěku přes přelomy až do budoucnosti', () => {
     const c = cardById(s.card);
     seenAges.add(s.age);
     if (c.age) assert.equal(c.age, s.age, `${c.id} nepatří do doby ${s.age}`);
-    else if (!['dej_intro'].includes(c.id)) assert.fail(`karta budoucnosti ${c.id} v době ${s.age}`);
+    else if (!['dej_intro'].includes(c.id) && !(c.season || c.traitor || c.pastOnly || c.who.startsWith('@'))) assert.fail(`karta budoucnosti ${c.id} v době ${s.age}`);
     if (c.milestone) {
       prelomSeen++;
       // nejdřív odmítnout – objev se vrátí, pak přijmout
@@ -570,4 +570,134 @@ test('karty se tolik neopakují', () => {
   for (let i = 0; i < 20; i++) { seen.push(s.card); choose(s, bestDir(s)); if (s.dead) nextLeader(s); }
   const uniq = new Set(seen).size;
   assert.ok(uniq >= 14, `ve 20 kartách jen ${uniq} různých`);
+});
+
+// ── Větvení dějin, divy, soused, roční období, zrádce, krajnosti, ztížení ──
+const flat = (s) => { s.meters = Object.fromEntries(Object.keys(s.meters).map((k) => [k, 50])); };
+
+test('přelom nabízí dvě cesty a každá otevře jiné karty', () => {
+  for (const [flag, other] of [['b_pole', 'b_stada'], ['b_tisk', 'b_prach']]) {
+    const c = CARDS.filter((x) => x.req?.includes(flag));
+    assert.equal(c.length, 2, flag);
+    assert.ok(c.every((x) => !x.req.includes(other)));
+  }
+  const s = newGame({ mode: 'dejiny' }, 5);
+  choose(s, 'left');
+  s.card = 'prelom1';
+  const dir = DIRS.find((d) => cardById('prelom1').opts[d].set === 'b_stada');
+  choose(s, dir);
+  assert.equal(s.age, 2);
+  assert.ok(s.flags.includes('b_stada'));
+});
+
+test('div světa: stavba po krocích, pak drží svůj ukazatel u rovnováhy', () => {
+  const w = WD.find((x) => x.id === 'kruh');
+  const s = newGame({ mode: 'dejiny' }, 6);
+  choose(s, 'left');
+  s.card = 'div_kruh_1';
+  choose(s, DIRS.find((d) => cardById('div_kruh_1').opts[d].set === 'stavba_kruh'));
+  assert.ok(s.flags.includes('stavba_kruh'));
+  s.card = 'div_kruh_3';
+  choose(s, DIRS.find((d) => cardById('div_kruh_3').opts[d].wonder === 'kruh'));
+  assert.deepEqual(s.wonders, ['kruh']);
+  assert.ok(s.flags.includes('div_kruh') && !s.flags.includes('stavba_kruh'));
+  s.meters[w.m] = 30;
+  const before = s.meters[w.m];
+  for (let i = 0; i < 6 && !s.dead; i++) { const o = s.meters; s.card = 'intro2'; choose(s, 'left'); }
+  assert.ok(s.meters[w.m] > before, 'div táhne ukazatel k rovnováze');
+});
+
+test('sousední říše: válka podle Síly, pohlcení slabého souseda', () => {
+  const s = newGame({ mode: 'dejiny' }, 7);
+  choose(s, 'left');
+  s.card = 'riv_hranice';
+  const warDir = DIRS.find((d) => cardById('riv_hranice').opts[d].war);
+  s.meters.sil = 95; s.rival.power = 20;
+  choose(s, warDir);
+  assert.ok(s.news.some((n) => n.kind === 'war'), 'silná země vyhraje');
+  assert.ok(s.rival.power <= 20);
+  const t = newGame({ mode: 'dejiny' }, 7);
+  choose(t, 'left');
+  t.card = 'riv_hranice'; t.meters.sil = 5; t.rival.power = 90;
+  choose(t, warDir);
+  assert.ok(t.news.some((n) => n.kind === 'warLost'), 'slabá prohraje');
+  const u = newGame({ mode: 'dejiny' }, 7);
+  choose(u, 'left');
+  u.card = 'riv_pohlceni'; u.rival.power = 10;
+  choose(u, DIRS.find((d) => cardById('riv_pohlceni').opts[d].absorb));
+  assert.ok(u.rival.absorbed);
+  assert.equal(whoOf(u, cardById('riv_obchod')), 'riv');
+  assert.ok(RIVALS[1].name && currentCard({ ...u, card: 'riv_obchod' }).person.name === RIVALS[1].name);
+  const f = newGame({}, 7);
+  choose(f, 'left');
+  for (let i = 0; i < 200; i++) { assert.ok(!cardById(f.card).pastOnly, 'v roce 2089 soused není'); choose(f, bestDir(f)); if (f.dead) nextLeader(f); }
+});
+
+test('roční období: karty jen ve své sezóně', () => {
+  const s = newGame({}, 9);
+  choose(s, 'left');
+  for (let i = 0; i < 400; i++) {
+    const c = cardById(s.card);
+    if (c.season) assert.equal(c.season, seasonOf(s), `${c.id} mimo sezónu`);
+    choose(s, bestDir(s));
+    if (s.dead) nextLeader(s);
+  }
+});
+
+test('zrádce: objeví se, dá se odhalit a potrestat; neodhalený zradí', () => {
+  const s = newGame({ mode: 'dejiny' }, 10);
+  choose(s, 'left');
+  s.traitor = { who: 'lov', since: s.total, known: false };
+  s.card = 'zrada_hledat';
+  assert.equal(whoOf(s, cardById('zrada_hledat')), 'sam');
+  choose(s, DIRS.find((d) => cardById('zrada_hledat').opts[d].expose));
+  assert.ok(s.traitor.known);
+  assert.equal(s.card, 'zrada_trest');
+  assert.equal(currentCard(s).person.name, PEOPLE.lov.name);
+  choose(s, 'left');
+  assert.equal(s.traitor, null);
+  const t = newGame({ mode: 'dejiny' }, 10);
+  choose(t, 'left');
+  t.traitor = { who: 'lov', since: t.total - 25, known: false };
+  t.card = 'p_hrob'; flat(t);
+  choose(t, 'left');
+  assert.equal(t.traitor, null);
+  assert.ok(t.news.some((n) => n.kind === 'traitorStrike'));
+});
+
+test('dlouhá krajnost přivolá kartu, dlouhý klid zlatý věk', () => {
+  const s = newGame({}, 11);
+  choose(s, 'left');
+  s.meters.fin = 12;
+  for (let i = 0; i < 5; i++) { s.card = 'intro2'; s.meters.fin = 12; choose(s, 'left'); if (s.card === 'stav_fin_low') break; }
+  assert.equal(s.card, 'stav_fin_low');
+  const g = newGame({}, 12);
+  choose(g, 'left');
+  for (let i = 0; i < 10 && g.card !== 'zlaty_vek'; i++) { flat(g); g.card = 'intro2'; choose(g, 'left'); }
+  assert.equal(g.card, 'zlaty_vek');
+});
+
+test('ztížení: víc bodů, hladová léta berou zásoby', () => {
+  const s = newGame({ mods: ['hlad', 'boure'] }, 13);
+  assert.equal(modBonus(s), 1 + MODS.hlad.bonus + MODS.boure.bonus);
+  choose(s, 'left');
+  s.card = 'intro2'; flat(s);
+  for (let i = 0; i < 6; i++) { s.card = 'intro2'; choose(s, 'left'); }
+  assert.ok(s.meters.fin < 50);
+  let g = 0;
+  while (!s.dead && g++ < 3000) choose(s, randomDir(s));
+  assert.equal(s.dead.score, Math.round(s.dead.months * modBonus(s)));
+  const a = newGame({}, 14), b = newGame({ mods: ['boure'] }, 14);
+  choose(a, 'left'); choose(b, 'left');
+  a.card = b.card = 'stavka'; flat(a); flat(b);
+  choose(a, 'down'); choose(b, 'down');
+  assert.ok(Math.abs(b.meters.lid - 50) > Math.abs(a.meters.lid - 50));
+});
+
+test('výzva v Dějinách začíná v pravěku bez úvodu', () => {
+  const s = newRun({ kind: 'vize', world: 'dejiny' }, 99, 'daily');
+  assert.equal(s.age, 1);
+  assert.equal(s.world, 'dejiny');
+  const c = cardById(s.card);
+  assert.ok(c.age === 1 || c.season || c.pastOnly || c.who.startsWith('@'), c.id);
 });

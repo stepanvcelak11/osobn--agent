@@ -380,3 +380,17 @@ body:not(.game) .toast, body:has(.pop) .toast, body:has(.menu) .toast { bottom: 
 .card.age6 { border-radius: 24px; box-shadow: 0 18px 40px #0000006b, 0 0 0 1px #ffffff40; }
 .card.age6::after { background: linear-gradient(160deg, #ffffff22, transparent 40%); }
 .card.age7 { box-shadow: 0 18px 40px #0000006b, 0 0 0 1px #6fd0e055, 0 0 18px #6fd0e022; }
+
+/* ── Ztížení ─ */
+.mods { background: var(--bg1); border: 1px solid var(--line); border-radius: 14px; padding: 0 12px; text-align: left; }
+.mods summary { list-style: none; cursor: pointer; padding: 12px 0; font-size: 14px; color: var(--dim); display: flex; align-items: center; gap: 7px; }
+.mods summary::-webkit-details-marker { display: none; }
+.mods summary .ico { color: var(--warn); }
+.mods summary span { color: var(--accent); }
+.modlist { display: flex; flex-direction: column; gap: 6px; padding-bottom: 12px; }
+.mod { text-align: left; padding: 10px 12px; background: var(--bg2); }
+.mod b { display: flex; justify-content: space-between; font-size: 14px; }
+.mod em { font-style: normal; color: var(--accent); }
+.mod small { display: block; font-size: 12px; color: var(--dim); margin-top: 2px; }
+.mod.on { border-color: var(--warn); background: #e3b86014; }
+.pop .mlist { max-height: 60vh; overflow-y: auto; }
