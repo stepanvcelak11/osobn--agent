@@ -2,6 +2,7 @@
 import { portrait, meterIcon, glyph, icon, mood, mix } from './art.js';
 import { duelSetup } from './duel.js';
 import { AMB_POINTS } from './court.js';
+import { OBJECTS, VERBS, MANNERS, TARGETS, Q_VERBS, Q_OBJECTS, Q_MANNERS, PEN_EVERY, penLeft, canCustom, cardTakesWords, customOption, questOption, reaction, sentence } from './words.js';
 import { PROVINCES, HERO_CLASSES, ATTRS, THREATS, canHire, hire, startQuest, questRoll, questHero, stepById, chance, attrOf, heroTitle, ready as heroReady, lostCount, LOST_MAX, WOUNDS_MAX, HEROES_MAX, HIRE_COST, NEED, STEPS } from './realm.js';
 import { LEVELS, levelOf, MASTERY, LEVEL_TEXT, TREE, TREE_MAX, RELICS, RELIC_SLOTS, SKINS, PRESTIGE_BONUS, ROMAN, CAMPAIGN } from './meta.js';
 import { CLUES, knownClues, cardProvince, URGENT_S, rankDirs, ARCS, PACKS, REPS, TRAITS, EDU, AMBITIONS, TITLES, COUNCIL_MAX, CARES, repName, councilCandidates, appoint, dismiss, ambById, ambProgress, rivalName, dailyCard, simVotes, FACTIONS, FACTION_REVOLT, PROJECTS, PROJECT_MONTHS, albumPeople, whoOf, master, chargeOf, ENDINGS_PAST, offerPerks, skipCard, bestDir, sageHint, shiftMeter, SHIFT, newGame, newBlitz, newRun, daily, touches, seesAhead, personOf, seasonOf, SEASON_NAMES, RIVALS, MODS, BRANCHES, WONDERS, modBonus, ageOf, leaderTitle, hasElections, lawAllowed, AGES, AGE_LEN, choose, nextLeader, currentCard, cardById, preview, outcome, optionOf, unlocked, skip, nudge, reformLaw, choosePerk, ready, tenure, timeLabel, danger, kindOf, upgrade, activeLaws, seals, taskById, taskProgress, seesDirection, revealed, toElection, support, KINDS, ACTIVE, CHARGE, NUDGE, METERS, ENDINGS, LAWS, TASKS, ERAS, SPECIAL, PEOPLE, REL_LOYAL, PERKS, CRISES, ELECTION, VOTE_MIN, BLITZ_START, BLITZ_BONUS, BLITZ_FALL } from './game.js';
@@ -729,6 +730,7 @@ function gameScreen() {
     <section class="stage">
       ${['up', 'left', 'right', 'down'].map((d) => `<button class="chev ${d}" data-dir="${d}" aria-label="Volba ${d}">${{ up: '▲', down: '▼', left: '◀', right: '▶' }[d]}</button>`).join('')}
       <button class="bag" id="bag" aria-label="Pomůcky"></button>
+      <button class="pen" id="pen" aria-label="Vlastní odpověď"></button>
       <div class="deck"><div class="card next" id="nextcard"></div><div class="card" id="card"></div></div>
     </section>
     <div class="name"><b><span id="person"></span><span id="mood"></span></b><div class="advice" id="adv"></div></div>`;
@@ -745,6 +747,7 @@ function gameScreen() {
   $('#menu').onclick = menu;
   $('#ab').onclick = ability;
   $('#bag').onclick = bag;
+  $('#pen').onclick = penPicker;
   for (const b of app.querySelectorAll('.meter')) b.onclick = () => meterInfo(b.dataset.m);
   for (const b of Object.values(ui.chev)) b.onclick = () => tapDir(b.dataset.dir);
   setupDrag(ui.card);
@@ -781,6 +784,7 @@ function render(enter) {
   $('#nth').textContent = `${l.n}. ${leaderTitle(state)} · ${(state.world ?? state.mode) === 'dejiny' ? `${ageOf(state).name} · ` : ''}Rok ${Math.floor(state.turn / 12) + 1} · ${SEASON_NAMES[seasonOf(state)]}`;
   if (state.mode === 'blitz') updateClock();
   updateBag();
+  updatePen();
   // Vpravo nahoře: ikona typu vůdce. U aktivních schopností kroužek ukazuje nabití.
   const ab = $('#ab'), active = ACTIVE.includes(k.id);
   if (ab.dataset.k !== k.id) { ab.querySelector('i').innerHTML = icon(k.id); ab.dataset.k = k.id; }
@@ -966,7 +970,7 @@ function tapDir(dir) {
   highlight(dir, 1);
 }
 
-function commit(dir) {
+function commit(dir, opt = null) {
   const wasUrgent = !!urgentT;
   stopUrgent();
   busy = true;
@@ -982,9 +986,11 @@ function commit(dir) {
   setTimeout(() => {
     undoSnap = ['normal', 'dejiny'].includes(state.mode) ? JSON.stringify(state) : null;
     if (state.hints > 0) state.hints -= 1;
-    const fast = !wasUrgent && state.mode !== 'blitz' && (stats.tut ?? 0) >= COACH.length && !['intro', 'dej_intro'].includes(state.card) && performance.now() - shownAt < RUSH_MS;
+    const fast = !opt && !wasUrgent && state.mode !== 'blitz' && (stats.tut ?? 0) >= COACH.length && !['intro', 'dej_intro'].includes(state.card) && performance.now() - shownAt < RUSH_MS;
     if (isMain() && (stats.tut ?? 0) < COACH.length && !['intro', 'dej_intro'].includes(state.card)) stats.tut = (stats.tut ?? 0) + 1;
-    const dead = choose(state, dir);
+    const speaker = currentCard(state).person?.name;
+    const dead = choose(state, dir, opt);
+    if (opt && !dead) setTimeout(() => toast(`„${opt.t}“ – ${reaction(state, before, opt, speaker)}`, opt.offTopic ? 'enemy' : 'perk'), 250);
     if (fast && !dead) { state.rush = true; toast('Moc rychle! Nečteš – další karta ti jen uškodí. Veď zemi pořádně.', 'fall'); vibrate([20, 40, 20]); }
     stats.decisions += 1; saveStats();
     if (state.mode === 'blitz') {
@@ -1774,6 +1780,7 @@ function helpScreen(back) {
         <li>Klepnutím na ukazatel zjistíš jeho stav, co znamená a co ho zvyšuje nebo snižuje.</li>
         <li><b>Mapa říše:</b> sedm krajů, každý drží jeden ukazatel. Spokojenost kraje tíhne k tomu, jak je jeho ukazatel v rovnováze. V krajích vznikají hrozby (bandité, šelma, nákaza, vzpoura, kult) nebo zvěsti o pokladu. Nevyřešená hrozba kraj rozzlobí, až se odtrhne – a když se odtrhnou 3 kraje, říše se rozpadne. Karta ukazuje, ze kterého kraje mluvčí je.</li>
         <li><b>Hrdinové a výpravy:</b> u dvora máš až 3 hrdiny (Válečník, Zloděj, Čaroděj, Bard, Lovec) se čtyřmi vlastnostmi. Na mapě je pošleš na výpravu: tři riskantní kroky, každá volba je hod kostkou k20 + vlastnost a vidíš šanci. Stačí 2 úspěchy; nezdar hrdinu zraní, 3 zranění = padne. Úspěšní hrdinové sílí.</li>
+        <li><b>Vlastní odpověď</b> (tlačítko s perem u karty): místo čtyř nabízených voleb si odpověď složíš ze slov – <i>Co udělám</i> (Zvýšit, Postavit, Zakázat…) + <i>S čím</i> (daně, vojsko, chrámy, lesy…) + <i>Jak</i> (opatrně, silou, tajně…) + <i>Pro koho</i>. Hra větu pochopí podle významu slov. Když neřeší, s čím postava přišla, problém se vrátí. Dobije se po 5 rozhodnutích. Ve výpravě takhle složíš vlastní čin hrdiny – sloveso určí, jaká vlastnost se hází.</li>
         <li><b>Naléhavé karty:</b> občas je potřeba rozhodnout do 7 vteřin – jinak se stane to nejhorší.</li>
         <li><b>Mlha</b> (ztížení): neuvidíš přesné hodnoty, jen klid, napětí, nebo krizi. Čti, co ti lidé říkají.</li>
         <li><b>Tajemství Velkého výpadku:</b> ve všech dobách jsou ukryté stopy (volby „Prozkoumat…“). Stopy se pamatují napříč hrami (Sbírka → Tajemství). Kdo najde všech 12, v roce 2089 může prolomit cyklus.</li>
@@ -2046,6 +2053,70 @@ function dcardStreak() {
   return n;
 }
 
+// ── Vlastní odpověď skládaná ze slov ─────────────────
+function updatePen() {
+  const b = $('#pen');
+  if (!b) return;
+  const show = !['blitz', 'duel'].includes(state.mode) && cardTakesWords(state);
+  b.hidden = !show;
+  const left = penLeft(state);
+  b.classList.toggle('ready', left === 0);
+  b.innerHTML = `${icon('pen', 'ico sm')}${left ? `<span>${left}</span>` : ''}`;
+}
+function penPicker() {
+  if (busy || state.dead || document.querySelector('.pop:not(.closing)')) return;
+  if (!cardTakesWords(state)) { toast('Na tuhle kartu se odpovídá jen volbou'); return; }
+  const left = penLeft(state);
+  if (left) { toast(`Vlastní odpověď se dobije za ${left} ${left === 1 ? 'rozhodnutí' : 'rozhodnutí'}`); return; }
+  wordPicker('card', (o) => commit('up', o));
+}
+/** Skládání věty: řádky slov, živý náhled věty a toho, čeho se dotkne. kind = 'card' | 'quest'. */
+function wordPicker(kind, done) {
+  const quest = kind === 'quest', h = quest ? questHero(state) : null;
+  const sel = {};
+  const rows = quest
+    ? [['verb', 'Co hrdina udělá', Q_VERBS], ['obj', 'S čím / na koho', Q_OBJECTS], ['how', 'Jak (nepovinné)', Q_MANNERS]]
+    : [['obj', 'S čím', OBJECTS], ['verb', 'Co udělám', VERBS], ['how', 'Jak (nepovinné)', MANNERS], ['who', 'Pro koho (nepovinné)', TARGETS]];
+  const p = document.createElement('div');
+  p.className = 'pop words';
+  const build = () => (quest ? questOption(sel, h?.female) : customOption(state, sel));
+  const draw = () => {
+    const o = build();
+    const verbsOk = (id) => quest || !sel.obj || OBJECTS[sel.obj].v.includes(id);
+    const chips = (key, dict) => Object.entries(dict).map(([id, w]) => `<button class="chip${sel[key] === id ? ' on' : ''}" data-k="${key}" data-v="${id}"${key === 'verb' && !verbsOk(id) ? ' disabled' : ''}>${esc(w.t)}</button>`).join('');
+    let info = '';
+    if (o && quest) { const c = Math.round(chance(h, o) * 100); info = `<div class="winfo">${ATTRS[o.a]} ${attrOf(h, o.a) > 0 ? '+' : ''}${attrOf(h, o.a)} · šance <b class="${c >= 65 ? 'ok' : c >= 40 ? 'warn' : 'bad'}">${c} %</b>${o.heal ? ' · úspěch zahojí zranění' : ''}</div>`; }
+    if (o && !quest) {
+      const touched = Object.entries(o.e).map(([m, n]) => `${glyph(m, 'glyph sm')}${Math.abs(n) >= 8 ? '<i class="big"></i>' : '<i></i>'}`).join('');
+      info = `<div class="winfo"><span class="wdots">${touched || '–'}</span>${o.offTopic ? `<div class="warn">${icon('crisis', 'ico sm')} Tohle neřeší, s čím ${esc(currentCard(state).person.name)} přichází – problém se vrátí a část následků dopadne stejně.</div>` : ''}</div>`;
+    }
+    p.innerHTML = `
+      <div class="pane" role="dialog" aria-label="Vlastní odpověď">
+        <b class="pane-title">${icon('pen', 'ico')} ${quest ? 'Vlastní čin hrdiny' : 'Vlastní odpověď'}</b>
+        <div class="wsent${o ? '' : ' empty'}">${o ? `„${esc(o.t)}.“` : quest ? 'Vyber, co hrdina udělá a s čím…' : 'Vyber, s čím a co uděláš…'}</div>
+        ${info}
+        ${rows.map(([key, label, dict]) => `<div class="wrow"><div class="label">${label}</div><div class="chips">${chips(key, dict)}</div></div>`).join('')}
+        <div class="row2"><button class="ghost" data-x>Zpět</button><button class="primary" data-ok${o ? '' : ' disabled'}>${quest ? 'Zkusit to' : 'Rozhodnout'}</button></div>
+      </div>`;
+    const pane = p.querySelector('.pane');
+    pane.scrollTop = p._st ?? 0;
+    pane.onscroll = () => { p._st = pane.scrollTop; };
+  };
+  p.onclick = (e) => {
+    const b = e.target.closest('button');
+    if (e.target === p || b?.dataset.x !== undefined) { p.remove(); return; }
+    if (b?.dataset.k) {
+      const k = b.dataset.k;
+      sel[k] = sel[k] === b.dataset.v && ['how', 'who'].includes(k) ? undefined : b.dataset.v;
+      if (k === 'obj' && !quest && sel.verb && !OBJECTS[sel.obj].v.includes(sel.verb)) sel.verb = undefined;
+      sfx('tick'); draw(); return;
+    }
+    if (b?.dataset.ok !== undefined) { const o = build(); if (!o) return; p.remove(); done(o); }
+  };
+  draw();
+  document.body.appendChild(p);
+}
+
 // ── Mapa říše, hrdinové a výpravy ────────────────────
 const ROADS = [['hlavni', 'nizina'], ['hlavni', 'hory'], ['hlavni', 'les'], ['hlavni', 'pristav'], ['hlavni', 'udoli'], ['hlavni', 'akademie'],
   ['hory', 'akademie'], ['akademie', 'les'], ['les', 'pristav'], ['pristav', 'udoli'], ['udoli', 'nizina'], ['nizina', 'hory']];
@@ -2126,16 +2197,18 @@ function questScreen(back = gameScreen, last = null) {
       ${q.i === 0 && !last ? `<p class="qintro">${esc(qfill(q.regain ? `Kraj ${PROVINCES[q.prov].name} se odtrhl a vzbouřenci drží brány. {hrdina} se vydal{a} vyjednat, nebo vybojovat návrat.` : T.text, h, q.prov))}</p>` : ''}
       <div class="qcard"><p>${esc(qfill(step.text, h, q.prov))}</p></div>
       <div class="qopts">${['left', 'right', 'up', 'down'].map((d) => { const o = step.opts[d], c = Math.round(chance(h, o) * 100);
-        return `<button class="qopt" data-q="${d}"><span><b>${esc(o.t)}</b><small>${ATTRS[o.a]} ${attrOf(h, o.a) > 0 ? '+' : ''}${attrOf(h, o.a)}</small></span><em class="${c >= 65 ? 'ok' : c >= 40 ? 'warn' : 'bad'}">${c} %</em></button>`; }).join('')}</div>
+        return `<button class="qopt" data-q="${d}"><span><b>${esc(o.t)}</b><small>${ATTRS[o.a]} ${attrOf(h, o.a) > 0 ? '+' : ''}${attrOf(h, o.a)}</small></span><em class="${c >= 65 ? 'ok' : c >= 40 ? 'warn' : 'bad'}">${c} %</em></button>`; }).join('')}
+        <button class="qopt qpen" id="qpen">${icon('pen', 'ico')}<span><b>Vlastní čin</b><small>slož ho ze slov – sloveso určí vlastnost</small></span></button></div>
       <div class="small dim" style="text-align:center">K úspěchu výpravy stačí ${NEED} zdařilé kroky ze ${STEPS}. Každý nezdar hrdinu zraní (${WOUNDS_MAX} zranění = padne).</div>
     </div>`;
   for (const b of app.querySelectorAll('[data-q]')) b.onclick = () => rollScreen(back, b.dataset.q);
+  $('#qpen').onclick = () => wordPicker('quest', (o) => rollScreen(back, 'custom', o));
 }
 /** Hod kostkou s animací, pak výsledek kroku (nebo celé výpravy). */
-function rollScreen(back, dir) {
+function rollScreen(back, dir, opt = null) {
   const h = questHero(state), q = state.quest, prov = q.prov;
-  const step = stepById(q.steps[q.i]), o = step.opts[dir];
-  const r = questRoll(state, dir);
+  const step = stepById(q.steps[q.i]), o = opt ?? step.opts[dir];
+  const r = questRoll(state, dir, opt);
   save();
   sfx('swipe');
   app.querySelector('.qopts').innerHTML = `<div class="roll"><div class="die" id="die">?</div><div class="small" id="rtext">${ATTRS[o.a]}: k20 ${r.bonus >= 0 ? '+' : '−'} ${Math.abs(r.bonus)} proti ${r.target}</div></div>`;

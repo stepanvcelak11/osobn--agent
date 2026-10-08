@@ -791,3 +791,21 @@ body.game .meter:nth-child(6) { animation-delay: 125ms; } body.game .meter:nth-c
 .stage.hurry .card:not(.next) { box-shadow: 0 0 0 2px #d4553f99, 0 0 34px #d4553f55; }
 .mapsheet .map { flex: none; width: 100%; height: auto; max-height: none; }
 .map .pv text { font-size: 4px; }
+/* ══ Vlastní odpověď ze slov ══ */
+.pen { position: absolute; z-index: 3; right: 0; top: 0; display: flex; align-items: center; gap: 4px; padding: 6px 10px; border-radius: 16px; font-size: 13px; color: var(--dim); background: #ffffff0a; border-color: #ffffff1c; }
+.pen[hidden] { display: none; }
+.pen.ready { color: var(--accent); background: #e0915a14; border-color: #e0915a55; animation: glow 2.4s ease-in-out infinite; }
+.pen span { font-weight: 700; }
+.words .pane { gap: 10px; }
+.wsent { font-family: var(--serif); font-size: 21px; line-height: 1.35; text-align: center; padding: 12px 10px; border-radius: 14px; background: radial-gradient(120% 100% at 50% 0%, #3a3125, #1d1a16); border: 1px solid #c9a46a33; min-height: 56px; }
+.wsent.empty { color: var(--dim); font-size: 16px; font-style: italic; }
+.winfo { font-size: 13px; color: var(--dim); text-align: center; display: flex; flex-direction: column; gap: 6px; align-items: center; }
+.winfo .warn { color: var(--warn); font-size: 13px; text-align: left; }
+.wdots { display: inline-flex; gap: 10px; align-items: center; } .wdots .glyph.sm { width: 18px; height: 18px; }
+.wdots i { display: inline-block; width: 5px; height: 5px; border-radius: 50%; background: #efe6d6aa; margin-left: 2px; vertical-align: middle; } .wdots i.big { width: 8px; height: 8px; background: #efe6d6; }
+.wrow .label { text-align: left; margin: 2px 0 6px; font-size: 11.5px; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { padding: 7px 11px; border-radius: 999px; font-size: 14px; background: #ffffff0b; border: 1px solid #ffffff1a; transition: background-color .15s, border-color .15s, transform .12s; }
+.chip.on { background: #e0915a26; border-color: var(--accent); color: var(--accent); font-weight: 600; }
+.chip[disabled] { opacity: .3; }
+.qopt.qpen { border-style: dashed; border-color: #e0915a55; } .qopt.qpen .ico { color: var(--accent); }

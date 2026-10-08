@@ -145,7 +145,7 @@ test('navazující příběhy opravdu navazují', () => {
   for (const id of ['vrana2', 'ork2', 'ork3', 'prorok2', 'fed2', 'fed3', 'stin2', 'hlad', 'epidemie', 'vakcina', 'nula2', 'vrana_dluh', 'pristav2', 'vlci', 'intro2']) {
     assert.ok(seen.has(id), `pokračování ${id} se nikdy neobjevilo`);
   }
-  const never = CARDS.filter((c) => !c.generated && !c.rep && !c.finale && !seen.has(c.id)).map((c) => c.id); // pověst závisí na stylu hry
+  const never = CARDS.filter((c) => !c.generated && !c.rep && !c.finale && !(c.arc && c.queueOnly) && !seen.has(c.id)).map((c) => c.id); // pověst závisí na stylu hry
   assert.deepEqual(never, [], 'každá karta se někdy objeví');
 });
 
@@ -940,4 +940,24 @@ test('kraje, hrdinové a výpravy; naléhavé karty; stopy tajemství', async ()
   assert.ok(g.knownClues(c).includes('c1'));
   const f = newGame({ meta: { clues: g.CLUES.map((x) => x.id) } }, 45);
   assert.equal(g.knownClues(f).length, 12);
+});
+
+test('vlastní odpověď ze slov: rozumí větě, mimo téma se problém vrátí, dobíjí se', async () => {
+  const w = await import('../words.js'), r = await import('../realm.js');
+  const s = newGame({}, 51); choose(s, 'left'); s.card = 'stavka';
+  assert.ok(w.canCustom(s));
+  const o = w.customOption(s, { verb: 'zvysit', obj: 'dane', how: 'opatrne', who: 'kupci' });
+  assert.ok(o.e.fin > 0 && o.e.lid < 0, 'daně: pokladna nahoru, lid dolů');
+  assert.ok(!w.customOption(s, { verb: 'postavit', obj: 'dane' }), 'nesmyslná dvojice slov neprojde');
+  const off = w.customOption(s, { verb: 'chranit', obj: 'lesy' });
+  if (off.offTopic) { choose(s, 'x', off); assert.ok(s.queue.some((q) => q.id === 'stavka'), 'problém se vrátí'); }
+  assert.ok(!w.canCustom(s), 'po použití se musí dobít');
+  for (let i = 0; i < w.PEN_EVERY && !s.dead; i++) choose(s, bestDir(s));
+  // výprava: vlastní čin hrdiny
+  const q = w.questOption({ verb: 'premluvit', obj: 'mistni', how: 'odvazne' }, false);
+  assert.equal(q.a, 'charisma'); assert.ok(q.heal);
+  const g = newGame({}, 52); choose(g, 'left'); g.prov.les.threat = { type: 'beast', since: 0 };
+  r.startQuest(g, 'les', g.heroes[0].id);
+  const res = r.questRoll(g, 'custom', q);
+  assert.ok(res && typeof res.success === 'boolean');
 });

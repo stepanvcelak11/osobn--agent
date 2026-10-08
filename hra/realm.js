@@ -127,14 +127,14 @@ export function startQuest(state, provId, heroId) {
 export const stepById = (id) => Object.values(QUEST_STEPS).flat().find((s) => s.id === id);
 export const questHero = (state) => (state.heroes ?? []).find((h) => h.id === state.quest?.hero);
 /** Riskantní čin: hod kostkou. Vrací výsledek kroku; po posledním kroku výpravu vyhodnotí. */
-export function questRoll(state, dir) {
+export function questRoll(state, dir, opt = null) {
   const q = state.quest, h = questHero(state);
   if (!q || !h) return null;
-  const step = stepById(q.steps[q.i]), o = step.opts[dir];
+  const step = stepById(q.steps[q.i]), o = opt ?? step.opts[dir];
   const die = 1 + Math.floor(rnd(state) * 20);
   const bonus = 2 * attrOf(h, o.a) + (h.lvl - 1), target = TARGET + (o.d ?? 0);
   const success = die === 20 || (die !== 1 && die + bonus >= target);
-  if (success) q.ok += 1; else { q.bad += 1; h.wounds += 1; }
+  if (success) { q.ok += 1; if (o.heal && h.wounds > 0) h.wounds -= 1; } else { q.bad += 1; h.wounds += 1; }
   const r = { die, bonus, target, success, crit: die === 20 || die === 1, a: o.a, text: success ? o.ok : o.bad };
   q.log.push(r);
   q.i += 1;

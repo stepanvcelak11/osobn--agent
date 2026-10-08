@@ -423,7 +423,7 @@ export function preview(card, dir, state) {
 const clamp = (v) => Math.max(0, Math.min(100, v));
 
 /** Jak se ukazatele po volbě změní (včetně schopnosti Krizového manažera) – bez změny stavu. */
-export function outcome(state, dir) {
+export function outcome(state, dir, opt = null) {
   const card = cardById(state.card) || INTRO;
   const out = { ...state.meters };
   const crisis = state.leader.kind === 'krize';
@@ -431,7 +431,7 @@ export function outcome(state, dir) {
   if (has(state, 'tlumic')) mult *= 0.8;
   if (state.mods?.includes('boure')) mult *= 1.25;
   if ((state.age ?? 7) < 7) mult *= PAST_SOFT;
-  for (const [k, v] of Object.entries(optionOf(state, card, dir).e || {})) {
+  for (const [k, v] of Object.entries((opt ?? optionOf(state, card, dir)).e || {})) {
     const from = out[k];
     let d = effect(k, v);
     if (mult !== 1) d = Math.round(d * mult);
@@ -485,6 +485,7 @@ export function sageHint(state, rnd = Math.random) {
 }
 
 /** Posun ukazatele (jednorázová pomůcka): o SHIFT tam, kam hráč chce – nikdy ne až na kraj. */
+export const PEN_EVERY = 5; // vlastní odpověď (skládaná ze slov) se dobije po tolika rozhodnutích
 export const URGENT_P = 0.07, URGENT_S = 7; // jak často je karta naléhavá a kolik je na ni vteřin
 export const SHIFT = 15;
 export function shiftMeter(state, id, sign) {
@@ -563,13 +564,15 @@ export function choosePerk(state, id) {
 }
 
 /** Rozhodnutí. Vrací konec vlády (nebo null). */
-export function choose(state, dir) {
+export function choose(state, dir, opt = null) {
   if (state.dead) return state.dead;
   const card = cardById(state.card) || INTRO;
-  if (!card.opts[dir]) throw new Error(`neznámý směr ${dir}`);
-  const o = optionOf(state, card, dir);
+  if (!opt && !card.opts[dir]) throw new Error(`neznámý směr ${dir}`);
+  const o = opt ?? optionOf(state, card, dir); // opt = vlastní odpověď složená ze slov
   const before = state.meters;
-  state.meters = outcome(state, dir);
+  state.meters = outcome(state, dir, opt);
+  state.pen = o.custom ? 0 : (state.pen ?? PEN_EVERY) + 1;
+  if (o.again) state.queue.push({ id: card.id, at: state.total + 4 }); // nevyřešený problém se vrátí
   state.rush = false;
   factionMood(state, before, o);
   reputation(state, before);
