@@ -234,6 +234,15 @@ const ACH = [
   { id: 'blesk60', name: 'Blesk', text: 'Stihni v bleskovce 60 rozhodnutí.', ok: () => (stats.blitz[0]?.score ?? 0) >= 60 },
   { id: 'denni', name: 'Každodenní služba', text: 'Dokonči denní výzvu.', ok: () => Object.keys(stats.daily).length >= 1 },
   { id: 'serie3', name: 'Série', text: 'Hraj denní výzvu 3 dny po sobě.', ok: () => dailyStreak() >= 3 },
+  { id: 'dedic', name: 'Krev nezapře', text: 'Předej vládu vlastnímu dítěti.', ok: (s) => !!s.leader?.heir },
+  { id: 'rod3', name: 'Tři generace', text: 'Korunuj 3 dědice z vlastního rodu.', ok: () => (stats.heirs ?? 0) >= 3 },
+  { id: 'rada3', name: 'Plná rada', text: 'Měj v královské radě zároveň 3 rádce.', ok: (s) => (s.council ?? []).length >= 3 },
+  { id: 'pribeh', name: 'Vypravěč', text: 'Dokonči příběhovou linii.', ok: () => stats.arcs.length >= 1 },
+  { id: 'ambice', name: 'Ctižádost', text: 'Splň osobní ambici vůdce.', ok: (s) => !!s.amb?.done },
+  { id: 'snatek', name: 'Královská svatba', text: 'Uzavři sňatek se sousedním rodem.', ok: (s) => (s.flags ?? []).includes('pakt_snatek') },
+  { id: 'povest', name: 'Pověst předchází', text: 'Získej pověst (Tyran, Dobrotivý…).', ok: (s) => !!s.repNow },
+  { id: 'zelezo', name: 'Železná vůle', text: 'V železném režimu vládni aspoň 3 roky.', ok: (s) => !!s.iron && s.turn >= 36 },
+  { id: 'kartadne', name: 'Denní rituál', text: 'Rozhodni kartu dne 7 dní po sobě.', ok: () => dcardStreak() >= 7 },
 ];
 /** Zkontroluje úspěchy a nové oznámí. */
 function checkAch() {
@@ -1676,6 +1685,8 @@ function statsScreen(back) {
         <table class="board"><tbody>${Object.entries(stats.daily).sort((a, b) => b[0].localeCompare(a[0])).slice(0, 7).map(([d, mo]) => `
         <tr><td>${d.split('-').reverse().slice(0, 2).map(Number).join('. ')}.</td><td class="r">${tenure(mo)}</td></tr>`).join('')}</tbody></table>`
         : '<div class="small">Každý den nová výzva: všichni mají stejný typ vůdce a stejný začátek. Najdeš ji v hlavní nabídce.</div>'}
+      ${stats.ironTop?.length ? `<h3>${icon('crisis', 'ico')} Železný režim</h3><table class="board"><tbody>${stats.ironTop.slice(0, 5).map((t, i) => `
+        <tr><td class="n">${i + 1}.</td><td>${t.kind ? icon(t.kind, 'ico sm') : ''} ${esc(t.name)}<small>${esc(t.title)}</small></td><td class="r">${tenure(t.months)}</td></tr>`).join('')}</tbody></table>` : ''}
       <h3>${icon('timer', 'ico')} Bleskovka</h3>
       ${stats.blitz.length ? `<table class="board"><tbody>${stats.blitz.slice(0, 5).map((b, i) => `
         <tr><td class="n">${i + 1}.</td><td>${icon(b.kind, 'ico sm')} ${b.score} rozhodnutí<small>${tenure(b.months)} · ${b.leaders} ${b.leaders === 1 ? 'vůdce' : 'vůdců'}</small></td><td class="r">${date(b.date)}</td></tr>`).join('')}</tbody></table>`
@@ -1750,7 +1761,7 @@ function helpScreen(back) {
         <li><b>Bleskovka:</b> hra na čas. Začínáš se 3 minutami, každé rozhodnutí přidá 5 s, pád vlády 15 s ubere. Počítá se, kolik rozhodnutí stihneš.</li>
         <li><b>Hra pro dva:</b> bleskovka pro dva naráz. Obrazovka se rozdělí – jeden hraje zespodu, druhý shora (jeho polovina je otočená). Každý má vlastního vůdce a vlastní hodiny; vyhrává, kdo se dostane nejdál.</li>
         <li><b>Ztížení</b> (při založení hry) – hladová léta, nevraživí sousedé, bouřlivá doba, hnízdo zrádců – násobí skóre vlády.</li>
-        <li><b>Úspěchy:</b> 26 odznaků za výjimečné vlády (Harmonie, O vlásek, Dynastie…). Najdeš je ve statistikách.</li>
+        <li><b>Úspěchy:</b> ${ACH.length} odznaků za výjimečné vlády (Harmonie, O vlásek, Dynastie…). Najdeš je ve statistikách.</li>
         <li><b>Statistiky</b> ukazují tvoje hodnocení (od Nováčka po Legendu republiky), nejdelší vlády a rekordy z bleskovky.</li>
         <li>Hra běží i offline. V Safari dej <b>Sdílet → Přidat na plochu</b> a hraj jako aplikaci.</li>
       </ul></details>
