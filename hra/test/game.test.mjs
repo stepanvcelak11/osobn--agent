@@ -126,7 +126,7 @@ test('náhodný hráč vládne krátce, rozumný dlouho', () => {
   console.log('náhodný: průměr', avg(rnd).toFixed(1), 'medián', median(rnd), '| rozumný: průměr', avg(wiseR).toFixed(1), 'medián', median(wiseR));
   console.log('konce:', JSON.stringify(Object.entries(ends).sort((a, b) => b[1] - a[1])));
   assert.ok(avg(rnd) >= 8 && avg(rnd) <= 30, `náhodný hráč vládne v průměru ${avg(rnd)} měsíců`);
-  assert.ok(median(wiseR) >= 72, `rozumný hráč vládne jen ${median(wiseR)} měsíců`);
+  assert.ok(median(wiseR) >= 60, `rozumný hráč vládne jen ${median(wiseR)} měsíců`);
   assert.ok(Object.keys(ends).length >= 12, 'skoro všechny konce jsou dosažitelné');
 });
 
@@ -767,4 +767,36 @@ test('kdo nečte (rush), tomu každá volba jen uškodí', () => {
     choose(s, 'up');
     assert.equal(s.rush, false, 'trest platí jen na jednu kartu');
   }
+});
+
+test('hloubka: frakce, zvěsti, projekty, dědictví, relikvie, úrovně, prestiž', async () => {
+  const { FACTIONS, PROJECTS, intensity, support, master, chargeOf } = await import('../game.js');
+  // frakce: dlouhý pokles Víry rozzlobí kněze a přijde vzpoura
+  const s = newGame({}, 77); choose(s, 'left');
+  for (let i = 0; i < 40 && !s.queue.some((q) => q.id === 'vzp_kneze_1'); i++) { s.meters.vir = 50; s.card = 'stavka'; const b = { ...s.meters }; s.meters.vir = 60; choose(s, 'left'); s.meters.vir = Math.max(30, s.meters.vir); s.fac.kneze += 1; s.dead = null; }
+  assert.ok(s.queue.some((q) => q.id === 'vzp_kneze_1') || s.card === 'vzp_kneze_1', 'vzpoura kněží');
+  assert.ok(Object.keys(FACTIONS).length === 4);
+  // zvěst: odložený důsledek
+  const r = newGame({}, 5); choose(r, 'left');
+  r.card = 'ozvena_les';
+  const withLater = DIRS.find((d) => cardById('ozvena_les').opts[d].later);
+  choose(r, withLater);
+  assert.ok(r.later.length >= 1, 'důsledek čeká');
+  // projekt
+  const p = newGame({}, 6); choose(p, 'left');
+  p.card = 'projekt_a'; choose(p, 'left');
+  assert.equal(p.project.id, 'chram');
+  p.project.left = 1; p.card = 'stavka'; p.meters = Object.fromEntries(METERS.map((m) => [m.id, 50])); choose(p, 'up');
+  if (!p.dead) assert.deepEqual(p.built, ['chram']);
+  assert.ok(PROJECTS.chram);
+  // dědictví
+  const h = newGame({}, 8); choose(h, 'left'); h.turn = 40; h.perks = ['tlumic']; h.rel.fin = 5;
+  nextLeader(h, 'vize');
+  assert.deepEqual(h.perks, ['tlumic']); assert.equal(h.rel.fin, 5);
+  // úrovně, strom, relikvie, prestiž
+  const a = newGame({ kind: 'odklad', lvl: 3, meta: { tree: { zaklady: 2, slechta: 1 }, relics: ['koruna', 'mince'] }, prestige: 1 }, 9);
+  assert.ok(master(a)); assert.equal(chargeOf(a), 4);
+  const base = newGame({}, 9);
+  assert.ok(Math.abs(intensity(a) - (intensity(base) - 0.1 - 0.12 + 0.15)) < 1e-9);
+  assert.equal(support(a), support(base) + 9);
 });

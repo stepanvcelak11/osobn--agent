@@ -7,6 +7,9 @@ import { bondCards } from './bonds.js';
 import { AGE_CARDS_MORE } from './ages_more.js';
 import { SEASON_CARDS, STATE_CARDS, RIVAL_CARDS, TRAITOR_CARDS } from './events.js';
 import { BRANCH_CARDS, WONDERS, WONDER_CARDS } from './history_more.js';
+import { FACTION_CARDS, RUMOR_CARDS, ECHO_CARDS } from './depth.js';
+import { PROJECT_CARDS, PROJECTS, PROJECT_MONTHS } from './projects.js';
+import { RELICS, PRESTIGE_STEP } from './meta.js';
 
 Object.assign(PEOPLE, AGE_PEOPLE, {
   // Zástupné postavy: skutečnou osobu určí doba (viz DYN) – tady jen pro jistotu.
@@ -49,7 +52,16 @@ const PERSON_AGE = {};
 for (const c of [...AGE_CARDS, ...AGE_CARDS_MORE]) PERSON_AGE[c.who] ??= c.age;
 const OWN_BONDS = [...new Set(EXTRA.filter((c) => c.rel).map((c) => c.who))];
 const BONDS = bondCards(CARES, PERSON_AGE, OWN_BONDS, REL_LOYAL);
-const CARDS = [...BASE, ...EXTRA, ...AGE_CARDS, ...AGE_CARDS_MORE, ...BONDS, ...SEASON_CARDS, ...STATE_CARDS, ...RIVAL_CARDS, ...TRAITOR_CARDS, ...BRANCH_CARDS, ...WONDER_CARDS];
+const CARDS = [...BASE, ...EXTRA, ...AGE_CARDS, ...AGE_CARDS_MORE, ...BONDS, ...SEASON_CARDS, ...STATE_CARDS, ...RIVAL_CARDS, ...TRAITOR_CARDS, ...BRANCH_CARDS, ...WONDER_CARDS, ...FACTION_CARDS, ...RUMOR_CARDS, ...ECHO_CARDS, ...PROJECT_CARDS];
+export { PROJECTS, PROJECT_MONTHS };
+/// Frakce: když jejich ukazatel dlouho klesá, roste jejich hněv a nakonec se vzbouří.
+export const FACTIONS = {
+  kneze: { name: 'Kněží', m: 'vir' },
+  kupci: { name: 'Kupci', m: 'fin' },
+  vojsko: { name: 'Vojsko', m: 'sil' },
+  ucenci: { name: 'Učenci', m: 'ved' },
+};
+export const FACTION_MAX = 10, FACTION_REVOLT = 6;
 
 export const DIRS = ['left', 'right', 'up', 'down'];
 export const START = 50;
@@ -88,17 +100,28 @@ export const ADVICE_OK = 0.7;
 /// ale dlouhá vláda je čím dál ostřejší.
 export const INTENSITY_START = globalThis.ROVNOVAHA_I0 ?? 1.8, INTENSITY_MAX = globalThis.ROVNOVAHA_I1 ?? 2.6;
 export const INTENSITY_RAMP = globalThis.ROVNOVAHA_RAMP ?? 48; // za kolik měsíců vlády dosáhne maxima
-export const intensity = (state) => INTENSITY_START + (INTENSITY_MAX - INTENSITY_START) * Math.min(1, (state?.turn ?? 0) / INTENSITY_RAMP);
+export function intensity(state) {
+  const p = (state?.prestige ?? 0) * PRESTIGE_STEP;
+  const lo = INTENSITY_START + p - (state && lvlOf(state) >= 2 ? 0.1 : 0) - 0.06 * (state ? treeOf(state, 'zaklady') : 0);
+  const hi = INTENSITY_MAX + p;
+  const ramp = state && relic(state, 'hodiny') ? 72 : INTENSITY_RAMP;
+  return lo + (hi - lo) * Math.min(1, (state?.turn ?? 0) / ramp);
+}
 export const PAST_SOFT = globalThis.ROVNOVAHA_PAST ?? 1; // dávné doby mají kratší balíčky – účinky jsou mírnější, aby vlády nebyly krátké
 export const RESCUE = 15;    // Zachránce / Druhá šance: kam se ukazatel odrazí od kraje
 export const TERM = 48;      // volby každé 4 roky
 export const VOTE_MIN = 40;  // potřebná podpora (průměr Lidu a Spojenců)
+export const lvlOf = (state) => state.leader?.lvl ?? 1;
+export const master = (state) => lvlOf(state) >= 3;
+export const relic = (state, id) => (state.meta?.relics ?? []).includes(id);
+export const treeOf = (state, id) => state.meta?.tree?.[id] ?? 0;
+export const chargeOf = (state) => CHARGE - (master(state) && ['odklad', 'kormidlo', 'reform'].includes(state.leader.kind) ? 1 : 0);
 export const kindOf = (state) => KINDS.find((k) => k.id === state.leader.kind) || KINDS[0];
 export const has = (state, perk) => (state.perks ?? []).includes(perk);
 /** Vidí vůdce směr změn / další kartu? (typ, nebo výhoda) */
-export const seesDirection = (state) => state.leader.kind === 'vize' || has(state, 'smer');
+export const seesDirection = (state) => state.leader.kind === 'vize' || has(state, 'smer') || (state.leader.kind === 'prorok' && master(state));
 /** Kdo přijde příště, vidí každý (karta pod kartou). Prorok a výhoda Zvědové navíc vidí, co další karta ovlivní. */
-export const seesAhead = (state) => state.leader.kind === 'prorok' || has(state, 'nahled');
+export const seesAhead = (state) => state.leader.kind === 'prorok' || has(state, 'nahled') || relic(state, 'kompas');
 
 // Deterministický generátor (mulberry32) – stav se ukládá, takže hra jde přesně obnovit.
 export function random(state) {
@@ -110,13 +133,21 @@ export function random(state) {
 
 function freshMeters() { return Object.fromEntries(METERS.map((m) => [m.id, START])); }
 
-export function newGame({ name = '', female = false, kind = 'vize', mode = 'normal', world = null, mods = [] } = {}, seed = Date.now() >>> 0) {
+export function newGame({ name = '', female = false, kind = 'vize', mode = 'normal', world = null, mods = [], lvl = 1, meta = null, prestige = 0, meters = null } = {}, seed = Date.now() >>> 0) {
   const history = mode === 'dejiny' || world === 'dejiny';
   const leaderName = name.trim().slice(0, 30) || (history ? (female ? 'Ara' : 'Brok') : female ? 'Jana Nová' : 'Jan Nový');
   const s = {
     v: 1,
     seed: seed >>> 0 || 1,
-    leader: { name: leaderName, female: !!female, n: 1, kind, age: history ? 1 : 7 },
+    leader: { name: leaderName, female: !!female, n: 1, kind, age: history ? 1 : 7, lvl },
+    meta: { tree: { ...(meta?.tree ?? {}) }, relics: [...(meta?.relics ?? [])] }, // trvalý postup hráče (strom, relikvie)
+    prestige, // kolikrát svět začal znovu od pravěku
+    fac: { kneze: 0, kupci: 0, vojsko: 0, ucenci: 0 }, // hněv frakcí
+    later: [], // odložené důsledky {at, e, text}
+    echoes: [], // co se z minulosti vrátilo (kronika)
+    project: null, // rozestavěný velký projekt {id, left}
+    built: [], // dokončené projekty
+    mirror: false, // relikvie Zrcadlo osudu už zachránila
     charge: 0, // rozhodnutí od posledního použití schopnosti
     rel: {}, // vztahy postav k vládě (−5 … +5)
     drift: {}, // nastřádané účinky zákonů (zlomky bodů)
@@ -143,7 +174,7 @@ export function newGame({ name = '', female = false, kind = 'vize', mode = 'norm
     age: history ? 1 : 7, // doba (Dějiny lidstva: 1 = pravěk … 7 = budoucnost)
     ageStart: 0, // kdy začala současná doba (počet karet)
     futureAt: history ? null : 0, // kdy svět dorazil do budoucnosti (éry Nové republiky se počítají od té chvíle)
-    meters: freshMeters(),
+    meters: { ...freshMeters(), ...(meters ?? {}) },
     flags: [],
     queue: [],
     recent: [],
@@ -213,7 +244,7 @@ export function touches(state, id) {
 }
 
 function eligible(state, c) {
-  if ((c.weight ?? 1) <= 0) return false;
+  if ((c.weight ?? 1) <= 0 || c.faction || c.queueOnly) return false;
   // Dějiny lidstva: karta dávné doby jen ve své době, karty budoucnosti až v budoucnosti.
   const age = state.age ?? 7;
   const timeless = c.season || c.traitor || c.who?.startsWith('@');
@@ -241,7 +272,7 @@ function eligible(state, c) {
 /** Nová karta na stůl (a rada rádce k ní). */
 function draw(state) {
   state.card = pickCard(state);
-  state.luck = state.leader.kind === 'hazard' ? 0.5 + Math.round(random(state) * 10) / 10 : 1;
+  state.luck = state.leader.kind === 'hazard' ? 0.5 + Math.round(random(state) * (master(state) ? 7 : 10)) / 10 : 1;
   state.peek = peekCard(state);
   state.advice = state.leader.kind === 'rada' ? advise(state) : null;
 }
@@ -328,8 +359,9 @@ export function outcome(state, dir) {
     let d = effect(k, v);
     if (mult !== 1) d = Math.round(d * mult);
     if (has(state, 'brzda')) d = Math.max(-12, Math.min(12, d));
+    if ((state.meta?.relics ?? []).some((r) => RELICS[r]?.m === k)) d = Math.round(d * 0.75);
     // Krok zpátky ke středu z krajnosti má dvojnásobnou sílu – ale za střed ho bonus nepřehoupne.
-    if (crisis && d && Math.abs(from - START) > EXTREME && Math.sign(d) === Math.sign(START - from)) {
+    if (crisis && d && Math.abs(from - START) > (master(state) ? 15 : EXTREME) && Math.sign(d) === Math.sign(START - from)) {
       const doubled = from + 2 * d;
       d = d > 0 ? Math.max(d, Math.min(doubled, START) - from) : Math.min(d, Math.max(doubled, START) - from);
     }
@@ -353,7 +385,7 @@ export const bestDir = (state) => rankDirs(state)[0];
 /** Rada rádce: v 70 % nejlepší volba, jinak ta nejhorší. */
 function advise(state) {
   const r = rankDirs(state);
-  return random(state) < ADVICE_OK ? r[0] : r[r.length - 1];
+  return random(state) < (master(state) ? 0.85 : ADVICE_OK) ? r[0] : r[r.length - 1];
 }
 
 /** Rada mudrce (vybavení z obchodu): napůl volba, která rovnováhu zlepší (ne nutně nejlepší), napůl cokoli. */
@@ -375,7 +407,7 @@ export function shiftMeter(state, id, sign) {
   return true;
 }
 
-export const ready = (state) => (state.charge ?? 0) >= CHARGE;
+export const ready = (state) => (state.charge ?? 0) >= chargeOf(state);
 
 /** Vyčkávač: odloží kartu. Měsíc uplyne, ukazatele se nehnou. */
 export function skip(state) {
@@ -404,15 +436,15 @@ function passCard(state) {
 /** Kormidelník: posune jeden ukazatel o 15 k rovnováze (nikdy přes střed). */
 export function nudge(state, id) {
   if (state.leader.kind !== 'kormidlo' || !ready(state) || state.dead) return false;
-  if (!steerMeter(state, id)) return false;
+  if (!steerMeter(state, id, master(state) ? 20 : NUDGE)) return false;
   state.charge = 0;
   return true;
 }
 /** Posune ukazatel o NUDGE k rovnováze (Kormidelník, nebo pomůcka z obchodu). */
-export function steerMeter(state, id) {
+export function steerMeter(state, id, by = NUDGE) {
   const v = state.meters[id];
   if (v === START || state.dead) return false;
-  state.meters[id] = v < START ? Math.min(START, v + NUDGE) : Math.max(START, v - NUDGE);
+  state.meters[id] = v < START ? Math.min(START, v + by) : Math.max(START, v - by);
   return true;
 }
 
@@ -447,9 +479,16 @@ export function choose(state, dir) {
   const card = cardById(state.card) || INTRO;
   if (!card.opts[dir]) throw new Error(`neznámý směr ${dir}`);
   const o = optionOf(state, card, dir);
+  const before = state.meters;
   state.meters = outcome(state, dir);
   state.rush = false;
-  state.charge = Math.min(CHARGE, (state.charge ?? 0) + (has(state, 'nabiti') ? 2 : 1));
+  factionMood(state, before, o);
+  for (const l of o.later ?? []) if (random(state) < (l.p ?? 1)) (state.later ??= []).push({ at: state.total + 1 + (l.in ?? 2), e: l.e, text: l.text });
+  if (o.project && PROJECTS[o.project] && !state.project) {
+    state.project = { id: o.project, left: PROJECT_MONTHS };
+    news(state, 'law', `Začala stavba: ${PROJECTS[o.project].name}. Hotovo za ${PROJECT_MONTHS} měsíců.`);
+  }
+  state.charge = Math.min(chargeOf(state), (state.charge ?? 0) + (has(state, 'nabiti') ? 2 : 1));
   if (o.set && !state.flags.includes(o.set)) state.flags.push(o.set);
   if (o.unset) state.flags = state.flags.filter((f) => f !== o.unset);
   if (o.law && !state.flags.includes(`zakon_${o.law}`)) {
@@ -526,7 +565,7 @@ function relate(state, card, o) {
   state.rel ??= {};
   const k = state.leader.kind === 'charisma' ? 2 : 1;
   const add = (who, n) => {
-    const m = n * k * (n > 0 && has(state, 'sarm') ? 2 : 1);
+    const m = n * (n < 0 && master(state) ? 1 : k) * (n > 0 && has(state, 'sarm') ? 2 : 1);
     const before = state.rel[who] ?? 0;
     state.rel[who] = Math.max(-REL_MAX, Math.min(REL_MAX, before + m));
     const name = PEOPLE[who]?.name ?? who;
@@ -562,12 +601,30 @@ function crisisStep(state, card, o) {
 
 /** Do voleb zbývá (měsíců). */
 export const toElection = (state) => TERM - (state.turn % TERM);
-export const support = (state) => Math.round((state.meters.lid + state.meters.dip) / 2);
+/** Hněv frakcí: pokles jejich ukazatele je zlobí, vzestup uklidňuje. Při hněvu FACTION_REVOLT přijde vzpoura. */
+function factionMood(state, before, o) {
+  state.fac ??= { kneze: 0, kupci: 0, vojsko: 0, ucenci: 0 };
+  for (const [f, { m }] of Object.entries(FACTIONS)) {
+    const d = state.meters[m] - before[m];
+    let a = state.fac[f] ?? 0;
+    if (d < 0) a += -d / 8; else if (d > 0) a -= d / 16;
+    state.fac[f] = Math.max(0, Math.min(FACTION_MAX, Math.round(a * 10) / 10));
+  }
+  if (o.calm && o.calm in state.fac) state.fac[o.calm] = 0;
+  const angry = Object.keys(FACTIONS).find((f) => state.fac[f] >= FACTION_REVOLT);
+  if (angry && !state.queue.some((q) => q.id.startsWith('vzp_')) && !String(state.card).startsWith('vzp_')) {
+    state.queue.push({ id: `vzp_${angry}_1`, at: state.total + 2 });
+    state.fac[angry] = FACTION_REVOLT - 2;
+    news(state, 'enemy', `${FACTIONS[angry].name} se bouří – brzy přijdou s požadavky.`);
+  }
+}
+
+export const support = (state) => Math.round((state.meters.lid + state.meters.dip) / 2) + 4 * treeOf(state, 'slechta') + (relic(state, 'koruna') ? 5 : 0);
 
 /** Uplynul měsíc: zákony, konec vlády, úkol, éra. */
 function monthPasses(state) {
   state.drift ??= {};
-  const lawPower = state.leader.kind === 'byro' ? 2 : 1;
+  const lawPower = state.leader.kind === 'byro' ? (master(state) ? 3 : 2) : 1;
   for (const id of activeLaws(state)) for (const [k, v] of Object.entries(LAWS[id].per)) state.drift[k] = (state.drift[k] ?? 0) + v * lawPower;
   if (has(state, 'stabilita') && state.turn % 12 === 0) {
     for (const m of METERS) { const v = state.meters[m.id]; state.meters[m.id] = v < START ? Math.min(START, v + 3) : Math.max(START, v - 3); }
@@ -578,20 +635,42 @@ function monthPasses(state) {
   if (season === 'podzim') add('fin', 0.3);
   if (state.mods?.includes('hlad')) add('fin', -0.4);
   if (state.mods?.includes('sousede')) add('dip', -0.3);
-  // Divy světa drží svůj ukazatel u rovnováhy.
-  for (const id of state.wonders ?? []) {
-    const m = WONDER_BY_ID[id]?.m, v = state.meters[m];
+  // Divy světa a dokončené projekty drží svůj ukazatel u rovnováhy.
+  for (const m of [...(state.wonders ?? []).map((id) => WONDER_BY_ID[id]?.m), ...(state.built ?? []).map((id) => PROJECTS[id]?.m)]) {
+    const v = state.meters[m];
     if (m && v !== START) add(m, v < START ? 0.5 : -0.5);
   }
+  // Rozestavěný projekt stojí každý měsíc zásoby.
+  if (state.project) {
+    add('fin', -0.5);
+    state.project.left -= 1;
+    if (state.project.left <= 0) {
+      const p = PROJECTS[state.project.id];
+      (state.built ??= []).push(state.project.id);
+      news(state, 'wonder', `Stavba dokončena: ${p.name}! Navždy bude držet ${METERS.find((m) => m.id === p.m).name} v rovnováze.`);
+      state.project = null;
+    }
+  }
+  // Odložené důsledky dřívějších rozhodnutí.
+  for (const l of (state.later ?? []).filter((x) => x.at <= state.total)) {
+    for (const [k, v] of Object.entries(l.e ?? {})) state.meters[k] = clamp(state.meters[k] + effect(k, v));
+    news(state, 'echo', l.text);
+    (state.echoes ??= []).push({ text: l.text, at: state.total });
+    state.echoes = state.echoes.slice(-20);
+  }
+  state.later = (state.later ?? []).filter((x) => x.at > state.total);
   for (const [k, v] of Object.entries(state.drift)) {
     const whole = Math.trunc(v);
     if (whole) { state.meters[k] = clamp(state.meters[k] + whole); state.drift[k] = v - whole; }
   }
   let hit = METERS.find((m) => state.meters[m.id] <= 0 || state.meters[m.id] >= 100);
-  if (hit && ((state.leader.kind === 'zachrance' && !state.rescued) || has(state, 'sance'))) {
-    // Záchrana: ukazatel se odrazí od kraje. Typ Zachránce jednou za vládu, výhoda Druhá šance jednou.
+  const mirror = relic(state, 'zrcadlo') && !state.mirror;
+  if (hit && ((state.leader.kind === 'zachrance' && !state.rescued) || has(state, 'sance') || mirror)) {
+    // Záchrana: ukazatel se odrazí od kraje. Typ Zachránce jednou za vládu (mistr dvakrát), výhoda Druhá šance jednou,
+    // relikvie Zrcadlo osudu jednou za hru.
     if (has(state, 'sance')) state.perks = state.perks.filter((p) => p !== 'sance');
-    else state.rescued = true;
+    else if (state.leader.kind === 'zachrance' && !state.rescued) { state.zUsed = (state.zUsed ?? 0) + 1; state.rescued = state.zUsed >= (master(state) ? 2 : 1); }
+    else state.mirror = true;
     state.meters[hit.id] = state.meters[hit.id] <= 0 ? RESCUE : 100 - RESCUE;
     news(state, 'rescue', `Na poslední chvíli: ${hit.name} se vrací na ${state.meters[hit.id]} %`);
     hit = METERS.find((m) => state.meters[m.id] <= 0 || state.meters[m.id] >= 100);
@@ -761,7 +840,10 @@ export function offerPerks(state) {
 }
 
 /** Nástupce: nový vůdce, ukazatele zpět doprostřed. Svět (příznaky) zůstává. */
-export function nextLeader(state, kind = state.leader.kind) {
+export function nextLeader(state, kind = state.leader.kind, lvl = 1) {
+  // Dědictví: kdo vládl aspoň 3 roky, předá nástupci jednu výhodu a věrné lidi.
+  const legacy = state.turn >= 36;
+  const keepPerk = legacy ? (state.perks ?? []).find((p) => p !== 'sance') : null;
   const female = random(state) < 0.5;
   const pool = (state.age ?? 7) < 7 ? AGE_NAMES[state.age] : SUCCESSORS;
   const names = female ? pool.f : pool.m;
@@ -769,18 +851,21 @@ export function nextLeader(state, kind = state.leader.kind) {
   const free = names.filter((n) => !used.has(n));
   const list = free.length ? free : names;
   const name = list[Math.floor(random(state) * list.length)];
-  state.leader = { name, female, n: state.leader.n + 1, kind, age: state.age ?? 7 };
+  state.leader = { name, female, n: state.leader.n + 1, kind, age: state.age ?? 7, lvl };
   state.charge = 0;
   state.drift = {};
-  state.perks = [];
+  state.perks = keepPerk ? [keepPerk] : [];
   state.perkOffer = null;
   state.rescued = false;
+  state.zUsed = 0;
   state.crisis = null;
   state.peek = null;
-  // Nový vůdce = nová šance: vztahy vychladnou na polovinu.
-  for (const k of Object.keys(state.rel ?? {})) state.rel[k] = Math.trunc(state.rel[k] / 2) || 0;
+  // Nový vůdce = nová šance: vztahy vychladnou na polovinu (po dlouhé vládě zůstanou věrní věrnými).
+  for (const k of Object.keys(state.rel ?? {})) if (!(legacy && state.rel[k] >= REL_LOYAL)) state.rel[k] = Math.trunc(state.rel[k] / 2) || 0;
+  if (legacy) news(state, 'friend', `Dědictví: ${keepPerk ? `výhoda ${PERKS[keepPerk].name} a ` : ''}věrní lidé zůstávají i novému vůdci.`);
   state.meters = freshMeters();
   state.queue = state.queue.filter((q) => q.id.startsWith('era') || q.id.startsWith('prelom')); // nová éra ani přelom nezapadne
+  if (!state.project) state.queue.push({ id: PROJECT_CARDS[Math.floor(random(state) * PROJECT_CARDS.length)].id, at: state.total + 4 });
   state.turn = 0;
   state.dead = null;
   assignTask(state);
