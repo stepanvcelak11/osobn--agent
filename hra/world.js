@@ -7,7 +7,7 @@
 /// Na čem kterému člověku záleží – volby, které „jeho“ ukazatel zvednou, mu udělají radost.
 export const CARES = {
   fin: 'fin', gen: 'sil', ved: 'ved', eko: 'pri', kaz: 'vir', vel: 'dip', odb: 'lid', med: 'fin', ork: 'ved', stin: 'sil',
-  far: 'pri', lek: 'lid', nula: 'ved', fed: 'dip', pou: 'vir', vrana: 'fin', upr: 'lid', dite: 'lid', prorok: 'vir', starosta: 'dip',
+  far: 'pri', lek: 'lid', soud: 'lid', stud: 'ved', sport: 'lid', nula: 'ved', fed: 'dip', pou: 'vir', vrana: 'fin', upr: 'lid', dite: 'lid', prorok: 'vir', starosta: 'dip',
 };
 export const REL_MAX = 5;
 export const REL_LOYAL = 3;
@@ -158,6 +158,122 @@ const crisisCards = [
     } },
 ];
 
+/// Všední starosti republiky – další karty pro pestřejší hru.
+const everyday = [
+  { id: 'soud1', who: 'soud', text: 'Ústavní soud přezkoumává tvé poslední nařízení, {osl}. Když ho zruší, budeš vypadat slabě.',
+    opts: {
+      left: { t: 'Respektovat soud', e: { lid: 5, sil: -5 } },
+      right: { t: 'Vyměnit soudce', e: { sil: 10, lid: -10, dip: -5 } },
+      up: { t: 'Požádat o odklad', e: { fin: -5, vir: 5 } },
+      down: { t: 'Nařízení stáhnout', e: { lid: -5, dip: 5 } },
+    } },
+  { id: 'soud2', who: 'soud', text: 'Bývalý ministr je obviněn z korupce. Je to tvůj starý přítel a prosí o pomoc.',
+    opts: {
+      left: { t: 'Ať rozhodne soud', e: { lid: 10, vir: -5 } },
+      right: { t: 'Udělit milost', e: { lid: -15, fin: 5 } },
+      up: { t: 'Urychlit proces', e: { lid: 5, dip: 5, fin: -5 } },
+      down: { t: 'Tajně ho varovat', e: { sil: -5, fin: 10 } },
+    } },
+  { id: 'stud1', who: 'stud', text: 'Studenti obsadili univerzitu. Chtějí, aby vláda konečně brala vážně změny klimatu.',
+    opts: {
+      left: { t: 'Vyklidit budovu', e: { sil: 5, lid: -10, ved: -5 } },
+      right: { t: 'Pozvat je k jednání', e: { lid: 5, pri: 5, fin: -5 } },
+      up: { t: 'Místo ve vládě', e: { lid: 10, sil: -5, vir: -5 } },
+      down: { t: 'Nevšímat si jich', e: { lid: -5, ved: -5, fin: 5 } },
+    } },
+  { id: 'stud2', who: 'stud', text: 'Chci studovat v zahraničí, ale stipendia jste zrušili. Mladí odcházejí a už se nevracejí.',
+    opts: {
+      left: { t: 'Obnovit stipendia', e: { ved: 10, fin: -10 } },
+      right: { t: 'Zakázat odchod', e: { lid: -15, sil: 5 } },
+      up: { t: 'Výměnné pobyty', e: { dip: 10, ved: 5, fin: -5 } },
+      down: { t: 'Ať si jdou', e: { ved: -10, fin: 5 } },
+    } },
+  { id: 'sport1', who: 'sport', text: 'Náš tým postoupil na mistrovství světa! Potřebujeme peníze na cestu i trénink.',
+    opts: {
+      left: { t: 'Ani korunu', e: { lid: -10, fin: 5 } },
+      right: { t: 'Zaplatit všechno', e: { lid: 10, fin: -10 } },
+      up: { t: 'Najít sponzora', e: { fin: 5, lid: 5, vir: -5 } },
+      down: { t: 'Uspořádat ho doma', e: { dip: 10, fin: -15, lid: 5 } },
+    } },
+  { id: 'sport2', who: 'sport', text: 'Hráči odmítají nastoupit proti týmu Federace. Prý kvůli politice.',
+    opts: {
+      left: { t: 'Musí hrát', e: { dip: 5, lid: -5 } },
+      right: { t: 'Podpořit bojkot', e: { dip: -10, lid: 5, sil: 5 } },
+      up: { t: 'Zápas za mír', e: { dip: 10, vir: 5, sil: -5 } },
+      down: { t: 'Rozpustit tým', e: { lid: -10, fin: 5 } },
+    } },
+  { id: 'film', who: 'med', text: 'Natočila jsem film o tvé vládě, {osl}. Moc lichotivý není. Premiéra je zítra.',
+    opts: {
+      left: { t: 'Zakázat premiéru', e: { lid: -10, vir: 5, sil: 5 } },
+      right: { t: 'Přijít na premiéru', e: { lid: 10, sil: -5 } },
+      up: { t: 'Natočit vlastní film', e: { fin: -10, vir: 10 } },
+      down: { t: 'Koupit práva', e: { fin: -15, sil: 5 } },
+    } },
+  { id: 'kobylky', who: 'far', text: 'Kobylky! Mračna hmyzu se valí přes jižní pole a žerou všechno zelené.',
+    opts: {
+      left: { t: 'Postřik z letadel', e: { pri: -15, fin: -5 } },
+      right: { t: 'Počkat, až odletí', e: { fin: -10, lid: -5 } },
+      up: { t: 'Přírodní nepřátelé', e: { ved: 5, pri: 5, fin: -10 } },
+      down: { t: 'Jíst je (bílkoviny!)', e: { lid: -5, vir: -5, fin: 5 } },
+    } },
+  { id: 'zazrak', who: 'kaz', text: 'V kapli prý pláče socha. Poutníci proudí ze všech koutů republiky.',
+    opts: {
+      left: { t: 'Je to zázrak!', e: { vir: 15, ved: -10 } },
+      right: { t: 'Poslat vědce', e: { ved: 10, vir: -10 } },
+      up: { t: 'Vybírat vstupné', e: { fin: 10, vir: -5, lid: -5 } },
+      down: { t: 'Nechat lidi věřit', e: { vir: 5, lid: 5 } },
+    } },
+  { id: 'datacentrum', who: 'fed', text: 'Federace u vás chce postavit obří datové centrum. Zaplatí dobře – ale bude chtít přístup k vaší síti.',
+    opts: {
+      left: { t: 'Odmítnout', e: { dip: -10, ved: 5 } },
+      right: { t: 'Přijmout', e: { fin: 15, sil: -10 } },
+      up: { t: 'Jen pod naší kontrolou', e: { fin: 5, ved: 5, dip: -5 } },
+      down: { t: 'Postavit vlastní', e: { ved: 10, fin: -15 } },
+    } },
+  { id: 'kral', who: 'vel', text: 'Přijede sousední král a čeká velkolepé přivítání. Jeho přízeň se hodí.',
+    opts: {
+      left: { t: 'Skromná večeře', e: { fin: 5, dip: -10 } },
+      right: { t: 'Vojenská přehlídka', e: { sil: 10, dip: 5, fin: -10 } },
+      up: { t: 'Lidová slavnost', e: { lid: 10, dip: 5, fin: -10 } },
+      down: { t: 'Nechat ho čekat', e: { dip: -15, vir: 5 } },
+    } },
+  { id: 'algoritmus', who: 'ork', text: 'Spočítal jsem, že rozpočet by řídil algoritmus o 31 % lépe. Smím ho převzít?',
+    opts: {
+      left: { t: 'Nikdy', e: { ved: -5, vir: 5 } },
+      right: { t: 'Jen rozpočet', e: { fin: 10, lid: -5, ved: 5 } },
+      up: { t: 'Zkušební měsíc', e: { ved: 10, vir: -5, fin: -5 } },
+      down: { t: 'Vypnout ORÁKL', e: { ved: -15, vir: 10 } },
+    } },
+  { id: 'dopis', who: 'dite', text: 'Holčička ti přinesla dopis: „Proč je v naší ulici pořád tma a nikdo neuklízí?“',
+    opts: {
+      left: { t: 'Opravit čtvrť', e: { lid: 10, fin: -10 } },
+      right: { t: 'Poslat dobrovolníky', e: { lid: 5, vir: 5, fin: -5 } },
+      up: { t: 'Pozvat ji do paláce', e: { lid: 5, dip: 5, fin: -5 } },
+      down: { t: 'Neodpovídat', e: { lid: -10 } },
+    } },
+  { id: 'vrak', who: 'starosta', text: 'Rybáři našli na dně moře vrak plný beden ze starého světa.',
+    opts: {
+      left: { t: 'Prozkoumat ho', e: { ved: 10, fin: -5 } },
+      right: { t: 'Prodat obsah', e: { fin: 10, ved: -5 } },
+      up: { t: 'Otevřít muzeum', e: { vir: 5, lid: 5, fin: -5 } },
+      down: { t: 'Nechat ho na dně', e: { pri: 5, ved: -5 } },
+    } },
+  { id: 'dron', who: 'gen', text: 'Na hranici zmizel náš průzkumný dron. Federace tvrdí, že ho sestřelila.',
+    opts: {
+      left: { t: 'Omluvit se', e: { dip: 10, sil: -10 } },
+      right: { t: 'Žádat náhradu', e: { dip: -5, fin: 5 } },
+      up: { t: 'Vyslat další', e: { sil: 10, dip: -10, ved: 5 } },
+      down: { t: 'Mlčet', e: { sil: -5, lid: -5 } },
+    } },
+  { id: 'mraz', who: 'upr', text: 'Zima je krutá a tábor uprchlíků mrzne. Potřebujeme stany, deky a teplé jídlo.',
+    opts: {
+      left: { t: 'Otevřít školy', e: { lid: -5, dip: 10 } },
+      right: { t: 'Deky od armády', e: { sil: -5, dip: 5, fin: -5 } },
+      up: { t: 'Ubytovat v rodinách', e: { lid: -10, vir: 10, dip: 5 } },
+      down: { t: 'Tábor zavřít', e: { dip: -15, sil: 5 } },
+    } },
+];
+
 const lawCard = (id, who, text, law, opts) => ({ id, who, text, not: [`zakon_${law}`], opts: { ...opts, right: { t: 'Uzákonit', ...opts.right, law } } });
 
 const repealCards = Object.entries(LAWS).map(([id, l]) => ({
@@ -173,6 +289,7 @@ const repealCards = Object.entries(LAWS).map(([id, l]) => ({
 
 export const EXTRA = [
   ...crisisCards,
+  ...everyday,
   // ── Návrhy zákonů ────────────────────────────────────
   lawCard('zakon_dan', 'fin', 'Navrhuji trvalou daň z bohatství, {osl}. Peníze by tekly každý měsíc – jen boháči budou zuřit.', 'dan_bohati', {
     left: { t: 'Bohaté nechte být', e: { fin: -5, dip: 5 } },

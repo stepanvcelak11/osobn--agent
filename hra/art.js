@@ -139,6 +139,7 @@ const LINE = {
   hazard: '<rect x="4" y="4" width="16" height="16" rx="3"/><circle cx="8.5" cy="8.5" r=".9" fill="currentColor"/><circle cx="15.5" cy="15.5" r=".9" fill="currentColor"/><circle cx="12" cy="12" r=".9" fill="currentColor"/><circle cx="15.5" cy="8.5" r=".9" fill="currentColor"/><circle cx="8.5" cy="15.5" r=".9" fill="currentColor"/>',
   reform: '<path d="M14.5 4.5l5 5M12 7l5 5M4 20l8.5-8.5M10 9.5l4.5 4.5"/><path d="M13 3.5l7.5 7.5-2.5 2.5L10.5 6z"/>',
   // výhody, volby, krize, čas, statistiky
+  sun: '<rect x="3.5" y="5" width="17" height="15.5" rx="2.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/><circle cx="12" cy="15" r="1.6" fill="currentColor"/>',
   perk: '<path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5L18 18M18 6l-2.5 2.5M8.5 15.5L6 18"/>',
   vote: '<path d="M4 12h16v8H4z"/><path d="M8 12V5h8v7M10 8.5l1.5 1.5L14.5 7"/>',
   crisis: '<path d="M12 3.5L21.5 20h-19z"/><path d="M12 10v4.5M12 17.2v.3"/>',

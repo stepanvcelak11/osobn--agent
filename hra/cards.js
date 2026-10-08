@@ -58,6 +58,9 @@ export const PEOPLE = {
   dite: { name: 'Holčička z ulice', icon: '🧒', color: '#d9b36a', look: 'child' },
   prorok: { name: 'Prorok Světla', icon: '☀️', color: '#e0c060', look: 'halo' },
   starosta: { name: 'Starostka přístavu Marta', icon: '⚓', color: '#5a8fb0', look: 'bun' },
+  soud: { name: 'Soudkyně Veselá', icon: '⚖️', color: '#8c7a9e', look: 'long' },
+  stud: { name: 'Studentka Tereza', icon: '🎒', color: '#d07a6a', look: 'hoodie' },
+  sport: { name: 'Trenér Bureš', icon: '⚽', color: '#5fae8f', look: 'beanie' },
 };
 
 export const INTRO = {

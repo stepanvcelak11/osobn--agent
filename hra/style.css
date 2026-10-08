@@ -286,3 +286,29 @@ body.game { background: var(--scene, var(--bg)); transition: background-color .5
 .board td.r { text-align: right; white-space: nowrap; color: var(--dim); font-size: 14px; }
 .board .ico { color: var(--accent); }
 .advice b.ok { color: var(--grass); } .advice b.bad { color: var(--bad); }
+
+/* ── Režimy na úvodní obrazovce ─ */
+.modes button { flex-direction: row; justify-content: flex-start; text-align: left; gap: 10px; padding: 12px 12px; }
+.modes .ico { color: var(--accent); width: 22px; height: 22px; }
+.modes span { display: flex; flex-direction: column; min-width: 0; }
+.modes b { font-size: 15px; }
+.modes small { font-size: 12px; color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* ── Úspěchy ─ */
+.achs { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.ach { display: flex; gap: 8px; align-items: flex-start; background: var(--bg1); border: 1px solid var(--line); border-radius: 12px; padding: 10px; opacity: .55; }
+.ach.got { opacity: 1; border-color: #e0915a55; }
+.ach .ico { color: var(--dim); margin-top: 1px; }
+.ach.got .ico { color: var(--accent); }
+.ach b { display: block; font-size: 14px; }
+.ach small { display: block; font-size: 12px; color: var(--dim); line-height: 1.35; margin-top: 2px; }
+.toast.ach { border-color: var(--accent); }
+
+/* ── Průvodce ─ */
+.tips { align-items: center; padding: 20px; }
+.tips .pane { border-radius: 22px; }
+.tips .dots { display: flex; gap: 6px; justify-content: center; }
+.tips .dots i { width: 7px; height: 7px; border-radius: 50%; background: var(--faint); }
+.tips .dots i.on { background: var(--accent); }
+/* Mimo hrací plochu a nad okny se oznámení ukazuje nahoře, aby nezakrývalo tlačítka. */
+body:not(.game) .toast, body:has(.pop) .toast { bottom: auto; top: calc(env(safe-area-inset-top, 0px) + 12px); }

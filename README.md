@@ -33,6 +33,7 @@ Sedm ukazatelů drží zemi pohromadě. **Ideál je uprostřed – oba kraje jso
   Hazardér (náhodný účinek 0,5–1,5×, dvě pečetě za úkol), Reformátor (každých 5 rozhodnutí zavede/zruší zákon).
 - **Výhody:** po splněném úkolu výběr jedné ze tří výhod na zbytek vlády.
 - **Volby** každé 4 roky (průměr Lidu a Spojenců aspoň 40 %), **víceměsíční krize** (epidemie, povodeň, útok na síť).
+- **Denní výzva** (stejný začátek a typ vůdce pro všechny v daný den, série dní), **26 úspěchů**, průvodce při první hře, nové postavy (soudkyně, studentka, trenér).
 - **Statistiky a hodnocení** (Nováček → Legenda republiky), žebříček nejdelších vlád, **bleskovka** na čas (3 min, +5 s za rozhodnutí).
 - **Lidé si pamatují** – věrní pomáhají, rozzlobení škodí.
 - **Zákony** platí, dokud je někdo nezruší, a každý měsíc posouvají ukazatele.

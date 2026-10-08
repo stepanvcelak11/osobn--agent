@@ -1,6 +1,6 @@
 // Rovnováha – zobrazení a ovládání (tažení karty do čtyř stran, šipky, klávesy, uložení hry).
 import { portrait, meterIcon, glyph, icon, mood, mix } from './art.js';
-import { newGame, newBlitz, choose, nextLeader, currentCard, cardById, preview, outcome, optionOf, unlocked, skip, nudge, reformLaw, choosePerk, ready, tenure, timeLabel, danger, kindOf, upgrade, activeLaws, seals, taskById, taskProgress, seesDirection, toElection, support, KINDS, ACTIVE, CHARGE, NUDGE, METERS, ENDINGS, LAWS, TASKS, ERAS, SPECIAL, PEOPLE, REL_LOYAL, PERKS, CRISES, ELECTION, VOTE_MIN, BLITZ_START, BLITZ_BONUS, BLITZ_FALL } from './game.js';
+import { newGame, newBlitz, newRun, daily, choose, nextLeader, currentCard, cardById, preview, outcome, optionOf, unlocked, skip, nudge, reformLaw, choosePerk, ready, tenure, timeLabel, danger, kindOf, upgrade, activeLaws, seals, taskById, taskProgress, seesDirection, toElection, support, KINDS, ACTIVE, CHARGE, NUDGE, METERS, ENDINGS, LAWS, TASKS, ERAS, SPECIAL, PEOPLE, REL_LOYAL, PERKS, CRISES, ELECTION, VOTE_MIN, BLITZ_START, BLITZ_BONUS, BLITZ_FALL } from './game.js';
 
 const SAVE = 'rovnovaha.save';
 const app = document.getElementById('app');
@@ -27,11 +27,26 @@ function load() {
 }
 function save() {
   if (state?.mode === 'blitz') return; // bleskovka se neukládá – hlavní hra zůstává netknutá
-  try { localStorage.setItem(SAVE, JSON.stringify(state)); } catch { /* soukromé okno – hraje se bez ukládání */ }
+  try { localStorage.setItem(state?.mode === 'daily' ? DAILY : SAVE, JSON.stringify(state)); } catch { /* soukromé okno – hraje se bez ukládání */ }
+}
+// Denní výzva má vlastní uložení – hlavní hra zůstává netknutá.
+const DAILY = 'rovnovaha.daily';
+const today = (d = new Date()) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+function loadDaily() {
+  try {
+    const s = JSON.parse(localStorage.getItem(DAILY));
+    return s && s.day === today() && !s.dead ? upgrade(s) : null;
+  } catch { return null; }
+}
+/** Zpět do hlavní nabídky – vždy s hlavní hrou (ne s bleskovkou ani denní výzvou). */
+function home() {
+  if (blitz) { clearInterval(blitz.id); blitz = null; }
+  state = load();
+  startScreen();
 }
 // ── Statistiky hráče (přežijí i novou hru) ───────────
 const STATS = 'rovnovaha.stats';
-const emptyStats = () => ({ games: 0, decisions: 0, reigns: 0, months: 0, tasks: 0, elections: 0, crises: 0, ends: {}, top: [], blitz: [] });
+const emptyStats = () => ({ games: 0, decisions: 0, reigns: 0, months: 0, tasks: 0, elections: 0, crises: 0, ends: {}, top: [], blitz: [], daily: {}, ach: {}, kinds: [] });
 let stats = loadStats();
 function loadStats() {
   let s = null;
@@ -56,6 +71,7 @@ function recordReign() {
   stats.months += h.months;
   stats.ends[h.ending] = (stats.ends[h.ending] ?? 0) + 1;
   stats.top.push({ name: h.name, months: h.months, title: h.title, kind: state.leader.kind });
+  if (!stats.kinds.includes(state.leader.kind)) stats.kinds.push(state.leader.kind);
   stats.top = stats.top.sort((a, b) => b.months - a.months).slice(0, 10);
   saveStats();
 }
@@ -64,10 +80,61 @@ const RANKS = [[0, 'Nováček'], [30, 'Radní'], [80, 'Ministr'], [160, 'Prezide
 function rating() {
   const best = Math.max(state?.best ?? 0, stats.top[0]?.months ?? 0);
   const ends = state?.endings?.length ?? 0;
-  const pts = best + 5 * ends + 4 * stats.tasks + 3 * stats.crises + 3 * stats.elections + Math.floor(stats.decisions / 50);
+  const pts = best + 5 * ends + 4 * stats.tasks + 3 * stats.crises + 3 * stats.elections + 2 * Object.keys(stats.ach).length + Math.floor(stats.decisions / 50);
   let i = RANKS.length - 1;
   while (RANKS[i][0] > pts) i--;
   return { pts, rank: RANKS[i][1], from: RANKS[i][0], to: RANKS[i + 1]?.[0] ?? null, next: RANKS[i + 1]?.[1] ?? null, best, ends };
+}
+
+// ── Úspěchy ──────────────────────────────────────────
+const anyEnd = (pre) => (s) => (s?.endings ?? []).some((e) => e.startsWith(pre));
+const ACH = [
+  { id: 'prvni', name: 'První krok', text: 'Udělej první rozhodnutí.', ok: () => stats.decisions >= 1 },
+  { id: 'rok', name: 'Celý rok', text: 'Vládni aspoň rok.', ok: (s) => s.turn >= 12 },
+  { id: 'pet', name: 'Pětiletka', text: 'Vládni 5 let.', ok: (s) => s.turn >= 60 },
+  { id: 'deset', name: 'Dekáda', text: 'Vládni 10 let.', ok: (s) => s.turn >= 120 },
+  { id: 'dvacet', name: 'Otec národa', text: 'Vládni 20 let.', ok: (s) => s.turn >= 240 },
+  { id: 'harmonie', name: 'Harmonie', text: 'Měj všech 7 ukazatelů zároveň mezi 40 a 60 %.', ok: (s) => s.turn > 3 && Object.values(s.meters).every((v) => v >= 40 && v <= 60) },
+  { id: 'vlasek', name: 'O vlásek', text: 'Přežij s ukazatelem na 5 % nebo 95 %.', ok: (s) => !s.dead && s.turn > 0 && Object.values(s.meters).some((v) => v <= 5 || v >= 95) },
+  { id: 'zakony', name: 'Zákonodárce', text: 'Měj zároveň v platnosti 4 zákony.', ok: (s) => activeLaws(s).length >= 4 },
+  { id: 'pratele', name: 'Přátelé na dvoře', text: 'Měj zároveň 3 věrné lidi.', ok: (s) => Object.values(s.rel ?? {}).filter((r) => r >= REL_LOYAL).length >= 3 },
+  { id: 'nepratele', name: 'Všichni proti mně', text: 'Měj zároveň 3 nepřátele – a přežij to.', ok: (s) => !s.dead && Object.values(s.rel ?? {}).filter((r) => r <= -REL_LOYAL).length >= 3 },
+  { id: 'volby', name: 'Mandát lidu', text: 'Vyhraj volby.', ok: () => stats.elections >= 1 },
+  { id: 'volby3', name: 'Věčný prezident', text: 'Vyhraj troje volby jedním vůdcem.', ok: (s) => !s.dead && s.turn >= 144 },
+  { id: 'krize', name: 'Krizový štáb', text: 'Zvládni krizi.', ok: () => stats.crises >= 1 },
+  { id: 'krize5', name: 'Ostřílený', text: 'Zvládni 5 krizí.', ok: () => stats.crises >= 5 },
+  { id: 'vyhoda', name: 'Výhodný obchod', text: 'Vyber si výhodu za splněný úkol.', ok: (s) => (s.perks ?? []).length >= 1 },
+  { id: 'pecete', name: 'Pět pečetí', text: 'Získej 5 pečetí.', ok: (s) => seals(s) >= 5 },
+  { id: 'era3', name: 'Nové hranice', text: 'Doveď svět do třetí éry.', ok: (s) => (s.era ?? 1) >= 3 },
+  { id: 'dynastie', name: 'Dynastie', text: 'Doveď republiku k 10. vůdci.', ok: (s) => s.leader.n >= 10 },
+  { id: 'konce5', name: 'Sběratel', text: 'Odemkni 5 různých konců.', ok: (s) => (s.endings ?? []).length >= 5 },
+  { id: 'konce12', name: 'Kronikář', text: 'Odemkni 12 různých konců.', ok: (s) => (s.endings ?? []).length >= 12 },
+  { id: 'legenda', name: 'Legenda', text: 'Dosáhni tajného konce.', ok: anyEnd('x.') },
+  { id: 'typy', name: 'Všestranný', text: 'Vládni s 5 různými typy vůdců.', ok: () => stats.kinds.length >= 5 },
+  { id: 'blesk30', name: 'Rychlé prsty', text: 'Stihni v bleskovce 30 rozhodnutí.', ok: () => (stats.blitz[0]?.score ?? 0) >= 30 },
+  { id: 'blesk60', name: 'Blesk', text: 'Stihni v bleskovce 60 rozhodnutí.', ok: () => (stats.blitz[0]?.score ?? 0) >= 60 },
+  { id: 'denni', name: 'Každodenní služba', text: 'Dokonči denní výzvu.', ok: () => Object.keys(stats.daily).length >= 1 },
+  { id: 'serie3', name: 'Série', text: 'Hraj denní výzvu 3 dny po sobě.', ok: () => dailyStreak() >= 3 },
+];
+/** Zkontroluje úspěchy a nové oznámí. */
+function checkAch() {
+  if (!state) return;
+  let got = false;
+  for (const a of ACH) {
+    if (stats.ach[a.id]) continue;
+    let ok = false;
+    try { ok = a.ok(state); } catch { ok = false; }
+    if (ok) { stats.ach[a.id] = Date.now(); got = true; toast(`Úspěch: ${a.name}`, 'ach'); }
+  }
+  if (got) saveStats();
+}
+/** Kolik dní po sobě (do dneška nebo včerejška) hráč dokončil denní výzvu. */
+function dailyStreak() {
+  const d = new Date();
+  if (stats.daily[today(d)] == null) d.setDate(d.getDate() - 1);
+  let n = 0;
+  while (stats.daily[today(d)] != null) { n++; d.setDate(d.getDate() - 1); }
+  return n;
 }
 
 const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
@@ -118,13 +185,17 @@ function startScreen() {
       <div class="col">
         ${state ? `<button class="primary" id="cont">Pokračovat – ${esc(state.leader.name)}</button>` : ''}
         <button class="${state ? 'ghost' : 'primary'}" id="new">${state ? 'Nová hra od začátku' : 'Nová hra'}</button>
-        <button class="ghost blitzbtn" id="blitz">${icon('timer', 'ico sm')} Bleskovka na čas</button>
+        <div class="row2 modes">
+          <button class="ghost" id="daily">${icon('sun', 'ico sm')}<span><b>Denní výzva</b><small>${dailyLabel()}</small></span></button>
+          <button class="ghost" id="blitz">${icon('timer', 'ico sm')}<span><b>Bleskovka</b><small>3 minuty na čas</small></span></button>
+        </div>
         <div class="row2"><button class="ghost" id="stats">${icon('stats', 'ico sm')} Statistiky</button><button class="ghost" id="help">Jak hrát</button></div>
       </div>
     </div>`;
   $('#help').onclick = () => helpScreen(startScreen);
   $('#stats').onclick = () => statsScreen(startScreen);
   $('#blitz').onclick = () => setupScreen('blitz');
+  $('#daily').onclick = startDaily;
   if (state) $('#cont').onclick = () => (state.dead ? deathScreen() : gameScreen());
   $('#new').onclick = setupScreen;
 }
@@ -163,6 +234,53 @@ function setupScreen(mode = 'normal', kind = 'vize') {
     gameScreen();
     toast(`Úkol: ${taskById(state.task.id).text}`, 'newtask');
   };
+}
+
+function dailyLabel() {
+  const k = KINDS.find((x) => x.id === daily(today()).kind);
+  const best = stats.daily[today()];
+  if (loadDaily()) return 'rozehraná – pokračuj';
+  return best != null ? `dnes: ${tenure(best)}` : `dnes: ${k.short}`;
+}
+/** Denní výzva: všichni mají ve stejný den stejný typ vůdce a stejný začátek. Jedna vláda, počítají se měsíce. */
+function startDaily() {
+  const cont = loadDaily();
+  if (cont) { state = cont; gameScreen(); return; }
+  const d = daily(today()), main = state;
+  state = newRun({ name: main?.leader?.name ?? '', female: main?.leader?.female ?? false, kind: d.kind }, d.seed, 'daily');
+  state.day = today();
+  save();
+  gameScreen();
+  const k = KINDS.find((x) => x.id === d.kind);
+  toast(`Denní výzva: ${k.short}. Vydrž co nejdéle!`, 'sun');
+}
+function dailyEnd() {
+  const d = state.dead, day = state.day, months = d.months;
+  const prev = stats.daily[day];
+  stats.daily[day] = Math.max(prev ?? 0, months);
+  saveStats();
+  try { localStorage.removeItem(DAILY); } catch { /* nic */ }
+  recordReign();
+  checkAch();
+  ui = null;
+  document.body.classList.remove('game');
+  const m = METERS.find((x) => x.id === d.meter);
+  app.innerHTML = `
+    <div class="sheet">
+      <div class="big">${icon('sun', 'ico xl')}</div>
+      <h2 class="legend">Denní výzva</h2>
+      <div class="score"><b>${tenure(months)}</b><span>${esc(d.title)}${m ? ` · ${m.name}` : ''}</span></div>
+      ${prev == null || months > prev ? `<div class="record">${prev == null ? 'Dnešní výsledek zapsán' : 'Lepší než dnes ráno!'}</div>` : `<div class="small" style="text-align:center">Dnešní nejlepší: ${tenure(prev)}</div>`}
+      <p>${esc(d.text)}</p>
+      <div class="stats">
+        <div class="stat"><span class="small">Série dní</span><b>${dailyStreak()}</b></div>
+        <div class="stat"><span class="small">Zítra</span><b>${KINDS.find((x) => x.id === daily(today(new Date(Date.now() + 864e5))).kind).short}</b></div>
+      </div>
+      <button class="primary" id="again">Zkusit znovu</button>
+      <button class="ghost" id="home">Hlavní nabídka</button>
+    </div>`;
+  $('#again').onclick = () => { state = null; startDaily(); };
+  $('#home').onclick = home;
 }
 
 // ── Hra ──────────────────────────────────────────────
@@ -204,6 +322,44 @@ function gameScreen() {
   setupDrag(ui.card);
   render(true);
   offerPerk();
+  tips();
+}
+
+/** Krátký průvodce při první hře (jen jednou). */
+const TIPS = 'rovnovaha.tips';
+function tips() {
+  try { if (localStorage.getItem(TIPS)) return; } catch { return; }
+  const steps = [
+    ['Táhni kartu', 'Každá karta má čtyři volby: doleva, doprava, nahoru a dolů. Při tažení uvidíš, co volba udělá, a tečky ukážou, kterých ukazatelů se dotkne.'],
+    ['Sedm ukazatelů', 'Ideál je uprostřed. Když ukazatel spadne na nulu, nebo vystoupá na maximum, vláda končí. Klepnutím na ikonu zjistíš víc.'],
+    ['Tvoje schopnost', 'Vpravo nahoře je ikona tvého typu vůdce. Kroužek kolem ní ukazuje nabíjení – když svítí, klepni.'],
+    ['Úkoly a nabídka', 'Pod třemi čárkami najdeš Stav republiky (úkol, zákony, volby, lidi), kroniku a statistiky. Hodně štěstí!'],
+  ];
+  let i = 0;
+  const p = document.createElement('div');
+  p.className = 'pop tips';
+  const show = () => {
+    p.innerHTML = `
+      <div class="pane" role="dialog">
+        <div class="dots">${steps.map((_, j) => `<i class="${j === i ? 'on' : ''}"></i>`).join('')}</div>
+        <b class="pane-title">${steps[i][0]}</b>
+        <p>${steps[i][1]}</p>
+        <button class="primary">${i < steps.length - 1 ? 'Další' : 'Rozumím'}</button>
+        ${i < steps.length - 1 ? '<button class="ghost" data-skip>Přeskočit</button>' : ''}
+      </div>`;
+  };
+  p.onclick = (e) => {
+    const b = e.target.closest('button');
+    if (!b) return;
+    if (b.dataset.skip !== undefined || ++i >= steps.length) {
+      p.remove();
+      try { localStorage.setItem(TIPS, '1'); } catch { /* nic */ }
+      return;
+    }
+    show();
+  };
+  show();
+  document.body.appendChild(p);
 }
 
 function render(enter) {
@@ -334,13 +490,14 @@ function commit(dir) {
       blitz.left += BLITZ_BONUS * 1000;
       state.decisions += 1;
       busy = false;
-      if (dead) { blitzFall(dead); return; }
-      render(true); flash(before); showNews(); offerPerk();
+      if (dead) { blitzFall(dead); checkAch(); return; }
+      render(true); flash(before); showNews(); offerPerk(); checkAch();
       return;
     }
     save();
     busy = false;
-    if (dead) { recordReign(); deathScreen(); } else { render(true); flash(before); showNews(); offerPerk(); }
+    if (dead && state.mode === 'daily') { dailyEnd(); return; }
+    if (dead) { recordReign(); checkAch(); deathScreen(); } else { render(true); flash(before); showNews(); offerPerk(); checkAch(); }
   }, 220);
 }
 
@@ -400,7 +557,7 @@ function nextToast() {
   if (!m) return;
   const t = document.createElement('div');
   t.className = `toast ${m.kind}`;
-  const ic = { law: 'law', task: 'task', era: 'era', crisis: 'crisis', crisisLost: 'crisis', election: 'vote', electionSoon: 'vote', rescue: 'rescue', perk: 'perk', fall: 'crisis' }[m.kind];
+  const ic = { law: 'law', task: 'task', era: 'era', crisis: 'crisis', crisisLost: 'crisis', election: 'vote', electionSoon: 'vote', rescue: 'rescue', perk: 'perk', fall: 'crisis', ach: 'trophy', sun: 'sun' }[m.kind];
   t.innerHTML = (ic ? icon(ic, 'ico sm') : '') + `<span>${esc(m.text)}</span>`;
   document.body.appendChild(t);
   setTimeout(() => { t.remove(); toasts.shift(); nextToast(); }, m.kind ? 2800 : 1800);
@@ -434,7 +591,7 @@ function ability() {
     ui.card.style.opacity = '0';
     setTimeout(() => {
       skip(state); save(); busy = false;
-      if (state.dead) { if (state.mode === 'blitz') { blitzFall(state.dead); return; } recordReign(); deathScreen(); return; }
+      if (state.dead) { if (state.mode === 'blitz') { blitzFall(state.dead); return; } if (state.mode === 'daily') { dailyEnd(); return; } recordReign(); deathScreen(); return; }
       render(true); toast('Karta odložena'); showNews(); offerPerk();
     }, 220);
   }
@@ -480,6 +637,7 @@ function offerPerk() {
     save();
     if (ui) render(false);
     toast(`Výhoda: ${PERKS[b.dataset.p].name}`, 'perk');
+    checkAch();
   };
   document.body.appendChild(p);
 }
@@ -572,6 +730,7 @@ function menu() {
     ${bl ? '' : '<button data-a="chron">Kronika a konce</button><button data-a="stats">Statistiky a hodnocení</button>'}
     <button data-a="help">Jak hrát</button>
     ${bl ? '<button class="ghost" data-a="endblitz">Ukončit bleskovku</button>' : '<button class="ghost" data-a="start">Hlavní nabídka</button>'}
+    ${state.mode === 'daily' ? '<div class="small">Denní výzva se ukládá zvlášť – můžeš ji kdykoli dohrát.</div>' : ''}
     <div class="small">${bl ? 'Bleskovka se neukládá. Tvoje hlavní hra zůstává, jak byla.' : 'Hra se ukládá sama po každém rozhodnutí.'}</div>`;
   m.onclick = (e) => {
     const a = e.target.dataset?.a;
@@ -582,7 +741,7 @@ function menu() {
     if (a === 'help') helpScreen(gameScreen);
     if (a === 'stats') statsScreen(gameScreen);
     if (a === 'endblitz') endBlitz();
-    if (a === 'start') startScreen();
+    if (a === 'start') home();
   };
   document.body.appendChild(m);
 }
@@ -715,6 +874,7 @@ function endBlitz() {
   const prev = stats.blitz[0]?.score ?? 0;
   stats.blitz = [...stats.blitz, run].sort((a, b) => b.score - a.score).slice(0, 10);
   saveStats();
+  checkAch();
   const place = stats.blitz.indexOf(run) + 1;
   const again = { kind: blitz.kind };
   blitz = null;
@@ -740,7 +900,7 @@ function endBlitz() {
     </div>`;
   $('#again').onclick = () => setupScreen('blitz', again.kind);
   $('#st').onclick = () => statsScreen(startScreen);
-  $('#home').onclick = startScreen;
+  $('#home').onclick = home;
 }
 
 // ── Statistiky a hodnocení ───────────────────────────
@@ -779,12 +939,19 @@ function statsScreen(back) {
         <div class="stat"><span class="small">Zvládnuté krize</span><b>${stats.crises}</b></div>
         <div class="stat"><span class="small">Odemčené konce</span><b>${r.ends} z ${total}</b></div>
       </div>
-      <div class="small">Body: nejdelší vláda v měsících + 5 za každý konec + 4 za úkol + 3 za vyhrané volby a zvládnutou krizi + 1 za každých 50 rozhodnutí.</div>
+      <div class="small">Body: nejdelší vláda v měsících + 5 za každý konec + 4 za úkol + 3 za vyhrané volby a zvládnutou krizi + 2 za úspěch + 1 za každých 50 rozhodnutí.</div>
+      <h3>${icon('trophy', 'ico')} Úspěchy (${Object.keys(stats.ach).length} z ${ACH.length})</h3>
+      <div class="achs">${ACH.map((a) => `<div class="ach${stats.ach[a.id] ? ' got' : ''}">${icon(stats.ach[a.id] ? 'trophy' : 'key', 'ico sm')}<div><b>${a.name}</b><small>${a.text}</small></div></div>`).join('')}</div>
       <h3>${icon('trophy', 'ico')} Nejdelší vlády</h3>
       ${stats.top.length ? `<table class="board"><tbody>${stats.top.map((t, i) => `
         <tr><td class="n">${i + 1}.</td><td>${t.kind ? icon(t.kind, 'ico sm') : ''} ${esc(t.name)}<small>${esc(t.title)}</small></td><td class="r">${tenure(t.months)}</td></tr>`).join('')}</tbody></table>`
         : '<div class="small">Zatím žádná dokončená vláda.</div>'}
       ${common.length ? `<h3>Nejčastější konce</h3>${common.map(([k, n]) => `<div class="past"><span>${esc(endName(k))}</span><span>${n}×</span></div>`).join('')}` : ''}
+      <h3>${icon('sun', 'ico')} Denní výzva</h3>
+      ${Object.keys(stats.daily).length ? `<div class="small">Série: <b>${dailyStreak()}</b> ${dailyStreak() === 1 ? 'den' : dailyStreak() < 5 && dailyStreak() > 0 ? 'dny' : 'dní'} po sobě · odehráno dní: ${Object.keys(stats.daily).length}</div>
+        <table class="board"><tbody>${Object.entries(stats.daily).sort((a, b) => b[0].localeCompare(a[0])).slice(0, 7).map(([d, mo]) => `
+        <tr><td>${d.split('-').reverse().slice(0, 2).map(Number).join('. ')}.</td><td class="r">${tenure(mo)}</td></tr>`).join('')}</tbody></table>`
+        : '<div class="small">Každý den nová výzva: všichni mají stejný typ vůdce a stejný začátek. Najdeš ji v hlavní nabídce.</div>'}
       <h3>${icon('timer', 'ico')} Bleskovka</h3>
       ${stats.blitz.length ? `<table class="board"><tbody>${stats.blitz.slice(0, 5).map((b, i) => `
         <tr><td class="n">${i + 1}.</td><td>${icon(b.kind, 'ico sm')} ${b.score} rozhodnutí<small>${tenure(b.months)} · ${b.leaders} ${b.leaders === 1 ? 'vůdce' : 'vůdců'}</small></td><td class="r">${date(b.date)}</td></tr>`).join('')}</tbody></table>`
@@ -821,6 +988,8 @@ function helpScreen(back) {
         <li><b>Volby</b> jsou každé 4 roky. Hlasy ti dají Lid a Spojenci – když je jejich průměr pod ${VOTE_MIN} %, prohraješ a vláda končí. Půl roku předem tě varují.</li>
         <li><b>Krize</b> (epidemie, povodeň, útok na síť) trvají několik karet. Když zvládneš většinu kroků, země z toho vyjde silnější, jinak to bolí.</li>
         <li><b>Bleskovka:</b> hra na čas. Začínáš se 3 minutami, každé rozhodnutí přidá 5 s, pád vlády 15 s ubere. Počítá se, kolik rozhodnutí stihneš.</li>
+        <li><b>Denní výzva:</b> každý den nový začátek a typ vůdce – stejný pro všechny. Jedna vláda, počítá se, jak dlouho vydržíš. Hraj ji každý den a buduj sérii.</li>
+        <li><b>Úspěchy:</b> 26 odznaků za výjimečné vlády (Harmonie, O vlásek, Dynastie…). Najdeš je ve statistikách.</li>
         <li><b>Statistiky</b> ukazují tvoje hodnocení (od Nováčka po Legendu republiky), nejdelší vlády a rekordy z bleskovky.</li>
         <li>Sbírej všech <b>${15 + Object.keys(SPECIAL).length} konců</b> a překonej svou nejdelší vládu.</li>
         <li>Hra běží i offline. V Safari dej <b>Sdílet → Přidat na plochu</b> a hraj jako aplikaci.</li>

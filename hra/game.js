@@ -496,12 +496,21 @@ export function nextLeader(state, kind = state.leader.kind) {
 export const BLITZ_START = 180;
 export const BLITZ_BONUS = 5;
 export const BLITZ_FALL = 15; // pád vlády stojí sekundy
-export function newBlitz(opts, seed) {
+export function newBlitz(opts, seed) { return newRun(opts, seed, 'blitz'); }
+/** Hra bez úvodu v jiném režimu (bleskovka, denní výzva). */
+export function newRun(opts, seed, mode) {
   const s = newGame(opts, seed);
-  s.mode = 'blitz';
+  s.mode = mode;
   s.decisions = 0;
   draw(s);
   return s;
+}
+
+/** Denní výzva: stejné semínko a typ vůdce pro všechny v daný den. */
+export function daily(dateKey) {
+  let h = 2166136261;
+  for (const ch of dateKey) h = Math.imul(h ^ ch.charCodeAt(0), 16777619) >>> 0;
+  return { seed: h >>> 0 || 1, kind: KINDS[h % KINDS.length].id };
 }
 
 /** „2 roky a 3 měsíce“ */

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { effect, newGame, choose, nextLeader, currentCard, preview, fill, tenure, DIRS, cardById, METERS, CARDS, INTRO, PEOPLE, ENDINGS, KINDS, outcome, bestDir, skip, nudge, ready, CHARGE, activeLaws, optionOf, taskProgress, upgrade, SPECIAL, TASKS , reformLaw, choosePerk, offerPerks, newBlitz, toElection, PERKS, CRISES, TERM, VOTE_MIN, RESCUE, seals } from '../game.js';
+import { effect, newGame, choose, nextLeader, currentCard, preview, fill, tenure, DIRS, cardById, METERS, CARDS, INTRO, PEOPLE, ENDINGS, KINDS, outcome, bestDir, skip, nudge, ready, CHARGE, activeLaws, optionOf, taskProgress, upgrade, SPECIAL, TASKS , reformLaw, choosePerk, offerPerks, newBlitz, newRun, daily, toElection, PERKS, CRISES, TERM, VOTE_MIN, RESCUE, seals } from '../game.js';
 
 const meterIds = new Set(METERS.map((m) => m.id));
 const all = [INTRO, ...CARDS];
@@ -464,4 +464,14 @@ test('bleskovka začíná rovnou hrou', () => {
   assert.notEqual(s.card, 'intro');
   choose(s, 'left');
   assert.equal(s.turn, 1);
+});
+
+test('denní výzva: stejný den = stejná hra, jiný den jinak', () => {
+  const a = daily('2026-10-08'), b = daily('2026-10-08'), c = daily('2026-10-09');
+  assert.deepEqual(a, b);
+  assert.notEqual(a.seed, c.seed);
+  assert.ok(KINDS.some((k) => k.id === a.kind));
+  const s1 = newRun({ kind: a.kind }, a.seed, 'daily'), s2 = newRun({ kind: a.kind }, a.seed, 'daily');
+  assert.equal(s1.card, s2.card);
+  assert.equal(s1.mode, 'daily');
 });
