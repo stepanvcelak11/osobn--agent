@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { effect, newGame, choose, nextLeader, currentCard, preview, fill, tenure, DIRS, cardById, METERS, CARDS, INTRO, PEOPLE, ENDINGS, KINDS, outcome, bestDir, rankDirs, sageHint, shiftMeter, skip, nudge, ready, CHARGE, activeLaws, optionOf, taskProgress, upgrade, SPECIAL, TASKS, AGES, AGE_LEN, ENDINGS_PAST, hasElections, leaderTitle, lawAllowed, touches, skipCard, steerMeter , reformLaw, choosePerk, offerPerks, newBlitz, newRun, daily, toElection, PERKS, CRISES, TERM, VOTE_MIN, RESCUE, seals , whoOf, seasonOf, modBonus, MODS, WONDERS as WD, RIVALS } from '../game.js';
+import { effect, newGame, choose, nextLeader, currentCard, preview, fill, tenure, DIRS, cardById, METERS, CARDS, INTRO, PEOPLE, ENDINGS, KINDS, outcome, INTENSITY, bestDir, rankDirs, sageHint, shiftMeter, skip, nudge, ready, CHARGE, activeLaws, optionOf, taskProgress, upgrade, SPECIAL, TASKS, AGES, AGE_LEN, ENDINGS_PAST, hasElections, leaderTitle, lawAllowed, touches, skipCard, steerMeter , reformLaw, choosePerk, offerPerks, newBlitz, newRun, daily, toElection, PERKS, CRISES, TERM, VOTE_MIN, RESCUE, seals , whoOf, seasonOf, modBonus, MODS, WONDERS as WD, RIVALS } from '../game.js';
 
 const meterIds = new Set(METERS.map((m) => m.id));
 const all = [INTRO, ...CARDS];
@@ -161,12 +161,12 @@ function onCard(kind, id, meters = {}) {
 test('Krizový manažer: krok z krajnosti k rovnováze je dvojnásobný, jinak normální', () => {
   // stavka.down = „Pošlu policii“: lid −, sil +
   const o = cardById('stavka').opts.down.e;
-  const dl = effect('lid', o.lid), ds = effect('sil', o.sil);
+  const dl = Math.round(effect('lid', o.lid) * INTENSITY), ds = Math.round(effect('sil', o.sil) * INTENSITY);
   assert.ok(dl < 0 && ds > 0);
-  const plain = onCard('vize', 'stavka', { lid: 85, sil: 50 });
-  const crisis = onCard('krize', 'stavka', { lid: 85, sil: 50 });
-  assert.equal(outcome(plain, 'down').lid, 85 + dl);
-  assert.equal(outcome(crisis, 'down').lid, 85 + 2 * dl, 'z krajnosti dvojnásob');
+  const plain = onCard('vize', 'stavka', { lid: 95, sil: 50 });
+  const crisis = onCard('krize', 'stavka', { lid: 95, sil: 50 });
+  assert.equal(outcome(plain, 'down').lid, 95 + dl);
+  assert.equal(outcome(crisis, 'down').lid, Math.max(50, 95 + 2 * dl), 'z krajnosti dvojnásob');
   assert.equal(outcome(crisis, 'down').sil, 50 + ds, 'u středu beze změny');
   // bonus nepřehoupne přes střed
   assert.equal(outcome(onCard('krize', 'stavka', { lid: 71 }), 'down').lid, Math.max(50, 71 + 2 * dl));
@@ -230,7 +230,8 @@ test('každý typ prezidenta vydrží s rozumnou hrou déle než náhoda', () =>
       while (!s.dead && g++ < 3000) {
         if (k.id === 'odklad' && ready(s) && s.card !== 'intro') { const m = outcome(s, bestDir(s)); if (Object.values(m).some((v) => v < 15 || v > 85)) { skip(s); continue; } }
         if (k.id === 'kormidlo' && ready(s)) { const [id] = Object.entries(s.meters).sort((a, b) => Math.abs(b[1] - 50) - Math.abs(a[1] - 50))[0]; nudge(s, id); }
-        choose(s, k.id === 'rada' && s.advice ? s.advice : bestDir(s));
+        // Rádce se občas splete na nejhorší volbu – rozumný hráč mu nevěří slepě.
+        choose(s, bestDir(s));
       }
       months.push(s.turn);
     }

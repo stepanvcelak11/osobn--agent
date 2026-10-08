@@ -124,8 +124,8 @@ function recordReign() {
   if (!stats.kinds.includes(state.leader.kind)) stats.kinds.push(state.leader.kind);
   stats.top = stats.top.sort((a, b) => (b.score ?? b.months) - (a.score ?? a.months)).slice(0, 10);
   saveStats();
-  // Body: 2 roky = 1, 5 let = 2, 10 let = 3; se ztížením dvojnásob; legenda +3.
-  let n = h.months >= 120 ? 3 : h.months >= 60 ? 2 : h.months >= 24 ? 1 : 0;
+  // Body: 1 rok = 1, 3 roky = 2, 6 let = 3; se ztížením dvojnásob; legenda +3.
+  let n = h.months >= 72 ? 3 : h.months >= 36 ? 2 : h.months >= 12 ? 1 : 0;
   if (n && state.mods?.length) n *= 2;
   if (h.ending.startsWith('x.')) n += 3;
   lastAward = n;
@@ -444,7 +444,7 @@ function shop(back) {
       <div class="shoplist">${KINDS.map((k) => `<div class="shopitem${isUnlocked(k.id) ? ' got' : ''}">${icon(k.id, 'ico')}<div><b>${k.m}</b><small>${k.text}</small></div>
         ${isUnlocked(k.id) ? '<span class="dim">odemčeno</span>' : `<button class="unlock" data-k="${k.id}"${stats.points < PRICE ? ' disabled' : ''}>${PRICE} b.</button>`}</div>`).join('')}</div>
       <h3>Jak získat body</h3>
-      <div class="past"><span>Vláda aspoň 2 roky / 5 let / 10 let</span><span>1 / 2 / 3</span></div>
+      <div class="past"><span>Vláda aspoň 1 rok / 3 roky / 6 let</span><span>1 / 2 / 3</span></div>
       <div class="past"><span>Totéž se ztížením</span><span>dvojnásob</span></div>
       <div class="past"><span>Tajný konec (legenda)</span><span>+3</span></div>
       <div class="past"><span>Splněný úkol, nový úspěch</span><span>1</span></div>

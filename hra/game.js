@@ -82,7 +82,10 @@ export const CHARGE = 5;     // po kolika rozhodnutích se nabije schopnost
 export const NUDGE = 15;     // o kolik posune Kormidelník
 const EXTREME = 20;          // Krizový manažer: krajnost = dál než 20 od středu (pod 30 / nad 70)
 export const ADVICE_OK = 0.7;
-export const PAST_SOFT = 0.75; // dávné doby mají kratší balíčky – účinky jsou mírnější, aby vlády nebyly krátké
+/// Celková síla rozhodnutí (laděno simulací): náhodné volby vydrží jen kolem roku, hráč, který se
+/// občas splete, několik let, pečlivý hráč desítky let. Každá chyba je znát.
+export const INTENSITY = globalThis.ROVNOVAHA_INTENSITY ?? 1.9;
+export const PAST_SOFT = globalThis.ROVNOVAHA_PAST ?? 1; // dávné doby mají kratší balíčky – účinky jsou mírnější, aby vlády nebyly krátké
 export const RESCUE = 15;    // Zachránce / Druhá šance: kam se ukazatel odrazí od kraje
 export const TERM = 48;      // volby každé 4 roky
 export const VOTE_MIN = 40;  // potřebná podpora (průměr Lidu a Spojenců)
@@ -259,7 +262,8 @@ export function pickCard(state) {
     const [q] = state.queue.splice(due, 1);
     const c = cardById(q.id);
     // Pokračování dává smysl jen tehdy, když jeho předpoklady pořád platí.
-    if (c && (!c.req || c.req.every((f) => state.flags.includes(f)))) return c.id;
+    // Pokračování z minulé doby po přelomu propadne.
+    if (c && (!c.req || c.req.every((f) => state.flags.includes(f))) && (!c.age || c.age === (state.age ?? 7))) return c.id;
   }
   if (state.peek) {
     // Předpověď Proroka platí, pokud ji mezitím nezměnilo rozhodnutí.
@@ -300,7 +304,7 @@ export function optionOf(state, card, dir) {
 export function preview(card, dir, state) {
   const o = state ? optionOf(state, card, dir) : card.opts[dir];
   const out = {};
-  for (const [k, v] of Object.entries(o?.e || {})) if (v) out[k] = Math.abs(effect(k, v)) >= 12 ? 'big' : 'small';
+  for (const [k, v] of Object.entries(o?.e || {})) if (v) out[k] = Math.abs(effect(k, v) * INTENSITY) >= 15 ? 'big' : 'small';
   return out;
 }
 
@@ -311,7 +315,7 @@ export function outcome(state, dir) {
   const card = cardById(state.card) || INTRO;
   const out = { ...state.meters };
   const crisis = state.leader.kind === 'krize';
-  let mult = state.leader.kind === 'byro' ? 0.75 : state.leader.kind === 'hazard' ? state.luck ?? 1 : 1;
+  let mult = INTENSITY * (state.leader.kind === 'byro' ? 0.75 : state.leader.kind === 'hazard' ? state.luck ?? 1 : 1);
   if (has(state, 'tlumic')) mult *= 0.8;
   if (state.mods?.includes('boure')) mult *= 1.25;
   if ((state.age ?? 7) < 7) mult *= PAST_SOFT;
@@ -644,14 +648,14 @@ function worldEvents(state) {
     const v = state.meters[m.id], e = (state.ext[m.id] ??= { low: 0, high: 0 });
     e.low = v <= 20 ? e.low + 1 : 0;
     e.high = v >= 80 ? e.high + 1 : 0;
-    if (v < 40 || v > 60) calm = false;
+    if (v < 35 || v > 65) calm = false;
     for (const side of ['low', 'high']) {
       const id = `stav_${m.id}_${side}`;
       if (e[side] === 4 && cardById(id) && !state.queue.some((q) => q.id === id)) state.queue.push({ id, at: state.total });
     }
   }
   state.ext.calm = calm ? (state.ext.calm ?? 0) + 1 : 0;
-  if (state.ext.calm === 8 && !state.queue.some((q) => q.id === 'zlaty_vek')) state.queue.push({ id: 'zlaty_vek', at: state.total });
+  if (state.ext.calm === 6 && !state.queue.some((q) => q.id === 'zlaty_vek')) state.queue.push({ id: 'zlaty_vek', at: state.total });
 }
 
 /** Skóre vlády: měsíce × bonus za ztížení. */
