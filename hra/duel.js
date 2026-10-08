@@ -12,7 +12,7 @@ export const DUEL_FALL = 15;   // pád vlády
 const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
 const DIRS = ['left', 'right', 'up', 'down'];
 
-/** Nastavení na rozdělené obrazovce: každý hráč si na své polovině napíše jméno a vybere vůdce.
+/** Nastavení na rozdělené obrazovce: každý hráč si na své polovině vybere vůdce.
  *  `ctx` = { app, home, sfx, unlocked: [id], award(n, why) } */
 export function duelSetup(ctx) {
   const { app } = ctx;
@@ -20,7 +20,6 @@ export function duelSetup(ctx) {
   const half = (p) => `
     <section class="half ${p ? 'top' : 'bottom'} dsetup" data-p="${p}">
       <div class="dstitle">${p ? 'Hráč 2' : 'Hráč 1'}</div>
-      <input maxlength="16" placeholder="Tvoje jméno" autocomplete="off" enterkeyhint="done">
       <div class="kinds">${KINDS.map((k) => `<button class="kind${k.id === 'vize' ? ' on' : ''}${can(k.id) ? '' : ' locked'}" data-k="${k.id}" aria-label="${k.m}">${icon(k.id)}</button>`).join('')}</div>
       <div class="dk"><b>${KINDS[0].m}</b> ${KINDS[0].text}</div>
       <button class="primary dready">Připraven</button>
@@ -41,18 +40,17 @@ export function duelSetup(ctx) {
     const p = Number(box.dataset.p);
     for (const b of box.querySelectorAll('.kind')) b.onclick = () => {
       const k = KINDS.find((x) => x.id === b.dataset.k);
-      if (!can(k.id)) { box.querySelector('.dk').innerHTML = `<b>${k.m}</b> je zamčený – odemkni ho za body v hlavní hře.`; return; }
+      if (!can(k.id)) { box.querySelector('.dk').innerHTML = `<b>${k.m}</b> je zamčený – odemkni ho za body v obchodě.`; return; }
       kinds[p] = k.id;
       for (const x of box.querySelectorAll('.kind')) x.classList.toggle('on', x === b);
       box.querySelector('.dk').innerHTML = `<b>${k.m}</b> ${k.text}`;
     };
-    box.querySelector('input').onkeydown = (e) => { if (e.key === 'Enter') e.target.blur(); };
     box.querySelector('.dready').onclick = (e) => {
       ready[p] = !ready[p];
       e.target.classList.toggle('on', ready[p]);
       e.target.textContent = ready[p] ? 'Připraven ✓ (čekám na soupeře)' : 'Připraven';
       if (ready.every(Boolean)) {
-        const names = [0, 1].map((i) => app.querySelector(`.dsetup[data-p="${i}"] input`).value.trim() || `Hráč ${i + 1}`);
+        const names = ['Hráč 1', 'Hráč 2'];
         startDuel(ctx, { names, kinds, world });
       }
     };

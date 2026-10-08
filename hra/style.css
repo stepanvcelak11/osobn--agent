@@ -30,7 +30,7 @@ body {
 #app {
   position: fixed; top: 0; left: 0; right: 0; height: 100lvh; height: var(--app-h, 100lvh); display: flex; flex-direction: column;
   padding: calc(env(safe-area-inset-top, 0px) + 14px) 18px max(14px, env(safe-area-inset-bottom));
-  max-width: 520px; margin: 0 auto;
+  max-width: 520px; margin: 0 auto; overflow-x: hidden;
 }
 button { font: inherit; color: inherit; background: var(--bg2); border: 1px solid var(--line); border-radius: 16px; padding: 15px 18px; cursor: pointer;
   transition: transform .12s ease, background-color .15s ease, border-color .15s ease, filter .15s ease; }
@@ -43,7 +43,7 @@ button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 h1 { font-family: var(--serif); font-weight: 600; letter-spacing: .12em; color: var(--accent); margin: 0; }
 
 /* ── Úvodní obrazovka ───────────────────── */
-.start { flex: 1; display: flex; flex-direction: column; justify-content: safe center; gap: 22px; text-align: center; overflow-y: auto; padding-bottom: 8px; }
+.start { flex: 1; min-width: 0; max-width: 100%; overflow-x: hidden; display: flex; flex-direction: column; justify-content: safe center; gap: 22px; text-align: center; overflow-y: auto; padding-bottom: 8px; }
 .start .logo { width: 88px; height: 88px; border-radius: 22px; margin: 0 auto; box-shadow: 0 10px 30px #0008; }
 .start h1 { font-size: 36px; }
 .start p { color: var(--dim); font-family: var(--serif); font-size: 17px; line-height: 1.55; margin: 0; }
@@ -320,7 +320,10 @@ body.game { background: var(--scene, var(--bg)); transition: background-color .5
 .advice b.ok { color: var(--grass); } .advice b.bad { color: var(--bad); }
 
 /* ── Režimy na úvodní obrazovce ─ */
-.modes button { flex-direction: row; justify-content: flex-start; text-align: left; gap: 10px; padding: 12px 12px; }
+.row2.modes { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+.modes button { min-width: 0; flex-direction: row; justify-content: flex-start; text-align: left; gap: 10px; padding: 12px 12px; overflow: hidden; }
+.modes .ico { flex: none; }
+.modes b { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .modes .ico { color: var(--accent); width: 22px; height: 22px; }
 .modes span { display: flex; flex-direction: column; min-width: 0; }
 .modes b { font-size: 15px; }
@@ -489,6 +492,7 @@ body.duelmode #app { padding: 0; max-width: none; }
 .shopitem .unlock { margin: 0; flex: none; }
 .shopitem:not(.got) > .ico { color: var(--dim); }
 .name { position: relative; }
-.bag { position: absolute; z-index: 3; left: 0; top: 0; display: flex; align-items: center; gap: 4px; padding: 6px 10px; border-radius: 16px; font-size: 13px; color: var(--accent); background: #e0915a14; border-color: #e0915a44; }
-.bag[hidden] { display: none; }
+.gear { text-align: center; font-size: 13px; line-height: 1.4; color: var(--dim); }
+.gear .ico { vertical-align: -3px; margin-right: 4px; }
+.gear b { color: var(--accent); font-weight: 600; }
 .mi .use { font-style: normal; font-size: 13px; color: var(--accent); flex: none; }
