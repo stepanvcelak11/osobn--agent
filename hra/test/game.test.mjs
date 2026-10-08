@@ -125,8 +125,8 @@ test('náhodný hráč vládne krátce, rozumný dlouho', () => {
   const median = (a) => [...a].sort((x, y) => x - y)[Math.floor(a.length / 2)];
   console.log('náhodný: průměr', avg(rnd).toFixed(1), 'medián', median(rnd), '| rozumný: průměr', avg(wiseR).toFixed(1), 'medián', median(wiseR));
   console.log('konce:', JSON.stringify(Object.entries(ends).sort((a, b) => b[1] - a[1])));
-  assert.ok(avg(rnd) >= 12 && avg(rnd) <= 45, `náhodný hráč vládne v průměru ${avg(rnd)} měsíců`);
-  assert.ok(median(wiseR) >= 120, `rozumný hráč vládne jen ${median(wiseR)} měsíců`);
+  assert.ok(avg(rnd) >= 8 && avg(rnd) <= 30, `náhodný hráč vládne v průměru ${avg(rnd)} měsíců`);
+  assert.ok(median(wiseR) >= 72, `rozumný hráč vládne jen ${median(wiseR)} měsíců`);
   assert.ok(Object.keys(ends).length >= 12, 'skoro všechny konce jsou dosažitelné');
 });
 

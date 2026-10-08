@@ -84,9 +84,9 @@ const EXTREME = 20;          // Krizový manažer: krajnost = dál než 20 od st
 export const ADVICE_OK = 0.7;
 /// Celková síla rozhodnutí (laděno simulací): náhodné volby vydrží jen kolem roku, hráč, který se
 /// občas splete, několik let, pečlivý hráč desítky let. Každá chyba je znát.
-/// Na začátku vlády mírnější (1,4×), s každým měsícem vlády roste až na 2× – nováček hned nevypadne,
+/// Na začátku vlády mírnější (1,8×), s každým měsícem vlády roste až na 2,6× – nováček hned nevypadne,
 /// ale dlouhá vláda je čím dál ostřejší.
-export const INTENSITY_START = 1.4, INTENSITY_MAX = 2;
+export const INTENSITY_START = globalThis.ROVNOVAHA_I0 ?? 1.8, INTENSITY_MAX = globalThis.ROVNOVAHA_I1 ?? 2.6;
 export const INTENSITY_RAMP = globalThis.ROVNOVAHA_RAMP ?? 48; // za kolik měsíců vlády dosáhne maxima
 export const intensity = (state) => INTENSITY_START + (INTENSITY_MAX - INTENSITY_START) * Math.min(1, (state?.turn ?? 0) / INTENSITY_RAMP);
 export const PAST_SOFT = globalThis.ROVNOVAHA_PAST ?? 1; // dávné doby mají kratší balíčky – účinky jsou mírnější, aby vlády nebyly krátké
