@@ -210,6 +210,7 @@ const LINE = {
   sound: '<path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z"/><path d="M15.5 9a4.5 4.5 0 0 1 0 6M18 6.5a8 8 0 0 1 0 11"/>',
   mute: '<path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z"/><path d="M16 9.5l5 5M21 9.5l-5 5"/>',
   home: '<path d="M3.5 11L12 4l8.5 7"/><path d="M6 9.5V20h12V9.5M10 20v-5.5h4V20"/>',
+  undo: '<path d="M9 14L4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 010 11H11"/>',
   play: '<path d="M8 5.5v13l10.5-6.5z"/>',
   chev: '<path d="M9.5 6l6 6-6 6"/>',
   globe: '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c-2.6 2.6-4 5.6-4 9s1.4 6.4 4 9M12 3c2.6 2.6 4 5.6 4 9s-1.4 6.4-4 9"/>',

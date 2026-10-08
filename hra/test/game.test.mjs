@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { effect, newGame, choose, nextLeader, currentCard, preview, fill, tenure, DIRS, cardById, METERS, CARDS, INTRO, PEOPLE, ENDINGS, KINDS, outcome, bestDir, skip, nudge, ready, CHARGE, activeLaws, optionOf, taskProgress, upgrade, SPECIAL, TASKS, AGES, AGE_LEN, ENDINGS_PAST, hasElections, leaderTitle, lawAllowed, touches, skipCard, steerMeter , reformLaw, choosePerk, offerPerks, newBlitz, newRun, daily, toElection, PERKS, CRISES, TERM, VOTE_MIN, RESCUE, seals , whoOf, seasonOf, modBonus, MODS, WONDERS as WD, RIVALS } from '../game.js';
+import { effect, newGame, choose, nextLeader, currentCard, preview, fill, tenure, DIRS, cardById, METERS, CARDS, INTRO, PEOPLE, ENDINGS, KINDS, outcome, bestDir, rankDirs, sageHint, shiftMeter, skip, nudge, ready, CHARGE, activeLaws, optionOf, taskProgress, upgrade, SPECIAL, TASKS, AGES, AGE_LEN, ENDINGS_PAST, hasElections, leaderTitle, lawAllowed, touches, skipCard, steerMeter , reformLaw, choosePerk, offerPerks, newBlitz, newRun, daily, toElection, PERKS, CRISES, TERM, VOTE_MIN, RESCUE, seals , whoOf, seasonOf, modBonus, MODS, WONDERS as WD, RIVALS } from '../game.js';
 
 const meterIds = new Set(METERS.map((m) => m.id));
 const all = [INTRO, ...CARDS];
@@ -201,7 +201,7 @@ test('Kormidelník: posun o 15 k rovnováze, nikdy přes střed', () => {
   assert.equal(s.meters.vir, 50);
 });
 
-test('Rádce radí z 70 % nejlépe', () => {
+test('Rádce radí z 70 % nejlépe, jinak nejhůř', () => {
   let ok = 0, n = 0;
   for (let i = 0; i < 300; i++) {
     const s = newGame({ kind: 'rada' }, 2000 + i);
@@ -209,6 +209,7 @@ test('Rádce radí z 70 % nejlépe', () => {
     for (let k = 0; k < 10 && !s.dead; k++) {
       assert.ok(DIRS.includes(s.advice));
       if (s.advice === bestDir(s)) ok++;
+      else assert.equal(s.advice, rankDirs(s)[3], 'když se plete, radí nejhorší');
       n++;
       choose(s, DIRS[(i + k) % 4]);
     }
@@ -717,4 +718,24 @@ test('pomůcky z obchodu: přeskočení karty a vyrovnání ukazatele pro každ�
   assert.equal(s.meters.sil, 50, 'nikdy přes střed');
   const t = newGame({ mode: 'dejiny' }, 3);
   assert.equal(skipCard(t), false, 'úvod přeskočit nejde');
+});
+
+test('mudrc radí napůl dobře, posun ukazatele nepustí na kraj', () => {
+  let good = 0, n = 0;
+  for (let i = 0; i < 200; i++) {
+    const s = newGame({}, 500 + i);
+    choose(s, 'left');
+    const h = sageHint(s);
+    assert.ok(DIRS.includes(h));
+    if (h === bestDir(s)) good++;
+    n++;
+  }
+  assert.ok(good / n < 0.9, 'mudrc není neomylný');
+  const s = newGame({}, 3); choose(s, 'left');
+  s.meters.fin = 12;
+  assert.ok(shiftMeter(s, 'fin', -1));
+  assert.equal(s.meters.fin, 5);
+  assert.ok(!shiftMeter(s, 'fin', -1), 'pod 5 % nejde');
+  assert.ok(shiftMeter(s, 'fin', 1));
+  assert.equal(s.meters.fin, 20);
 });

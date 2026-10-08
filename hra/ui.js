@@ -1,7 +1,7 @@
 // Rovnováha – zobrazení a ovládání (tažení karty do čtyř stran, šipky, klávesy, uložení hry).
 import { portrait, meterIcon, glyph, icon, mood, mix } from './art.js';
 import { duelSetup } from './duel.js';
-import { offerPerks, bestDir, newGame, newBlitz, newRun, daily, touches, seesAhead, personOf, seasonOf, SEASON_NAMES, RIVALS, MODS, BRANCHES, WONDERS, modBonus, ageOf, leaderTitle, hasElections, lawAllowed, AGES, AGE_LEN, choose, nextLeader, currentCard, cardById, preview, outcome, optionOf, unlocked, skip, nudge, reformLaw, choosePerk, ready, tenure, timeLabel, danger, kindOf, upgrade, activeLaws, seals, taskById, taskProgress, seesDirection, toElection, support, KINDS, ACTIVE, CHARGE, NUDGE, METERS, ENDINGS, LAWS, TASKS, ERAS, SPECIAL, PEOPLE, REL_LOYAL, PERKS, CRISES, ELECTION, VOTE_MIN, BLITZ_START, BLITZ_BONUS, BLITZ_FALL } from './game.js';
+import { offerPerks, skipCard, bestDir, sageHint, shiftMeter, SHIFT, newGame, newBlitz, newRun, daily, touches, seesAhead, personOf, seasonOf, SEASON_NAMES, RIVALS, MODS, BRANCHES, WONDERS, modBonus, ageOf, leaderTitle, hasElections, lawAllowed, AGES, AGE_LEN, choose, nextLeader, currentCard, cardById, preview, outcome, optionOf, unlocked, skip, nudge, reformLaw, choosePerk, ready, tenure, timeLabel, danger, kindOf, upgrade, activeLaws, seals, taskById, taskProgress, seesDirection, toElection, support, KINDS, ACTIVE, CHARGE, NUDGE, METERS, ENDINGS, LAWS, TASKS, ERAS, SPECIAL, PEOPLE, REL_LOYAL, PERKS, CRISES, ELECTION, VOTE_MIN, BLITZ_START, BLITZ_BONUS, BLITZ_FALL } from './game.js';
 
 const SAVE = 'rovnovaha.save';
 const app = document.getElementById('app');
@@ -67,12 +67,19 @@ const PRICE = 5;
 /// Vybavení do příští vlády (kupuje se za body v obchodě na úvodní obrazovce). Ve hře se nic neovládá –
 /// na začátku další vlády v hlavní hře se od každého druhu použije jeden kus. Cena odpovídá síle.
 const ITEMS = {
-  rada: { name: 'Rada mudrce', icon: 'rada', price: 2, text: 'Na prvních 20 kartách vlády ti mudrc ukáže nejlepší volbu.' },
+  rada: { name: 'Rada mudrce', icon: 'rada', price: 2, text: 'Na prvních 20 kartách vlády ti mudrc radí. Napůl trefí volbu, která pomůže, napůl jen hádá.' },
   vyhoda: { name: 'Výhoda do začátku', icon: 'perk', price: 4, text: 'Hned na začátku vlády si vybereš jednu ze tří výhod.' },
   stit: { name: 'Štít', icon: 'zachrance', price: 5, text: 'Jednou tě zachrání před pádem – ukazatel se odrazí na 15, nebo 85 %.' },
 };
 const HINTS = 20;
-const OLD_ITEMS = { preskok: 3, vyrovnat: 4 }; // zrušené pomůcky – body se vrátí
+const OLD_ITEMS = { vyrovnat: 4 }; // zrušené pomůcky – body se vrátí
+/// Jednorázové pomůcky: ve hře je použiješ tlačítkem s klíčem v rohu karty (jen v hlavní hře).
+const TOOLS = {
+  preskok: { name: 'Přeskočit kartu', icon: 'odklad', price: 3, text: 'Karta zmizí bez následků, uplyne jen měsíc.' },
+  posun: { name: 'Posunout ukazatel', icon: 'kormidlo', price: 3, text: `Posuneš libovolný ukazatel o ${SHIFT} nahoru, nebo dolů – kam potřebuješ.` },
+  zpet: { name: 'Vrátit tah', icon: 'undo', price: 4, text: 'Vezme zpět poslední rozhodnutí – karta se vrátí a můžeš volit znovu.' },
+};
+let undoSnap = null; // stav před posledním rozhodnutím (pro „Vrátit tah“)
 const bodu = (n) => (n === 1 ? 'bod' : n >= 2 && n <= 4 ? 'body' : 'bodů');
 const emptyStats = () => ({ points: 0, unlocked: [...START_KINDS], items: {}, games: 0, decisions: 0, reigns: 0, months: 0, tasks: 0, elections: 0, crises: 0, ends: {}, top: [], blitz: [], daily: {}, weekly: {}, ach: {}, kinds: [], wonders: 0, wars: 0, traitors: 0 });
 let stats = loadStats();
@@ -242,6 +249,7 @@ const $ = (sel) => app.querySelector(sel);
 
 // ── Úvod ─────────────────────────────────────────────
 function startScreen() {
+  undoSnap = null;
   document.body.classList.remove('game');
   app.innerHTML = `
     <div class="start">
@@ -423,7 +431,18 @@ function shop(back) {
   app.innerHTML = `
     <div class="sheet">
       <div class="rankcard">${icon('trophy', 'ico xl')}<h2 class="legend">${stats.points} ${bodu(stats.points)}</h2>
-        <div class="small">Za body si odemykáš další vůdce (${PRICE} bodů) a kupuješ vybavení do příští vlády.</div></div>
+        <div class="small">Za body si odemykáš další vůdce (${PRICE} bodů) a kupuješ vybavení na celou vládu i jednorázové pomůcky.</div></div>
+      <h3>Vybavení na celou vládu</h3>
+      <div class="small">Nic se neovládá: na začátku tvé příští vlády v hlavní hře se od každého druhu použije jeden kus. Ve výzvách, bleskovce a hře pro dva se nepoužívá.</div>
+      <div class="shoplist">${Object.entries(ITEMS).map(([id, it]) => `<div class="shopitem got">${icon(it.icon, 'ico')}<div><b>${it.name}${stats.items[id] ? ` <span class="dim">(máš ${stats.items[id]})</span>` : ''}</b><small>${it.text}</small></div>
+        <button class="unlock" data-buy="${id}"${stats.points < it.price ? ' disabled' : ''}>${it.price} b.</button></div>`).join('')}</div>
+      <h3>Jednorázové pomůcky</h3>
+      <div class="small">Ve hře je použiješ tlačítkem s klíčem v levém horním rohu karty (jen v hlavní hře).</div>
+      <div class="shoplist">${Object.entries(TOOLS).map(([id, it]) => `<div class="shopitem got">${icon(it.icon, 'ico')}<div><b>${it.name}${stats.items[id] ? ` <span class="dim">(máš ${stats.items[id]})</span>` : ''}</b><small>${it.text}</small></div>
+        <button class="unlock" data-buy="${id}"${stats.points < it.price ? ' disabled' : ''}>${it.price} b.</button></div>`).join('')}</div>
+      <h3>Vůdci (${stats.unlocked.length} z ${KINDS.length})</h3>
+      <div class="shoplist">${KINDS.map((k) => `<div class="shopitem${isUnlocked(k.id) ? ' got' : ''}">${icon(k.id, 'ico')}<div><b>${k.m}</b><small>${k.text}</small></div>
+        ${isUnlocked(k.id) ? '<span class="dim">odemčeno</span>' : `<button class="unlock" data-k="${k.id}"${stats.points < PRICE ? ' disabled' : ''}>${PRICE} b.</button>`}</div>`).join('')}</div>
       <h3>Jak získat body</h3>
       <div class="past"><span>Vláda aspoň 2 roky / 5 let / 10 let</span><span>1 / 2 / 3</span></div>
       <div class="past"><span>Totéž se ztížením</span><span>dvojnásob</span></div>
@@ -432,17 +451,10 @@ function shop(back) {
       <div class="past"><span>Dokončená výzva (poprvé za den/týden)</span><span>1</span></div>
       <div class="past"><span>Bleskovka 30 / 60 rozhodnutí</span><span>1 / 2</span></div>
       <div class="past"><span>Vítězství v souboji pro dva</span><span>1</span></div>
-      <h3>Vybavení do příští vlády</h3>
-      <div class="small">Nic se neovládá: na začátku tvé příští vlády v hlavní hře se od každého druhu použije jeden kus. Ve výzvách, bleskovce a hře pro dva se nepoužívá.</div>
-      <div class="shoplist">${Object.entries(ITEMS).map(([id, it]) => `<div class="shopitem got">${icon(it.icon, 'ico')}<div><b>${it.name}${stats.items[id] ? ` <span class="dim">(máš ${stats.items[id]})</span>` : ''}</b><small>${it.text}</small></div>
-        <button class="unlock" data-buy="${id}"${stats.points < it.price ? ' disabled' : ''}>${it.price} b.</button></div>`).join('')}</div>
-      <h3>Vůdci (${stats.unlocked.length} z ${KINDS.length})</h3>
-      <div class="shoplist">${KINDS.map((k) => `<div class="shopitem${isUnlocked(k.id) ? ' got' : ''}">${icon(k.id, 'ico')}<div><b>${k.m}</b><small>${k.text}</small></div>
-        ${isUnlocked(k.id) ? '<span class="dim">odemčeno</span>' : `<button class="unlock" data-k="${k.id}"${stats.points < PRICE ? ' disabled' : ''}>${PRICE} b.</button>`}</div>`).join('')}</div>
       <button class="primary" id="back">Zpět</button>
     </div>`;
   for (const b of app.querySelectorAll('[data-buy]')) b.onclick = () => {
-    const it = ITEMS[b.dataset.buy];
+    const it = ITEMS[b.dataset.buy] ?? TOOLS[b.dataset.buy];
     if (stats.points < it.price) return;
     stats.points -= it.price;
     stats.items[b.dataset.buy] = (stats.items[b.dataset.buy] ?? 0) + 1;
@@ -488,6 +500,77 @@ function equip() {
   setTimeout(() => toast(`Vybavení: ${used.join(', ')}`, 'perk'), 600);
 }
 
+const toolCount = () => Object.keys(TOOLS).reduce((a, id) => a + (stats.items[id] ?? 0), 0);
+function updateBag() {
+  const bg = $('#bag');
+  if (!bg) return;
+  bg.hidden = !toolCount() || !['normal', 'dejiny'].includes(state.mode);
+  bg.innerHTML = `${icon('key', 'ico sm')}<span>${toolCount()}</span>`;
+}
+/** Jednorázové pomůcky (jen v hlavní hře – ve výzvách a bleskovce by to nebylo fér). */
+function bag() {
+  if (busy || state.dead || document.querySelector('.pop')) return;
+  const p = document.createElement('div');
+  p.className = 'pop';
+  p.innerHTML = `
+    <div class="pane" role="dialog" aria-label="Pomůcky">
+      <b class="pane-title">${icon('key', 'ico')} Pomůcky</b>
+      <div class="mlist">${Object.entries(TOOLS).filter(([id]) => stats.items[id]).map(([id, it]) => `
+        <button class="mi" data-i="${id}">${icon(it.icon, 'ico')}<span><b>${it.name} ×${stats.items[id]}</b><small>${it.text}</small></span><em class="use">Použít</em></button>`).join('')}</div>
+      <button class="ghost" data-x>Zpět</button>
+    </div>`;
+  p.onclick = (e) => {
+    const b = e.target.closest('button');
+    if (e.target === p || b?.dataset.x !== undefined) { p.remove(); return; }
+    if (b?.dataset.i) useTool(b.dataset.i, p);
+  };
+  document.body.appendChild(p);
+}
+function spendTool(id) {
+  stats.items[id] -= 1;
+  if (!stats.items[id]) delete stats.items[id];
+  saveStats();
+}
+function useTool(id, pop) {
+  if (id === 'preskok') {
+    const before = { ...state.meters };
+    undoSnap = JSON.stringify(state);
+    if (!skipCard(state)) { undoSnap = null; toast('Tuhle kartu přeskočit nejde'); return; }
+    spendTool(id); pop.remove(); save();
+    if (state.dead) { undoSnap = null; recordReign(); deathScreen(); return; }
+    render(true); flash(before); toast('Karta přeskočena', 'perk'); showNews(); offerPerk();
+  }
+  if (id === 'zpet') {
+    if (!undoSnap) { toast('Zatím není co vracet'); return; }
+    state = JSON.parse(undoSnap);
+    undoSnap = null;
+    spendTool(id); pop.remove(); save();
+    render(true); toast('Tah vrácen – vol znovu', 'perk');
+  }
+  if (id === 'posun') {
+    pop.remove();
+    const p = document.createElement('div');
+    p.className = 'pop';
+    const row = (m) => {
+      const v = state.meters[m.id], dn = Math.max(5, v - SHIFT), up = Math.min(95, v + SHIFT);
+      return `<div class="shiftrow"><span>${glyph(m.id)} ${m.name} <b>${v} %</b></span>
+        <button data-m="${m.id}" data-s="-1"${dn === v ? ' disabled' : ''}>▼ ${dn}</button><button data-m="${m.id}" data-s="1"${up === v ? ' disabled' : ''}>▲ ${up}</button></div>`;
+    };
+    p.innerHTML = `<div class="pane" role="dialog"><b class="pane-title">${icon('kormidlo', 'ico')} Který ukazatel a kam?</b>
+      <div class="shiftlist">${METERS.map(row).join('')}</div>
+      <button class="ghost" data-x>Zpět</button></div>`;
+    p.onclick = (e) => {
+      const b = e.target.closest('button');
+      if (e.target === p || b?.dataset.x !== undefined) { p.remove(); return; }
+      if (b?.dataset.m) {
+        const before = { ...state.meters };
+        if (shiftMeter(state, b.dataset.m, Number(b.dataset.s))) { spendTool(id); p.remove(); save(); render(false); flash(before); }
+      }
+    };
+    document.body.appendChild(p);
+  }
+}
+
 // ── Hra ──────────────────────────────────────────────
 let ui = null;       // odkazy na prvky herní obrazovky
 let selected = null; // směr vybraný klepnutím na šipku (druhé klepnutí potvrdí)
@@ -508,6 +591,7 @@ function gameScreen() {
     <div class="question" id="q"><p></p></div>
     <section class="stage">
       ${['up', 'left', 'right', 'down'].map((d) => `<button class="chev ${d}" data-dir="${d}" aria-label="Volba ${d}">${{ up: '▲', down: '▼', left: '◀', right: '▶' }[d]}</button>`).join('')}
+      <button class="bag" id="bag" aria-label="Pomůcky"></button>
       <div class="deck"><div class="card next" id="nextcard"></div><div class="card" id="card"></div></div>
     </section>
     <div class="name"><b><span id="person"></span><span id="mood"></span></b><div class="advice" id="adv"></div></div>`;
@@ -523,6 +607,7 @@ function gameScreen() {
   };
   $('#menu').onclick = menu;
   $('#ab').onclick = ability;
+  $('#bag').onclick = bag;
   for (const b of app.querySelectorAll('.meter')) b.onclick = () => meterInfo(b.dataset.m);
   for (const b of Object.values(ui.chev)) b.onclick = () => tapDir(b.dataset.dir);
   setupDrag(ui.card);
@@ -576,6 +661,7 @@ function render(enter) {
   const k = kindOf(state);
   $('#nth').textContent = `${l.n}. ${leaderTitle(state)} · ${(state.world ?? state.mode) === 'dejiny' ? `${ageOf(state).name} · ` : ''}Rok ${Math.floor(state.turn / 12) + 1} · ${SEASON_NAMES[seasonOf(state)]}`;
   if (state.mode === 'blitz') updateClock();
+  updateBag();
   // Vpravo nahoře: ikona typu vůdce. U aktivních schopností kroužek ukazuje nabití.
   const ab = $('#ab'), active = ACTIVE.includes(k.id);
   if (ab.dataset.k !== k.id) { ab.querySelector('i').innerHTML = icon(k.id); ab.dataset.k = k.id; }
@@ -585,7 +671,11 @@ function render(enter) {
   ab.setAttribute('aria-label', kindName(k, l.female));
   const c0 = currentCard(state), chips = [];
   if (state.advice) chips.push(`${icon('rada', 'ico sm')} Rádce radí: <b>${DIR_WORD[state.advice]}</b>`);
-  else if (state.hints > 0) chips.push(`${icon('rada', 'ico sm')} Mudrc radí: <b>${DIR_WORD[bestDir(state)]}</b> <span class="dim">(${state.hints})</span>`);
+  else if (state.hints > 0) {
+    const key = `${state.total}:${state.card}`;
+    if (state.hint?.key !== key) state.hint = { key, dir: sageHint(state) };
+    chips.push(`${icon('rada', 'ico sm')} Mudrc radí: <b>${DIR_WORD[state.hint.dir]}</b> <span class="dim">(ještě ${state.hints}×)</span>`);
+  }
   if (c0.crisis) chips.push(`<span class="warn">${icon('crisis', 'ico sm')} ${CRISES[c0.crisis].name} · krok ${CRISES[c0.crisis].steps.indexOf(c0.id) + 1} z ${CRISES[c0.crisis].steps.length}</span>`);
   else if (state.crisis) chips.push(`${icon('crisis', 'ico sm')} Probíhá: ${CRISES[state.crisis.id].name}`);
   if (state.turn > 0 && toElection(state) <= 6) chips.push(`${icon('vote', 'ico sm')} Volby za ${toElection(state)} m. · podpora <b class="${support(state) >= VOTE_MIN ? 'ok' : 'bad'}">${support(state)} %</b>`);
@@ -713,6 +803,7 @@ function commit(dir) {
   selected = null;
   const before = { ...state.meters };
   setTimeout(() => {
+    undoSnap = ['normal', 'dejiny'].includes(state.mode) ? JSON.stringify(state) : null;
     if (state.hints > 0) state.hints -= 1;
     const dead = choose(state, dir);
     stats.decisions += 1; saveStats();
@@ -727,7 +818,7 @@ function commit(dir) {
     save();
     busy = false;
     if (dead && state.mode === 'daily') { dailyFall(); return; }
-    if (dead) { recordReign(); checkAch(); deathScreen(); } else { render(true); flash(before); showNews(); offerPerk(); checkAch(); }
+    if (dead) { undoSnap = null; recordReign(); checkAch(); deathScreen(); } else { render(true); flash(before); showNews(); offerPerk(); checkAch(); }
   }, 220);
 }
 
@@ -1034,6 +1125,7 @@ function menu() {
 
 // ── Konec vlády ──────────────────────────────────────
 function deathScreen() {
+  undoSnap = null;
   sfx('end'); vibrate([30, 60, 30]);
   ui = null;
   document.body.classList.remove('game');

@@ -27,7 +27,7 @@ Sedm ukazatelů drží zemi pohromadě. **Ideál je uprostřed – oba kraje jso
 
 ## Hloubka hry
 
-- **Cesta dějin** (dva objevy na každém přelomu), **divy světa**, **sousední říše** (válka, tribut, pohlcení), **roční období**, **zrádci**, **následky dlouhých krajností a zlatý věk** (`hra/events.js`, `hra/history_more.js`), **ztížení** za vyšší skóre, **výzvy** (denní 2089 / Dějiny, týdenní) a **hra pro dva** (bleskovka na rozdělené obrazovce, `hra/duel.js`). **Body a obchod:** odemykání vůdců (5 volných, další za 5 bodů) a vybavení do příští vlády (rada mudrce, výhoda do začátku, štít) – obchod je jen na úvodní obrazovce, ve hře se nic neovládá.
+- **Cesta dějin** (dva objevy na každém přelomu), **divy světa**, **sousední říše** (válka, tribut, pohlcení), **roční období**, **zrádci**, **následky dlouhých krajností a zlatý věk** (`hra/events.js`, `hra/history_more.js`), **ztížení** za vyšší skóre, **výzvy** (denní 2089 / Dějiny, týdenní) a **hra pro dva** (bleskovka na rozdělené obrazovce, `hra/duel.js`). **Body a obchod:** odemykání vůdců (5 volných, další za 5 bodů) , vybavení na celou vládu (rada mudrce, výhoda do začátku, štít) a jednorázové pomůcky použitelné ve hře tlačítkem s klíčem (přeskočit kartu, posunout ukazatel, vrátit tah). Obchod je jen na úvodní obrazovce.
 
 - **Karta pod kartou:** je vidět, kdo přijde příště (Prorok navíc vidí, co další karta ovlivní). Rozzlobení lidé mluví nevraživě a přijdou s výčitkami, věrní se odvděčí (`hra/bonds.js`). Méně viděné karty mají přednost.
 

@@ -496,3 +496,11 @@ body.duelmode #app { padding: 0; max-width: none; }
 .gear .ico { vertical-align: -3px; margin-right: 4px; }
 .gear b { color: var(--accent); font-weight: 600; }
 .mi .use { font-style: normal; font-size: 13px; color: var(--accent); flex: none; }
+.bag { position: absolute; z-index: 3; left: 0; top: 0; display: flex; align-items: center; gap: 4px; padding: 6px 10px; border-radius: 16px; font-size: 13px; color: var(--accent); background: #e0915a14; border-color: #e0915a44; }
+.bag[hidden] { display: none; }
+.shiftlist { display: flex; flex-direction: column; gap: 6px; }
+.shiftrow { display: grid; grid-template-columns: 1fr auto auto; gap: 6px; align-items: center; font-size: 14px; }
+.shiftrow span { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.shiftrow .glyph { width: 20px; height: 20px; }
+.shiftrow button { padding: 8px 10px; font-size: 13px; border-radius: 12px; min-width: 62px; }
+.shiftrow button:disabled { opacity: .35; }

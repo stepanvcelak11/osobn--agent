@@ -68,7 +68,7 @@ export const KINDS = [
   { id: 'krize', short: 'Krizový', m: 'Krizový manažer', f: 'Krizová manažerka', icon: '🧯', text: 'Když je ukazatel v krajnosti (pod 30 % nebo nad 70 %), kroky zpět k rovnováze mají dvojnásobný účinek.' },
   { id: 'odklad', short: 'Vyčkávač', m: 'Vyčkávač', f: 'Vyčkávačka', icon: '⏭️', text: 'Po každých 5 rozhodnutích může jednu kartu odložit – nic se nestane a jde se dál.' },
   { id: 'kormidlo', short: 'Kormidelník', m: 'Kormidelník', f: 'Kormidelnice', icon: '🧭', text: 'Po každých 5 rozhodnutích může jeden ukazatel posunout o 15 bodů k rovnováze.' },
-  { id: 'rada', short: 'Rádce', m: 'Prezident s rádcem', f: 'Prezidentka s rádcem', icon: '🦉', text: 'Rádce mu ke každé kartě poradí. V 7 případech z 10 radí to nejlepší, jinak se mýlí.' },
+  { id: 'rada', short: 'Rádce', m: 'Prezident s rádcem', f: 'Prezidentka s rádcem', icon: '🦉', text: 'Rádce mu ke každé kartě poradí. V 7 případech z 10 radí to nejlepší, ve zbylých 3 to nejhorší.' },
   { id: 'zachrance', short: 'Zachránce', m: 'Zachránce', f: 'Zachránkyně', icon: '🛟', text: 'Jednou za vládu ho ukazatel na nule ani na maximu nesesadí – odrazí se zpátky na 15, nebo 85 %.' },
   { id: 'charisma', short: 'Charismatik', m: 'Charismatik', f: 'Charismatička', icon: '⭐', text: 'Vztahy s lidmi se mu mění dvakrát rychleji. Věrné spojence získá snadno – nepřátele taky.' },
   { id: 'prorok', short: 'Prorok', m: 'Prorok', f: 'Prorokyně', icon: '🔮', text: 'Vidí dopředu, které ukazatele ovlivní další karta – a může se na to připravit.' },
@@ -330,24 +330,39 @@ export function outcome(state, dir) {
   return out;
 }
 
-/** Nejlepší volba pro tuto chvíli: žádná katastrofa a ukazatele co nejblíž středu. */
-export function bestDir(state) {
-  let best = DIRS[0], bestScore = Infinity;
-  for (const d of DIRS) {
-    const m = outcome(state, d);
-    const vals = Object.values(m).map((v) => Math.abs(v - START));
-    const score = (vals.some((v) => v >= 50) ? 1e6 : 0) + vals.reduce((a, v) => a + v * v, 0) + 2 * Math.max(...vals) ** 2;
-    if (score < bestScore) { bestScore = score; best = d; }
-  }
-  return best;
+/** Volby seřazené od nejlepší po nejhorší: žádná katastrofa a ukazatele co nejblíž středu. */
+const balanceScore = (m) => {
+  const vals = Object.values(m).map((v) => Math.abs(v - START));
+  return (vals.some((v) => v >= 50) ? 1e6 : 0) + vals.reduce((a, v) => a + v * v, 0) + 2 * Math.max(...vals) ** 2;
+};
+export function rankDirs(state) {
+  return DIRS.map((d) => [d, balanceScore(outcome(state, d))]).sort((a, b) => a[1] - b[1]).map(([d]) => d);
+}
+export const bestDir = (state) => rankDirs(state)[0];
+
+/** Rada rádce: v 70 % nejlepší volba, jinak ta nejhorší. */
+function advise(state) {
+  const r = rankDirs(state);
+  return random(state) < ADVICE_OK ? r[0] : r[r.length - 1];
 }
 
-/** Rada rádce: v 70 % nejlepší volba, jinak jiná. */
-function advise(state) {
-  const best = bestDir(state);
-  if (random(state) < ADVICE_OK) return best;
-  const others = DIRS.filter((d) => d !== best);
-  return others[Math.floor(random(state) * others.length)];
+/** Rada mudrce (vybavení z obchodu): napůl volba, která rovnováhu zlepší (ne nutně nejlepší), napůl cokoli. */
+export function sageHint(state, rnd = Math.random) {
+  if (rnd() >= 0.5) return DIRS[Math.floor(rnd() * DIRS.length)];
+  const now = balanceScore(state.meters);
+  const good = DIRS.filter((d) => balanceScore(outcome(state, d)) < now);
+  const pool = good.length ? good : [bestDir(state)];
+  return pool[Math.floor(rnd() * pool.length)];
+}
+
+/** Posun ukazatele (jednorázová pomůcka): o SHIFT tam, kam hráč chce – nikdy ne až na kraj. */
+export const SHIFT = 15;
+export function shiftMeter(state, id, sign) {
+  if (state.dead || !(id in state.meters)) return false;
+  const v = state.meters[id], to = Math.max(5, Math.min(95, v + Math.sign(sign) * SHIFT));
+  if (to === v) return false;
+  state.meters[id] = to;
+  return true;
 }
 
 export const ready = (state) => (state.charge ?? 0) >= CHARGE;
