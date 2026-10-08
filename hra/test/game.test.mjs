@@ -944,17 +944,21 @@ test('kraje, hrdinové a výpravy; naléhavé karty; stopy tajemství', async ()
   assert.equal(g.knownClues(f).length, 12);
 });
 
-test('vlastní odpověď ze slov: rozumí větě, mimo téma se problém vrátí, dobíjí se', async () => {
+test('vlastní odpověď ze slov: ano/ne podle mluvčího, slova ke kartě, později = vrátí se, dobíjí se', async () => {
   const w = await import('../words.js'), r = await import('../realm.js');
   const s = newGame({}, 51); choose(s, 'left'); s.card = 'stavka';
   assert.ok(w.canCustom(s));
-  const o = w.customOption(s, { verb: 'zvysit', obj: 'dane', how: 'opatrne', who: 'kupci' });
-  assert.ok(o.e.fin > 0 && o.e.lid < 0, 'daně: pokladna nahoru, lid dolů');
-  assert.ok(!w.customOption(s, { verb: 'postavit', obj: 'dane' }), 'nesmyslná dvojice slov neprojde');
-  const off = w.customOption(s, { verb: 'chranit', obj: 'lesy' });
-  if (off.offTopic) { choose(s, 'x', off); assert.ok(s.queue.some((q) => q.id === 'stavka'), 'problém se vrátí'); }
+  const { yes, no } = w.yesNo(s);
+  assert.ok((optionOf(s, cardById('stavka'), yes).e.lid ?? 0) > (optionOf(s, cardById('stavka'), no).e.lid ?? 0), 'ano vyhoví lidu, ne odmítne');
+  const acts = Object.keys(w.cardActions(s));
+  assert.ok(acts.length > 0 && acts.length <= 8, 'jen pár slov ke kartě');
+  const o = w.customOption(s, { ans: 'ano', act: acts[0], how: 'opatrne', who: 'spk' });
+  assert.ok(o && o.rel, 'vstřícnost zlepší vztah s mluvčím');
+  assert.ok(Object.values(o.e).every((n) => n <= 8), 'zlepšení má strop');
+  const later = w.customOption(s, { ans: 'pozdeji' });
+  choose(s, 'x', later);
+  assert.ok(s.queue.some((q) => q.id === 'stavka'), 'odložená věc se vrátí');
   assert.ok(!w.canCustom(s), 'po použití se musí dobít');
-  for (let i = 0; i < w.PEN_EVERY && !s.dead; i++) choose(s, bestDir(s));
   // výprava: vlastní čin hrdiny
   const q = w.questOption({ verb: 'premluvit', obj: 'mistni', how: 'odvazne' }, false);
   assert.equal(q.a, 'charisma'); assert.ok(q.heal);

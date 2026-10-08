@@ -1,7 +1,7 @@
 // Vlastní odpověď skládaná ze slov (jako v Pocket Realmu, jen bez psaní): Čin + Co + (Jak) + (Pro koho).
 // Hra větu „rozumí“ podle významu slov: každé slovo nese změny ukazatelů a věta je jejich součet.
 import { tr } from './i18n.js';
-import { cardById, optionOf, rankDirs, DIRS, METERS, INTRO, PEN_EVERY } from './game.js';
+import { cardById, optionOf, whoOf, CARES, PEOPLE, DIRS, METERS, INTRO, PEN_EVERY } from './game.js';
 export { PEN_EVERY };
 
 /// Co se zvedne, když „toho je víc“ (sloveso se znaménkem −1 to otočí).
@@ -50,7 +50,7 @@ export const TARGETS = {
   ucenci: { t: 'pro učence', e: { ved: 3 }, calm: 'ucenci' },
   sousedy: { t: 'pro sousedy', e: { dip: 3 } },
 };
-const TAX = 0.7; // vlastní rozhodnutí je slabší v tom dobrém (cena za volnost)
+const TAX = 0.8; // vlastní rozhodnutí je slabší v tom dobrém (cena za volnost)
 const CAP = 15, CAP_UP = 8; // zlepšení je u vlastní odpovědi menší než zhoršení
 
 /** Dá se na kartu odpovědět vlastními slovy? Ne u přelomů, finále, prvních karet a karet, které otevírají příběh. */
@@ -61,29 +61,81 @@ export function cardTakesWords(state) {
   if (!c || c.id === INTRO.id || c.id.startsWith('dej_') || c.milestone || c.finale || state.dead) return false;
   return !DIRS.some((d) => { const o = c.opts[d]; return o?.end || o?.advance || o?.arcEnd || o?.clue || o?.edu || o?.project; });
 }
-export const sentence = (sel) => [VERBS[sel.verb]?.t, OBJECTS[sel.obj]?.t, MANNERS[sel.how]?.t, TARGETS[sel.who]?.t].filter(Boolean).map(tr).join(' ');
 
-/** Složí z vybraných slov volbu {t, e, …}. Mimo téma karty: problém zůstane a půlka nejhoršího následku dopadne stejně. */
+/// Základ odpovědi: vyhovět tomu, kdo přišel, odmítnout, napůl, nebo odložit.
+export const ANSWERS = { ano: { t: 'Ano' }, ne: { t: 'Ne' }, napul: { t: 'Napůl' }, pozdeji: { t: 'Později' } };
+const ACT_W = 0.5; // doplňující čin má poloviční váhu
+
+/** Co znamená „ano“ a „ne“ u této karty: volba nejpříznivější / nejméně příznivá pro to, na čem mluvčímu záleží. */
+export function yesNo(state) {
+  const c = cardById(state.card), cm = CARES[whoOf(state, c)];
+  // „Ano“ = co nejvíc vyhovět (při shodě ta rozhodnější volba), „ne“ = co nejméně.
+  const score = (d) => { const e = optionOf(state, c, d)?.e ?? {}, sum = Object.values(e).reduce((a, n) => a + n, 0), size = Object.values(e).reduce((a, n) => a + Math.abs(n), 0);
+    return cm ? (e[cm] ?? 0) * 100 + size * Math.sign(e[cm] ?? 0) : sum * 10 + size; };
+  const ranked = DIRS.filter((d) => c.opts[d]).sort((a, b) => score(b) - score(a));
+  return { yes: ranked[0], no: ranked.at(-1) };
+}
+/** Činy, které ke kartě sedí: jen ty, které hýbou ukazateli, o které na kartě jde. */
+export function cardActions(state) {
+  // Jen dva ukazatele, o které na kartě jde nejvíc, a u každého věci jen „víc“ a „míň“.
+  const c = cardById(state.card), weight = {};
+  for (const d of DIRS) for (const [m, n] of Object.entries(optionOf(state, c, d)?.e ?? {})) weight[m] = (weight[m] ?? 0) + Math.abs(n);
+  const top = Object.entries(weight).sort((a, b) => b[1] - a[1]).slice(0, 2).map(([m]) => m);
+  const out = {};
+  const objs = Object.entries(OBJECTS).filter(([, ob]) => top.includes(Object.keys(ob.e)[0]))
+    .sort((a, b) => top.indexOf(Object.keys(a[1].e)[0]) - top.indexOf(Object.keys(b[1].e)[0]));
+  const per = {};
+  for (const [oid, ob] of objs) {
+    const m = Object.keys(ob.e)[0];
+    if ((per[m] = (per[m] ?? 0) + 1) > 2) continue; // u každého ukazatele nejvýš dvě věci
+    const plus = ob.v.find((v) => VERBS[v].s > 0 && !VERBS[v].stall), minus = ob.v.find((v) => VERBS[v].s < 0);
+    for (const vid of [plus, minus].filter(Boolean)) out[`${vid}.${oid}`] = { t: `${tr(VERBS[vid].t)} ${tr(ob.t)}`, verb: vid, obj: oid };
+  }
+  return out;
+}
+/** Pro koho: mluvčí karty (zlepší vztah) a skupiny. */
+export function cardTargets(state) {
+  const c = cardById(state.card), who = whoOf(state, c), p = PEOPLE[who];
+  const out = {};
+  if (p && !who.startsWith('@')) out.spk = { t: tr('vyjít vstříc: {kdo}').replace('{kdo}', tr(p.name)), rel: who, cm: CARES[who] };
+  return { ...out, ...TARGETS };
+}
+export function sentence(sel, state) {
+  const parts = [tr(ANSWERS[sel.ans]?.t ?? '')];
+  const act = sel.act && cardActions(state)[sel.act];
+  if (act) parts.push(`${tr('a k tomu')} ${[VERBS[act.verb].t, OBJECTS[act.obj].t].map(tr).join(' ').toLowerCase()}`);
+  if (sel.how) parts.push(tr(MANNERS[sel.how].t));
+  if (sel.who) parts.push(cardTargets(state)[sel.who]?.t ?? '');
+  return parts.filter(Boolean).join(', ');
+}
+
+/** Složí odpověď: základ (ano/ne/napůl/později) + doplňující čin + způsob + pro koho. */
 export function customOption(state, sel) {
-  const v = VERBS[sel.verb], ob = OBJECTS[sel.obj], how = MANNERS[sel.how], who = TARGETS[sel.who];
-  if (!v || !ob || !ob.v.includes(sel.verb)) return null;
+  const ans = ANSWERS[sel.ans];
+  if (!ans) return null;
+  const c = cardById(state.card), { yes, no } = yesNo(state);
   const e = {};
   const add = (x, k = 1) => { for (const [m, n] of Object.entries(x ?? {})) e[m] = (e[m] ?? 0) + n * k; };
-  add(ob.e, v.s * (v.k ?? 1) * (how?.k ?? 1));
-  add(v.e); add(how?.e); add(who?.e);
+  const how = MANNERS[sel.how], tg = cardTargets(state)[sel.who];
+  const k = how?.k ?? 1;
+  if (sel.ans === 'ano') add(optionOf(state, c, yes).e, k);
+  if (sel.ans === 'ne') add(optionOf(state, c, no).e, k);
+  if (sel.ans === 'napul') { add(optionOf(state, c, yes).e, 0.5 * k); add(optionOf(state, c, no).e, 0.5 * k); }
+  if (sel.ans === 'pozdeji') add({ lid: -3 });
+  const act = sel.act && cardActions(state)[sel.act];
+  if (act) { const v = VERBS[act.verb]; add(OBJECTS[act.obj].e, v.s * (v.k ?? 1) * ACT_W * k); add(v.e, ACT_W); }
+  add(how?.e); add(tg?.e);
+  if (tg?.cm) add({ [tg.cm]: 2 });
   if (how?.hide) delete e[how.hide];
-  const c = cardById(state.card), touched = new Set();
-  for (const d of DIRS) for (const [m, n] of Object.entries(optionOf(state, c, d)?.e ?? {})) if (n) touched.add(m);
-  const main = Object.keys(ob.e)[0];
-  const offTopic = v.stall || !touched.has(main);
-  if (offTopic && !v.stall) add(optionOf(state, c, rankDirs(state).at(-1)).e, 0.8); // problém nevyřešen
   for (const m of Object.keys(e)) {
     let n = e[m] > 0 ? e[m] * TAX : e[m];
     n = Math.max(-CAP, Math.min(CAP_UP, Math.round(n)));
     if (n) e[m] = n; else delete e[m];
   }
-  const o = { t: sentence(sel), e, custom: true, offTopic, again: offTopic && !c.once };
-  if (who?.calm) o.calm = who.calm;
+  const stall = sel.ans === 'pozdeji';
+  const o = { t: sentence(sel, state), e, custom: true, offTopic: stall, again: stall && !c.once };
+  if (tg?.calm) o.calm = tg.calm;
+  if (tg?.rel) o.rel = { [tg.rel]: 1 };
   if (how?.risk) o.later = [{ p: how.risk.p, in: 3, e: how.risk.e, text: how.risk.text }];
   return o;
 }

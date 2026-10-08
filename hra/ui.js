@@ -14,7 +14,7 @@ if (lang !== 'cs') {
   setTranslator(tr);
   startTranslating();
 }
-import { OBJECTS, VERBS, MANNERS, TARGETS, Q_VERBS, Q_OBJECTS, Q_MANNERS, PEN_EVERY, penLeft, canCustom, cardTakesWords, customOption, questOption, reaction, sentence } from './words.js';
+import { ANSWERS, cardActions, cardTargets, OBJECTS, VERBS, MANNERS, TARGETS, Q_VERBS, Q_OBJECTS, Q_MANNERS, PEN_EVERY, penLeft, canCustom, cardTakesWords, customOption, questOption, reaction, sentence } from './words.js';
 import { PROVINCES, HERO_CLASSES, ATTRS, THREATS, canHire, hire, startQuest, questRoll, questHero, stepById, chance, attrOf, heroTitle, ready as heroReady, lostCount, LOST_MAX, WOUNDS_MAX, HEROES_MAX, HIRE_COST, NEED, STEPS } from './realm.js';
 import { LEVELS, levelOf, MASTERY, LEVEL_TEXT, TREE, TREE_MAX, RELICS, RELIC_SLOTS, SKINS, PRESTIGE_BONUS, ROMAN, CAMPAIGN } from './meta.js';
 import { CLUES, knownClues, cardProvince, URGENT_S, rankDirs, ARCS, PACKS, REPS, TRAITS, EDU, AMBITIONS, TITLES, COUNCIL_MAX, CARES, repName, councilCandidates, appoint, dismiss, ambById, ambProgress, rivalName, dailyCard, simVotes, FACTIONS, FACTION_REVOLT, PROJECTS, PROJECT_MONTHS, albumPeople, whoOf, master, chargeOf, ENDINGS_PAST, offerPerks, skipCard, bestDir, sageHint, shiftMeter, SHIFT, newGame, newBlitz, newRun, daily, touches, seesAhead, personOf, seasonOf, SEASON_NAMES, RIVALS, MODS, BRANCHES, WONDERS, modBonus, ageOf, leaderTitle, hasElections, lawAllowed, AGES, AGE_LEN, choose, nextLeader, currentCard, cardById, preview, outcome, optionOf, unlocked, skip, nudge, reformLaw, choosePerk, ready, tenure, timeLabel, danger, kindOf, upgrade, activeLaws, seals, taskById, taskProgress, seesDirection, revealed, toElection, support, KINDS, ACTIVE, CHARGE, NUDGE, METERS, ENDINGS, LAWS, TASKS, ERAS, SPECIAL, PEOPLE, REL_LOYAL, PERKS, CRISES, ELECTION, VOTE_MIN, BLITZ_START, BLITZ_BONUS, BLITZ_FALL } from './game.js';
@@ -1798,7 +1798,7 @@ function helpScreen(back) {
         <li><b>Živá scéna</b> pod kartou ukazuje tvou říši: město roste s Financemi a mění se podle doby, lesy s Přírodou, chrám s Vírou, hradby se Silou, lidé s Lidem. Kouř na obzoru = hrozba v kraji. Klepnutím otevřeš mapu.</li>
         <li><b>Mapa říše:</b> sedm krajů, každý drží jeden ukazatel. Spokojenost kraje tíhne k tomu, jak je jeho ukazatel v rovnováze. V krajích vznikají hrozby (bandité, šelma, nákaza, vzpoura, kult) nebo zvěsti o pokladu. Nevyřešená hrozba kraj rozzlobí, až se odtrhne – a když se odtrhnou 3 kraje, říše se rozpadne. Karta ukazuje, ze kterého kraje mluvčí je.</li>
         <li><b>Hrdinové a výpravy:</b> u dvora máš až 3 hrdiny (Válečník, Zloděj, Čaroděj, Bard, Lovec) se čtyřmi vlastnostmi. Na mapě je pošleš na výpravu: tři riskantní kroky, každá volba je hod kostkou k20 + vlastnost a vidíš šanci. Stačí 2 úspěchy; nezdar hrdinu zraní, 3 zranění = padne. Úspěšní hrdinové sílí.</li>
-        <li><b>Vlastní odpověď</b> (tlačítko s perem u karty): místo čtyř nabízených voleb si odpověď složíš ze slov – <i>Co udělám</i> (Zvýšit, Postavit, Zakázat…) + <i>S čím</i> (daně, vojsko, chrámy, lesy…) + <i>Jak</i> (opatrně, silou, tajně…) + <i>Pro koho</i>. Hra větu pochopí podle významu slov. Když neřeší, s čím postava přišla, problém se vrátí. Dobije se po 5 rozhodnutích. Ve výpravě takhle složíš vlastní čin hrdiny – sloveso určí, jaká vlastnost se hází.</li>
+        <li><b>Vlastní odpověď</b> (tlačítko s perem u karty): místo čtyř nabízených voleb si odpověď složíš ze slov – <i>Odpověď</i> (Ano = vyhovět, Ne = odmítnout, Napůl, Později) + <i>A k tomu</i> (činy, které k té kartě sedí) + <i>Jak</i> (opatrně, silou, tajně…) + <i>Pro koho</i> (třeba vyjít vstříc tomu, kdo přišel). Hra větu pochopí podle významu slov. Odložená věc se vrátí. Dobije se po 5 rozhodnutích. Ve výpravě takhle složíš vlastní čin hrdiny – sloveso určí, jaká vlastnost se hází.</li>
         <li><b>Naléhavé karty:</b> občas je potřeba rozhodnout do 7 vteřin – jinak se stane to nejhorší.</li>
         <li><b>Mlha</b> (ztížení): neuvidíš přesné hodnoty, jen klid, napětí, nebo krizi. Čti, co ti lidé říkají.</li>
         <li><b>Tajemství Velkého výpadku:</b> ve všech dobách jsou ukryté stopy (volby „Prozkoumat…“). Stopy se pamatují napříč hrami (Sbírka → Tajemství). Kdo najde všech 12, v roce 2089 může prolomit cyklus.</li>
@@ -2094,26 +2094,25 @@ function wordPicker(kind, done) {
   const sel = {};
   const rows = quest
     ? [['verb', 'Co hrdina udělá', Q_VERBS], ['obj', 'S čím / na koho', Q_OBJECTS], ['how', 'Jak (nepovinné)', Q_MANNERS]]
-    : [['obj', 'S čím', OBJECTS], ['verb', 'Co udělám', VERBS], ['how', 'Jak (nepovinné)', MANNERS], ['who', 'Pro koho (nepovinné)', TARGETS]];
+    : [['ans', 'Odpověď', ANSWERS], ['act', 'A k tomu (nepovinné)', cardActions(state)], ['how', 'Jak (nepovinné)', MANNERS], ['who', 'Pro koho (nepovinné)', cardTargets(state)]];
   const p = document.createElement('div');
   p.className = 'pop words';
   const build = () => (quest ? questOption(sel, h?.female) : customOption(state, sel));
   const draw = () => {
     const o = build();
-    const verbsOk = (id) => quest || !sel.obj || OBJECTS[sel.obj].v.includes(id);
-    const chips = (key, dict) => Object.entries(dict).map(([id, w]) => `<button class="chip${sel[key] === id ? ' on' : ''}" data-k="${key}" data-v="${id}"${key === 'verb' && !verbsOk(id) ? ' disabled' : ''}>${esc(w.t)}</button>`).join('');
+    const chips = (key, dict) => Object.entries(dict).map(([id, w]) => `<button class="chip${sel[key] === id ? ' on' : ''}${key === 'ans' ? ' ans' : ''}" data-k="${key}" data-v="${id}">${esc(w.t)}</button>`).join('');
     let info = '';
     if (o && quest) { const c = Math.round(chance(h, o) * 100); info = `<div class="winfo">${ATTRS[o.a]} ${attrOf(h, o.a) > 0 ? '+' : ''}${attrOf(h, o.a)} · šance <b class="${c >= 65 ? 'ok' : c >= 40 ? 'warn' : 'bad'}">${c} %</b>${o.heal ? ' · úspěch zahojí zranění' : ''}</div>`; }
     if (o && !quest) {
       const touched = Object.entries(o.e).map(([m, n]) => `${glyph(m, 'glyph sm')}${Math.abs(n) >= 8 ? '<i class="big"></i>' : '<i></i>'}`).join('');
-      info = `<div class="winfo"><span class="wdots">${touched || '–'}</span>${o.offTopic ? `<div class="warn">${icon('crisis', 'ico sm')} Tohle neřeší, s čím ${esc(currentCard(state).person.name)} přichází – problém se vrátí a část následků dopadne stejně.</div>` : ''}</div>`;
+      info = `<div class="winfo"><span class="wdots">${touched || '–'}</span>${o.offTopic ? `<div class="warn">${icon('crisis', 'ico sm')} Odložit znamená, že se ${esc(currentCard(state).person.name)} se stejnou věcí vrátí.</div>` : ''}</div>`;
     }
     p.innerHTML = `
       <div class="pane" role="dialog" aria-label="Vlastní odpověď">
         <b class="pane-title">${icon('pen', 'ico')} ${quest ? 'Vlastní čin hrdiny' : 'Vlastní odpověď'}</b>
-        <div class="wsent${o ? '' : ' empty'}">${o ? `„${esc(o.t)}.“` : quest ? 'Vyber, co hrdina udělá a s čím…' : 'Vyber, s čím a co uděláš…'}</div>
+        <div class="wsent${o ? '' : ' empty'}">${o ? `„${esc(o.t)}.“` : quest ? 'Vyber, co hrdina udělá a s čím…' : 'Začni odpovědí: ano, ne, napůl, nebo později…'}</div>
         ${info}
-        ${rows.map(([key, label, dict]) => `<div class="wrow"><div class="label">${label}</div><div class="chips">${chips(key, dict)}</div></div>`).join('')}
+        ${rows.filter(([, , d]) => Object.keys(d).length).map(([key, label, dict]) => `<div class="wrow"><div class="label">${label}</div><div class="chips">${chips(key, dict)}</div></div>`).join('')}
         <div class="row2"><button class="ghost" data-x>Zpět</button><button class="primary" data-ok${o ? '' : ' disabled'}>${quest ? 'Zkusit to' : 'Rozhodnout'}</button></div>
       </div>`;
     const pane = p.querySelector('.pane');
@@ -2125,8 +2124,7 @@ function wordPicker(kind, done) {
     if (e.target === p || b?.dataset.x !== undefined) { p.remove(); return; }
     if (b?.dataset.k) {
       const k = b.dataset.k;
-      sel[k] = sel[k] === b.dataset.v && ['how', 'who'].includes(k) ? undefined : b.dataset.v;
-      if (k === 'obj' && !quest && sel.verb && !OBJECTS[sel.obj].v.includes(sel.verb)) sel.verb = undefined;
+      sel[k] = sel[k] === b.dataset.v && ['how', 'who', 'act'].includes(k) ? undefined : b.dataset.v;
       sfx('tick'); draw(); return;
     }
     if (b?.dataset.ok !== undefined) { const o = build(); if (!o) return; p.remove(); done(o); }

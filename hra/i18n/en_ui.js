@@ -3,6 +3,10 @@
 // Exact Czech text → English. Composed strings with numbers and names are handled by `patterns` below.
 
 const D = {
+  // vlastní odpověď – základ a skladba věty
+  'Ano': 'Yes', 'Ne': 'No', 'Napůl': 'Halfway', 'Později': 'Later', 'a k tomu': 'and also', 'vyjít vstříc: {kdo}': 'accommodate {kdo}',
+  'Odpověď': 'Answer', 'A k tomu (nepovinné)': 'And also (optional)', 'Jak (nepovinné)': 'How (optional)', 'Pro koho (nepovinné)': 'For whom (optional)',
+  'Začni odpovědí: ano, ne, napůl, nebo později…': 'Start with an answer: yes, no, halfway or later…',
   // slova, která v první sadě chyběla
   'vojsko': 'the army', 'hranice': 'the borders', 'rychle': 'quickly', 'silou': 'by force', 'stopy': 'the tracks', 'stop': 'the tracks',
   // ── Challenges ─────────────────────────────────────
