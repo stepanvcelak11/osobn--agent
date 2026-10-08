@@ -337,7 +337,7 @@ function startScreen() {
   document.body.classList.remove('game');
   app.innerHTML = `
     <div class="start">
-      <button class="langsw" id="lang" hidden>${lang === 'cs' ? 'EN' : 'CZ'}</button>
+      <button class="langsw" id="lang">${lang === 'cs' ? 'EN' : 'CZ'}</button>
       <img class="logo" src="icons/icon-192.png" alt="">
       <h1>ROVNOVÁHA</h1>
       <button class="pts" id="shop">${icon('trophy', 'ico sm')} ${stats.points} ${bodu(stats.points)} · obchod</button>
