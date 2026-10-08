@@ -12,45 +12,56 @@ export const DUEL_FALL = 15;   // pád vlády
 const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
 const DIRS = ['left', 'right', 'up', 'down'];
 
-/** Nastavení: jména, vůdci a svět. `ctx` = { app, home, sfx, toastFree } */
+/** Nastavení na rozdělené obrazovce: každý hráč si na své polovině napíše jméno a vybere vůdce.
+ *  `ctx` = { app, home, sfx, unlocked: [id], award(n, why) } */
 export function duelSetup(ctx) {
   const { app } = ctx;
-  const pick = (p) => `<div class="dpick" data-p="${p}">
-      <input maxlength="16" placeholder="${p ? 'Hráč 2 (nahoře)' : 'Hráč 1 (dole)'}" autocomplete="off">
-      <div class="kinds">${KINDS.map((k) => `<button class="kind${k.id === 'vize' ? ' on' : ''}" data-k="${k.id}" aria-label="${k.m}">${icon(k.id)}</button>`).join('')}</div>
-      <div class="small dk">${KINDS[0].m} – ${KINDS[0].text}</div>
-    </div>`;
+  const can = (id) => !ctx.unlocked || ctx.unlocked.includes(id);
+  const half = (p) => `
+    <section class="half ${p ? 'top' : 'bottom'} dsetup" data-p="${p}">
+      <div class="dstitle">${p ? 'Hráč 2' : 'Hráč 1'}</div>
+      <input maxlength="16" placeholder="Tvoje jméno" autocomplete="off" enterkeyhint="done">
+      <div class="kinds">${KINDS.map((k) => `<button class="kind${k.id === 'vize' ? ' on' : ''}${can(k.id) ? '' : ' locked'}" data-k="${k.id}" aria-label="${k.m}">${icon(k.id)}</button>`).join('')}</div>
+      <div class="dk"><b>${KINDS[0].m}</b> ${KINDS[0].text}</div>
+      <button class="primary dready">Připraven</button>
+    </section>`;
   app.innerHTML = `
-    <div class="start setup duelsetup">
-      <h2 class="title">Souboj pro dva</h2>
-      <div class="small">Bleskovka pro dva naráz na jednom telefonu. Položte ho mezi sebe – každý hraje svou polovinu. Začínáte s ${DUEL_START / 60} minutami, rozhodnutí přidá ${DUEL_BONUS} s, pád vlády ${DUEL_FALL} s ubere. Vyhrává, kdo se dostane nejdál.</div>
-      ${pick(1)}
-      ${pick(0)}
-      <div class="seg world"><button id="w1" class="on">${icon('era', 'ico sm')} Dějiny<small>kdo dál v čase</small></button><button id="w2">${icon('kontakt', 'ico sm')} Rok 2089<small>kdo víc rozhodnutí</small></button></div>
-      <div class="col">
-        <button class="primary" id="go">Začít souboj</button>
-        <button class="ghost" id="back">Zpět</button>
+    <div class="duel dsetupwrap">
+      ${half(1)}
+      <div class="dmid">
+        <button class="ghost" data-a="back">✕</button>
+        <div class="seg world"><button data-w="dejiny" class="on">${icon('era', 'ico sm')} Dějiny</button><button data-w="2089">${icon('kontakt', 'ico sm')} Rok 2089</button></div>
       </div>
+      ${half(0)}
     </div>`;
-  const kinds = ['vize', 'vize'];
-  for (const box of app.querySelectorAll('.dpick')) {
+  document.body.classList.add('duelmode');
+  const kinds = ['vize', 'vize'], ready = [false, false];
+  let world = 'dejiny';
+  for (const box of app.querySelectorAll('.dsetup')) {
     const p = Number(box.dataset.p);
     for (const b of box.querySelectorAll('.kind')) b.onclick = () => {
-      kinds[p] = b.dataset.k;
-      for (const x of box.querySelectorAll('.kind')) x.classList.toggle('on', x === b);
       const k = KINDS.find((x) => x.id === b.dataset.k);
-      box.querySelector('.dk').textContent = `${k.m} – ${k.text}`;
+      if (!can(k.id)) { box.querySelector('.dk').innerHTML = `<b>${k.m}</b> je zamčený – odemkni ho za body v hlavní hře.`; return; }
+      kinds[p] = k.id;
+      for (const x of box.querySelectorAll('.kind')) x.classList.toggle('on', x === b);
+      box.querySelector('.dk').innerHTML = `<b>${k.m}</b> ${k.text}`;
+    };
+    box.querySelector('input').onkeydown = (e) => { if (e.key === 'Enter') e.target.blur(); };
+    box.querySelector('.dready').onclick = (e) => {
+      ready[p] = !ready[p];
+      e.target.classList.toggle('on', ready[p]);
+      e.target.textContent = ready[p] ? 'Připraven ✓ (čekám na soupeře)' : 'Připraven';
+      if (ready.every(Boolean)) {
+        const names = [0, 1].map((i) => app.querySelector(`.dsetup[data-p="${i}"] input`).value.trim() || `Hráč ${i + 1}`);
+        startDuel(ctx, { names, kinds, world });
+      }
     };
   }
-  let world = 'dejiny';
-  const w = (x) => { world = x; app.querySelector('#w1').classList.toggle('on', x === 'dejiny'); app.querySelector('#w2').classList.toggle('on', x === '2089'); };
-  app.querySelector('#w1').onclick = () => w('dejiny');
-  app.querySelector('#w2').onclick = () => w('2089');
-  app.querySelector('#back').onclick = ctx.home;
-  app.querySelector('#go').onclick = () => {
-    const names = [0, 1].map((p) => app.querySelector(`.dpick[data-p="${p}"] input`).value.trim() || `Hráč ${p + 1}`);
-    startDuel(ctx, { names, kinds, world });
+  for (const b of app.querySelectorAll('[data-w]')) b.onclick = () => {
+    world = b.dataset.w;
+    for (const x of app.querySelectorAll('[data-w]')) x.classList.toggle('on', x === b);
   };
+  app.querySelector('[data-a="back"]').onclick = () => { document.body.classList.remove('duelmode'); ctx.home(); };
 }
 
 /** Samotný souboj. */
@@ -66,7 +77,7 @@ function startDuel(ctx, cfg) {
   app.innerHTML = `<div class="duel">${[1, 0].map((p) => `
     <section class="half ${p ? 'top' : 'bottom'}" data-p="${p}">
       <div class="dhead"><b class="dname">${esc(players[p].name)}</b><span class="dsub"></span><span class="dclock"></span><button class="dab" aria-label="Schopnost"></button></div>
-      <div class="dmeters">${METERS.map((m) => `<span class="dm" data-m="${m.id}">${meterIcon(m.id).replace(/clip-/g, `d${p}clip-`)}<i class="dot"></i></span>`).join('')}</div>
+      <div class="dmeters">${METERS.map((m) => `<span class="dm" data-m="${m.id}">${meterIcon(m.id).replace(/clip-/g, `d${p}clip-`)}<i class="mbar"><b></b></i><i class="dot"></i></span>`).join('')}</div>
       <div class="dq"><p></p></div>
       <div class="dstage"><div class="ddeck"><div class="card dcard"></div></div></div>
       <div class="dwho"></div>
@@ -102,6 +113,9 @@ function startDuel(ctx, cfg) {
       h.querySelector(`.dm[data-m="${m.id}"] .lvl`).style.transform = `translateY(${((100 - v) * 0.24).toFixed(2)}px)`;
       ic.classList.toggle('warn', d >= 0.45 && d < 0.7);
       ic.classList.toggle('bad', d >= 0.7);
+      const bar = h.querySelector(`.dm[data-m="${m.id}"] .mbar`);
+      bar.firstElementChild.style.width = `${v}%`;
+      bar.className = `mbar${d >= 0.7 ? ' bad' : d >= 0.45 ? ' warn' : ''}`;
     }
     const c = currentCard(s);
     h.style.setProperty('--scene', mix(c.person.color, '#0d0c0b', 0.8));
@@ -265,6 +279,7 @@ function startDuel(ctx, cfg) {
       o.querySelector('[data-a="end"]').onclick = () => { document.body.classList.remove('duelmode'); ctx.home(); };
     }
     ctx.sfx('ach');
+    if (cmp !== 0 && ctx.award) ctx.award(1, `vítězství v souboji (${esc(players[cmp > 0 ? 0 : 1].name)})`);
   };
   const timer = setInterval(() => {
     const now = performance.now(), dt = now - last;

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { effect, newGame, choose, nextLeader, currentCard, preview, fill, tenure, DIRS, cardById, METERS, CARDS, INTRO, PEOPLE, ENDINGS, KINDS, outcome, bestDir, skip, nudge, ready, CHARGE, activeLaws, optionOf, taskProgress, upgrade, SPECIAL, TASKS, AGES, AGE_LEN, ENDINGS_PAST, hasElections, leaderTitle, lawAllowed, touches , reformLaw, choosePerk, offerPerks, newBlitz, newRun, daily, toElection, PERKS, CRISES, TERM, VOTE_MIN, RESCUE, seals , whoOf, seasonOf, modBonus, MODS, WONDERS as WD, RIVALS } from '../game.js';
+import { effect, newGame, choose, nextLeader, currentCard, preview, fill, tenure, DIRS, cardById, METERS, CARDS, INTRO, PEOPLE, ENDINGS, KINDS, outcome, bestDir, skip, nudge, ready, CHARGE, activeLaws, optionOf, taskProgress, upgrade, SPECIAL, TASKS, AGES, AGE_LEN, ENDINGS_PAST, hasElections, leaderTitle, lawAllowed, touches, skipCard, steerMeter , reformLaw, choosePerk, offerPerks, newBlitz, newRun, daily, toElection, PERKS, CRISES, TERM, VOTE_MIN, RESCUE, seals , whoOf, seasonOf, modBonus, MODS, WONDERS as WD, RIVALS } from '../game.js';
 
 const meterIds = new Set(METERS.map((m) => m.id));
 const all = [INTRO, ...CARDS];
@@ -700,4 +700,21 @@ test('výzva v Dějinách začíná v pravěku bez úvodu', () => {
   assert.equal(s.world, 'dejiny');
   const c = cardById(s.card);
   assert.ok(c.age === 1 || c.season || c.pastOnly || c.who.startsWith('@'), c.id);
+});
+
+test('pomůcky z obchodu: přeskočení karty a vyrovnání ukazatele pro každý typ', () => {
+  const s = newGame({ kind: 'vize' }, 31);
+  choose(s, 'left');
+  const card = s.card, turn = s.turn, m = { ...s.meters };
+  assert.ok(skipCard(s));
+  assert.notEqual(s.card, card);
+  assert.equal(s.turn, turn + 1);
+  s.meters.fin = 20;
+  assert.ok(steerMeter(s, 'fin'));
+  assert.equal(s.meters.fin, 35);
+  s.meters.sil = 45;
+  steerMeter(s, 'sil');
+  assert.equal(s.meters.sil, 50, 'nikdy přes střed');
+  const t = newGame({ mode: 'dejiny' }, 3);
+  assert.equal(skipCard(t), false, 'úvod přeskočit nejde');
 });

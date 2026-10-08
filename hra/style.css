@@ -443,3 +443,52 @@ body.duelmode #app { padding: 0; max-width: none; }
 .duelsetup .dpick input { padding: 11px; font-size: 16px; }
 .duelsetup .kind .ico { width: 22px; height: 22px; }
 .duelsetup .dk { text-align: left; font-size: 12.5px; line-height: 1.35; min-height: 2.7em; }
+/* Obě poloviny souboje stejně široké (otočená polovina se jinak smrskla). */
+.half > .dhead, .half > .dmeters, .half > .dq, .half > .dstage, .half > .dwho { width: 100%; align-self: stretch; }
+.dpause { width: 34px; height: 34px; font-size: 11px; }
+/* Výběr v souboji na rozdělené obrazovce */
+.dsetupwrap { grid-template-rows: 1fr auto 1fr; }
+.dsetup { justify-content: center; gap: 8px; padding: 12px 16px; }
+.dsetup > * { width: 100%; }
+.dstitle { font-family: var(--serif); font-size: 20px; text-align: center; color: var(--accent); }
+.dsetup input { font: 17px var(--serif); color: var(--text); background: var(--bg1); border: 1px solid var(--line); border-radius: 14px; padding: 10px; text-align: center; }
+.dsetup .kinds { gap: 5px; }
+.dsetup .kind .ico { width: 21px; height: 21px; }
+.dsetup .dk { font-size: 12.5px; line-height: 1.35; color: var(--dim); min-height: 2.7em; text-align: center; }
+.dsetup .dk b { color: var(--text); }
+.dready { padding: 11px; }
+.dready.on { background: var(--grass); box-shadow: none; }
+.dmid { display: flex; gap: 8px; align-items: center; padding: 6px 12px; background: var(--bg1); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.dmid > button { width: 40px; height: 40px; padding: 0; flex: none; }
+.dmid .seg { flex: 1; }
+.dmid .seg button { padding: 9px 6px; font-size: 14px; display: flex; align-items: center; justify-content: center; gap: 6px; }
+.kind.locked { opacity: .35; position: relative; }
+.kind.locked::after { content: ""; position: absolute; right: 5px; bottom: 5px; width: 9px; height: 9px; border-radius: 2px; background: var(--dim); }
+
+/* Proužek hodnoty pod ikonou ukazatele (ryska uprostřed = ideál) */
+.mbar { position: relative; display: block; width: 30px; height: 5px; border-radius: 3px; background: #ffffff1f; overflow: hidden; }
+.mbar b { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 3px; background: #efe6d6; transition: width .45s cubic-bezier(.3, .8, .3, 1), background-color .4s; }
+.mbar::after { content: ""; position: absolute; left: 50%; top: 0; bottom: 0; width: 1.5px; margin-left: -.75px; background: var(--scene, var(--bg)); }
+.mbar.warn b { background: var(--warn); }
+.mbar.bad b { background: var(--bad); }
+.meter { gap: 4px; }
+.dm .mbar { width: 24px; height: 4px; }
+
+/* Body a odemykání */
+.pts { align-self: center; display: inline-flex; align-items: center; gap: 7px; padding: 8px 14px; border-radius: 20px; font-size: 14px; background: #e0915a14; border-color: #e0915a55; color: var(--accent); }
+.kind.peek { border-color: var(--dim); }
+.kdesc.lockeddesc em { color: var(--warn); }
+.unlock { margin-top: 8px; padding: 9px 12px; font-size: 14px; background: var(--accent); color: #1a1208; border: 0; font-weight: 700; border-radius: 12px; }
+.unlock[disabled] { background: var(--bg2); color: var(--dim); font-weight: 400; }
+.shoplist { display: flex; flex-direction: column; gap: 8px; }
+.shopitem { display: flex; align-items: center; gap: 12px; background: var(--bg1); border: 1px solid var(--line); border-radius: 14px; padding: 10px 12px; }
+.shopitem > .ico { width: 26px; height: 26px; color: var(--accent); flex: none; }
+.shopitem div { flex: 1; min-width: 0; }
+.shopitem b { display: block; font-size: 15px; }
+.shopitem small { display: block; font-size: 12px; color: var(--dim); line-height: 1.35; }
+.shopitem .unlock { margin: 0; flex: none; }
+.shopitem:not(.got) > .ico { color: var(--dim); }
+.name { position: relative; }
+.bag { position: absolute; z-index: 3; left: 0; top: 0; display: flex; align-items: center; gap: 4px; padding: 6px 10px; border-radius: 16px; font-size: 13px; color: var(--accent); background: #e0915a14; border-color: #e0915a44; }
+.bag[hidden] { display: none; }
+.mi .use { font-style: normal; font-size: 13px; color: var(--accent); flex: none; }

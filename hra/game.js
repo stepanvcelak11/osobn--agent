@@ -356,6 +356,14 @@ export const ready = (state) => (state.charge ?? 0) >= CHARGE;
 export function skip(state) {
   if (state.leader.kind !== 'odklad' || !ready(state) || state.dead || state.card === INTRO.id) return false;
   state.charge = 0;
+  return passCard(state);
+}
+/** Pomůcka z obchodu: přeskočí kartu bez ohledu na typ vůdce. */
+export function skipCard(state) {
+  if (state.dead || state.card === INTRO.id || state.card === 'dej_intro' || cardById(state.card)?.milestone) return false;
+  return passCard(state);
+}
+function passCard(state) {
   const card = cardById(state.card);
   if (card?.crisis) crisisStep(state, card, {}); // odložený krok krize se počítá jako nezvládnutý
   state.recent = [...state.recent, state.card].slice(-RECENT);
@@ -370,10 +378,15 @@ export function skip(state) {
 /** Kormidelník: posune jeden ukazatel o 15 k rovnováze (nikdy přes střed). */
 export function nudge(state, id) {
   if (state.leader.kind !== 'kormidlo' || !ready(state) || state.dead) return false;
-  const v = state.meters[id];
-  if (v === START) return false;
-  state.meters[id] = v < START ? Math.min(START, v + NUDGE) : Math.max(START, v - NUDGE);
+  if (!steerMeter(state, id)) return false;
   state.charge = 0;
+  return true;
+}
+/** Posune ukazatel o NUDGE k rovnováze (Kormidelník, nebo pomůcka z obchodu). */
+export function steerMeter(state, id) {
+  const v = state.meters[id];
+  if (v === START || state.dead) return false;
+  state.meters[id] = v < START ? Math.min(START, v + NUDGE) : Math.max(START, v - NUDGE);
   return true;
 }
 
