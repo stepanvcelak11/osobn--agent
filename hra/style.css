@@ -364,3 +364,19 @@ body:not(.game) .toast, body:has(.pop) .toast, body:has(.menu) .toast { bottom: 
 .ageends { display: flex; justify-content: space-between; font-size: 12px; color: var(--dim); margin-top: -8px; }
 .agesplash .pane { align-items: center; text-align: center; }
 .agesplash .pane-title { font-size: 24px; }
+
+/* ── Rámy karet podle doby ─ */
+.card::after { content: ""; position: absolute; inset: 0; z-index: 1; border-radius: inherit; pointer-events: none; }
+.card.age1 { border-radius: 26px 18px 28px 20px; box-shadow: 0 18px 40px #0000006b, 0 0 0 3px #6b4a2e; }
+.card.age1::after { inset: 7px; border: 2px dashed #6b4a2e88; border-radius: 22px 14px 24px 16px; }
+.card.age2 { border-radius: 10px; box-shadow: 0 18px 40px #0000006b, 0 0 0 3px #b8925a; }
+.card.age2::after { inset: 6px; border: 2px solid #8a6a3a99; border-radius: 6px; box-shadow: inset 0 0 0 4px #e6cf9c55; }
+.card.age3 { border-radius: 14px; box-shadow: 0 18px 40px #0000006b, 0 0 0 3px #4a4038, 0 0 0 5px #b8963c; }
+.card.age3::after { inset: 8px; border: 1.5px solid #d9b25a88; border-radius: 10px; }
+.card.age4 { border-radius: 16px; box-shadow: 0 18px 40px #0000006b, 0 0 0 4px #c9a24f, 0 0 0 6px #6a4f22; }
+.card.age4::after { inset: 7px; border: 1px solid #f0d89aaa; border-radius: 12px; }
+.card.age5 { border-radius: 8px; box-shadow: 0 18px 40px #0000006b, 0 0 0 3px #1c1a18, 0 0 0 5px #b8963c; }
+.card.age5::after { inset: 6px; border: 2px solid #1c1a18aa; border-radius: 4px; box-shadow: inset 0 0 0 3px #b8963c66; }
+.card.age6 { border-radius: 24px; box-shadow: 0 18px 40px #0000006b, 0 0 0 1px #ffffff40; }
+.card.age6::after { background: linear-gradient(160deg, #ffffff22, transparent 40%); }
+.card.age7 { box-shadow: 0 18px 40px #0000006b, 0 0 0 1px #6fd0e055, 0 0 18px #6fd0e022; }

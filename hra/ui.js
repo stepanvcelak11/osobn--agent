@@ -412,12 +412,14 @@ function render(enter) {
   const np = nx ? PEOPLE[nx.who] : null;
   ui.next.parentElement.classList.remove('dragging');
   ui.next.className = 'card next' + (enter ? ' rise' : '');
-  ui.next.innerHTML = np ? `${portrait(np)}<div class="nextname">${esc(np.name)}</div>` : '';
+  const age = state.age ?? 7;
+  ui.next.classList.add(`age${age}`);
+  ui.next.innerHTML = np ? `${portrait(np, age)}<div class="nextname">${esc(np.name)}</div>` : '';
   const card = ui.card;
-  card.className = 'card' + (enter ? ' enter' : '');
+  card.className = `card age${age}` + (enter ? ' enter' : '');
   card.style.transform = '';
   card.style.opacity = '';
-  card.innerHTML = portrait(c.person) +
+  card.innerHTML = portrait(c.person, age) +
     ['left', 'right', 'up', 'down'].map((d) => {
       // Podmíněná volba, kterou si vláda „odemkla“, je označená klíčem.
       const o = optionOf(state, c, d), special = c.opts[d].need && unlocked(state, c.opts[d]);
@@ -499,7 +501,7 @@ function commit(dir) {
   const far = { left: 'translate(-150%, 30px) rotate(-16deg)', right: 'translate(150%, 30px) rotate(16deg)', up: 'translate(0, -140%)', down: 'translate(0, 140%)' }[dir];
   sfx('swipe'); vibrate(8);
   ui.card.parentElement.classList.add('dragging');
-  card.className = 'card fly';
+  card.className = `card fly age${state.age ?? 7}`;
   card.style.transform = far;
   card.style.opacity = '0';
   selected = null;
@@ -539,7 +541,7 @@ function setupDrag(card) {
     if (busy) return;
     active = true; sx = e.clientX; sy = e.clientY; dx = dy = 0; t0 = performance.now();
     selected = null;
-    card.className = 'card';
+    card.className = `card age${state.age ?? 7}`;
     card.parentElement.classList.add('dragging');
     card.setPointerCapture(e.pointerId);
   });
@@ -555,7 +557,7 @@ function setupDrag(card) {
     const dist = Math.max(Math.abs(dx), Math.abs(dy));
     const speed = dist / Math.max(1, performance.now() - t0); // px/ms – rychlé švihnutí stačí i na kratší vzdálenost
     if (dist > 90 || (dist > 40 && speed > 0.6)) { commit(dirOf()); return; }
-    card.className = 'card back';
+    card.className = `card back age${state.age ?? 7}`;
     card.parentElement.classList.remove('dragging');
     card.style.transform = '';
     highlight(null, 0);
@@ -642,7 +644,7 @@ function ability() {
   if (k === 'odklad') {
     if (state.card === 'intro') { toast('Úvod odložit nejde'); return; }
     busy = true;
-    ui.card.className = 'card fly';
+    ui.card.className = `card fly age${state.age ?? 7}`;
     ui.card.style.transform = 'translate(0, 30px) scale(.85)';
     ui.card.style.opacity = '0';
     setTimeout(() => {
