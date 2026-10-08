@@ -84,7 +84,11 @@ const EXTREME = 20;          // Krizový manažer: krajnost = dál než 20 od st
 export const ADVICE_OK = 0.7;
 /// Celková síla rozhodnutí (laděno simulací): náhodné volby vydrží jen kolem roku, hráč, který se
 /// občas splete, několik let, pečlivý hráč desítky let. Každá chyba je znát.
-export const INTENSITY = globalThis.ROVNOVAHA_INTENSITY ?? 1.9;
+/// Na začátku vlády mírnější (1,4×), s každým měsícem vlády roste až na 2× – nováček hned nevypadne,
+/// ale dlouhá vláda je čím dál ostřejší.
+export const INTENSITY_START = 1.4, INTENSITY_MAX = 2;
+export const INTENSITY_RAMP = globalThis.ROVNOVAHA_RAMP ?? 48; // za kolik měsíců vlády dosáhne maxima
+export const intensity = (state) => INTENSITY_START + (INTENSITY_MAX - INTENSITY_START) * Math.min(1, (state?.turn ?? 0) / INTENSITY_RAMP);
 export const PAST_SOFT = globalThis.ROVNOVAHA_PAST ?? 1; // dávné doby mají kratší balíčky – účinky jsou mírnější, aby vlády nebyly krátké
 export const RESCUE = 15;    // Zachránce / Druhá šance: kam se ukazatel odrazí od kraje
 export const TERM = 48;      // volby každé 4 roky
@@ -304,7 +308,7 @@ export function optionOf(state, card, dir) {
 export function preview(card, dir, state) {
   const o = state ? optionOf(state, card, dir) : card.opts[dir];
   const out = {};
-  for (const [k, v] of Object.entries(o?.e || {})) if (v) out[k] = Math.abs(effect(k, v) * INTENSITY) >= 15 ? 'big' : 'small';
+  for (const [k, v] of Object.entries(o?.e || {})) if (v) out[k] = Math.abs(effect(k, v) * intensity(state)) >= 15 ? 'big' : 'small';
   return out;
 }
 
@@ -315,7 +319,7 @@ export function outcome(state, dir) {
   const card = cardById(state.card) || INTRO;
   const out = { ...state.meters };
   const crisis = state.leader.kind === 'krize';
-  let mult = INTENSITY * (state.leader.kind === 'byro' ? 0.75 : state.leader.kind === 'hazard' ? state.luck ?? 1 : 1);
+  let mult = intensity(state) * (state.leader.kind === 'byro' ? 0.75 : state.leader.kind === 'hazard' ? state.luck ?? 1 : 1);
   if (has(state, 'tlumic')) mult *= 0.8;
   if (state.mods?.includes('boure')) mult *= 1.25;
   if ((state.age ?? 7) < 7) mult *= PAST_SOFT;

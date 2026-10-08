@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { effect, newGame, choose, nextLeader, currentCard, preview, fill, tenure, DIRS, cardById, METERS, CARDS, INTRO, PEOPLE, ENDINGS, KINDS, outcome, INTENSITY, bestDir, rankDirs, sageHint, shiftMeter, skip, nudge, ready, CHARGE, activeLaws, optionOf, taskProgress, upgrade, SPECIAL, TASKS, AGES, AGE_LEN, ENDINGS_PAST, hasElections, leaderTitle, lawAllowed, touches, skipCard, steerMeter , reformLaw, choosePerk, offerPerks, newBlitz, newRun, daily, toElection, PERKS, CRISES, TERM, VOTE_MIN, RESCUE, seals , whoOf, seasonOf, modBonus, MODS, WONDERS as WD, RIVALS } from '../game.js';
+import { effect, newGame, choose, nextLeader, currentCard, preview, fill, tenure, DIRS, cardById, METERS, CARDS, INTRO, PEOPLE, ENDINGS, KINDS, outcome, intensity, INTENSITY_START, INTENSITY_MAX, bestDir, rankDirs, sageHint, shiftMeter, skip, nudge, ready, CHARGE, activeLaws, optionOf, taskProgress, upgrade, SPECIAL, TASKS, AGES, AGE_LEN, ENDINGS_PAST, hasElections, leaderTitle, lawAllowed, touches, skipCard, steerMeter , reformLaw, choosePerk, offerPerks, newBlitz, newRun, daily, toElection, PERKS, CRISES, TERM, VOTE_MIN, RESCUE, seals , whoOf, seasonOf, modBonus, MODS, WONDERS as WD, RIVALS } from '../game.js';
 
 const meterIds = new Set(METERS.map((m) => m.id));
 const all = [INTRO, ...CARDS];
@@ -161,7 +161,8 @@ function onCard(kind, id, meters = {}) {
 test('Krizový manažer: krok z krajnosti k rovnováze je dvojnásobný, jinak normální', () => {
   // stavka.down = „Pošlu policii“: lid −, sil +
   const o = cardById('stavka').opts.down.e;
-  const dl = Math.round(effect('lid', o.lid) * INTENSITY), ds = Math.round(effect('sil', o.sil) * INTENSITY);
+  const k0 = intensity(onCard('vize', 'stavka', {}));
+  const dl = Math.round(effect('lid', o.lid) * k0), ds = Math.round(effect('sil', o.sil) * k0);
   assert.ok(dl < 0 && ds > 0);
   const plain = onCard('vize', 'stavka', { lid: 95, sil: 50 });
   const crisis = onCard('krize', 'stavka', { lid: 95, sil: 50 });
@@ -506,7 +507,7 @@ test('Dějiny lidstva: od pravěku přes přelomy až do budoucnosti', () => {
     choose(s, bestDir(s));
     if (s.dead) {
       if (s.dead.meter) assert.equal(s.dead.title, ENDINGS_PAST[s.dead.meter][s.dead.side].title, 'konce dávných dob');
-      assert.ok(!s.dead.election, 'v pravěku se nevolí');
+      assert.ok(!s.dead.election || hasElections(s), 'volí se až od doby, kdy jsou volby');
       nextLeader(s);
     }
   }
@@ -739,4 +740,15 @@ test('mudrc radí napůl dobře, posun ukazatele nepustí na kraj', () => {
   assert.ok(!shiftMeter(s, 'fin', -1), 'pod 5 % nejde');
   assert.ok(shiftMeter(s, 'fin', 1));
   assert.equal(s.meters.fin, 20);
+});
+
+test('síla rozhodnutí roste s délkou vlády', () => {
+  const s = newGame({}, 1);
+  assert.equal(intensity(s), INTENSITY_START);
+  s.turn = 24;
+  assert.ok(intensity(s) > INTENSITY_START && intensity(s) < INTENSITY_MAX);
+  s.turn = 500;
+  assert.equal(intensity(s), INTENSITY_MAX);
+  nextLeader(s);
+  assert.equal(intensity(s), INTENSITY_START, 'nový vůdce začíná zase mírněji');
 });
